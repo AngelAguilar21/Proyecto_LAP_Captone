@@ -1,0 +1,13 @@
+services:
+  app:
+    build: .
+    container_name: proyecto_lap_app
+    volumes:
+      # Monta la carpeta del repo dentro del contenedor: editas afuera, corres adentro
+      - .:/app
+    working_dir: /app
+    tty: true
+    stdin_open: true
+    # Si más adelante quieren abrir Jupyter dentro del contenedor, descomentar:
+    # ports:
+    #   - "8888:8888"

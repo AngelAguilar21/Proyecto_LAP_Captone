@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Datasets y videos pesados (no subir al repo, usar Drive)
+*.mp4
+*.avi
+data/raw/
+data/processed/
+*.pt
+*.pth
+checkpoints/
+
+# Entorno / credenciales
+.env
+
+# Sistema operativo / editor
+.DS_Store
+.vscode/
+.idea/

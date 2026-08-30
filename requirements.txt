@@ -1,0 +1,23 @@
+# Base de visión por computadora (CPU) para el Proyecto LAP
+# Entrenamiento pesado con GPU: usar Google Colab / Kaggle, no este contenedor.
+
+numpy
+opencv-python-headless
+matplotlib
+pandas
+Pillow
+
+# PyTorch CPU (para probar/afinar modelos livianos localmente)
+torch --index-url https://download.pytorch.org/whl/cpu
+torchvision --index-url https://download.pytorch.org/whl/cpu
+
+# Detección de objetos (YOLO)
+ultralytics
+
+# Tracking multi-objeto
+lap
+filterpy
+
+# Utilidades
+tqdm
+pyyaml
