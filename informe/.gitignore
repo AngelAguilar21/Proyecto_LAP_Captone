@@ -1,0 +1,38 @@
+# =====================================================================
+# .gitignore -- Capstone I, informe LaTeX
+#
+# Criterio: se versiona la fuente (.tex, .bib, .md) y el PDF compilado.
+# Se ignora todo lo que pdflatex, biber y latexmk regeneran en cada
+# compilacion, porque cambia en cada corrida y genera conflictos de
+# merge sin aportar informacion.
+# =====================================================================
+
+# --- Auxiliares de pdfLaTeX ---
+*.aux
+*.log
+*.out
+*.toc
+
+# --- Bibliografia (biber / biblatex) ---
+*.bbl
+*.bcf
+*.blg
+*.run.xml
+
+# --- Auxiliares de latexmk ---
+*.fls
+*.fdb_latexmk
+
+# --- SyncTeX ---
+*.synctex.gz
+
+# --- Articulos de referencia ---
+# Los PDF de los papers no se versionan: son material de terceros, pesan
+# y no nos corresponde redistribuirlos. Las citas oficiales estan en
+# referencias.bib y la trazabilidad en NOTAS_FUENTES.md.
+papers/
+
+# =====================================================================
+# main.pdf NO se ignora: es el entregable y debe poder descargarse del
+# repositorio sin necesidad de compilar. No anadir *.pdf a este archivo.
+# =====================================================================

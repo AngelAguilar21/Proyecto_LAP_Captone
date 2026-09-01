@@ -1,0 +1,184 @@
+% =====================================================================
+% ANEXO A -- MODELO DE CARTEL INFORMATIVO
+% Responsable: Fabian Moreno Ugarte
+%
+% El cartel se maqueta con \fbox + \parbox + tabular, sin tcolorbox ni
+% mdframed, para que compile en cualquier distribucion sin instalar
+% paquetes adicionales.
+% =====================================================================
+\section{Modelo de cartel informativo de videovigilancia}
+\label{anx:cartel}
+
+\subsection{Propósito y estatus de este modelo}
+
+La Sección~\ref{sec:directiva} estableció que el tratamiento de datos
+personales mediante videovigilancia exige informar previamente a los
+titulares mediante carteles visibles. Este anexo propone un modelo
+concreto para el sistema del proyecto.
+
+\cajaaviso{Estatus de este modelo}{Se trata de una \textbf{propuesta de
+trabajo}, no de un formato aprobado. Está construido sobre los elementos
+informativos que la Directiva 01-2020-JUS/DGTAIPD exige, pero su
+redacción final debe ser revisada por el área legal de LAP antes de su
+colocación física.
+
+Esa revisión tiene un contenido preciso: contrastar los campos del modelo
+uno por uno contra el texto de la Directiva y contra el D.S.
+016-2024-JUS, para confirmar que no falta ningún elemento informativo
+exigido ni sobra alguno que la norma no requiera. Este informe propone el
+conjunto de campos, no acredita que sea el exigible.}
+
+\subsection{Elementos que el modelo incorpora}
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}L{4.2cm}Y@{}}
+\toprule
+\textbf{Elemento} & \textbf{Razón de su inclusión} \\
+\midrule
+Identidad del responsable &
+El titular debe saber ante quién ejercer sus derechos. \\
+\addlinespace
+Finalidad del tratamiento &
+Núcleo del deber de información y límite frente al deslizamiento de
+finalidad (Sec.~\ref{sec:impacto-etico}). \\
+\addlinespace
+Base de legitimación &
+Permite al titular entender por qué no se le pidió consentimiento. \\
+\addlinespace
+Plazo de conservación &
+Exigencia del principio de conservación limitada. \\
+\addlinespace
+Destinatarios &
+Incluye la eventual entrega a autoridades conforme a las normas de
+seguridad ciudadana (Sec.~\ref{sec:dl1218}). \\
+\addlinespace
+Canal para ejercer derechos &
+Sin un canal indicado, el derecho es nominal. \\
+\addlinespace
+Declaración de lo que el sistema \emph{no} hace &
+No es un elemento exigido por la norma. Se incorpora por decisión de
+este frente: es la traducción visible del compromiso contra el
+deslizamiento de finalidad y el elemento que distingue este cartel de
+uno genérico de CCTV. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{Modelo propuesto}
+
+En el modelo que sigue, los textos en \emph{cursiva} señalan los campos
+que este informe no puede completar porque corresponden a datos que solo
+LAP posee --- su identificación registral, la base de legitimación que
+decida invocar, sus canales de atención y el plazo de conservación que
+fije. El resto del contenido es propuesta de este frente.
+
+\vspace{0.5em}
+\noindent
+\fcolorbox{azulesan}{white}{%
+\begin{minipage}{\dimexpr\linewidth-2\fboxsep-2\fboxrule\relax}
+\vspace{0.6em}
+\begin{center}
+{\Large\bfseries\color{azulesan} ZONA VIDEOVIGILADA}\\[0.25em]
+{\large\bfseries\color{azulesan} SISTEMA DE ESTIMACIÓN DE AFORO}\\[0.2em]
+{\small\itshape Este sistema NO identifica personas}
+\end{center}
+\vspace{0.4em}
+{\color{azulesan}\rule{\linewidth}{0.8pt}}
+\vspace{0.5em}
+
+\small
+\setlength{\extrarowheight}{3pt}
+\begin{tabularx}{\linewidth}{@{}L{3.1cm}Y@{}}
+\textbf{Responsable} &
+Lima Airport Partners S.R.L. --- \emph{razón social registral completa,
+RUC y domicilio fiscal, a completar por LAP.} \\
+
+\textbf{Finalidad} &
+Estimar el número de personas presentes por zona, con el fin de prevenir
+aglomeraciones y gestionar el flujo de pasajeros en el terminal. \\
+
+\textbf{Base legal} &
+\emph{Base de legitimación que LAP invoque, con su fundamento normativo
+exacto, a completar por su área legal.} \\
+
+\textbf{Conservación} &
+Las imágenes no se almacenan. El sistema conserva únicamente conteos
+agregados por zona, durante el plazo fijado en su política de retención
+--- \emph{plazo a definir con LAP (medida M-05).} \\
+
+\textbf{Destinatarios} &
+Personal autorizado de LAP. Las imágenes del sistema de seguridad podrán
+entregarse a las autoridades competentes cuando lo requieran conforme a
+ley. \\
+
+\textbf{Sus derechos} &
+Puede ejercer sus derechos de acceso, rectificación, cancelación y
+oposición escribiendo al canal de atención de LAP o acudiendo a su
+oficina de atención al usuario --- \emph{dirección de correo y ubicación
+de la oficina, a completar por LAP.} \\
+
+\textbf{Más información} &
+\emph{Dirección web de la política de privacidad de LAP, a completar.} \\
+\end{tabularx}
+
+\vspace{0.6em}
+{\color{azulesan}\rule{\linewidth}{0.8pt}}
+\vspace{0.4em}
+
+{\footnotesize\bfseries Este sistema no realiza reconocimiento facial, no
+identifica a personas concretas, no realiza seguimiento individual de
+trayectorias y no adopta decisiones automatizadas sobre los pasajeros.}
+
+\vspace{0.6em}
+\end{minipage}%
+}
+\vspace{0.8em}
+
+\subsection{Criterios de colocación}
+
+\begin{enumerate}[leftmargin=1.6em,itemsep=0.35em]
+  \item \textbf{Anterioridad.} El cartel debe ser visible \emph{antes} de
+        que la persona ingrese a la zona videovigilada, no dentro de
+        ella. Informar a quien ya fue captado no cumple la finalidad de
+        la norma.
+  \item \textbf{Cobertura de todos los accesos.} Cada acceso a una zona
+        cubierta requiere señalización. Un acceso sin cartel es un punto
+        de incumplimiento con independencia de cuántos carteles haya en
+        el resto del terminal.
+  \item \textbf{Legibilidad.} Tamaño y contraste suficientes para ser
+        leídos a la distancia de aproximación real, considerando que el
+        pasajero circula con equipaje y no se detiene.
+  \item \textbf{Idiomas.} Español e inglés como mínimo, dada la condición
+        de terminal internacional. Si conviene añadir algún idioma más es
+        algo que depende de la composición real del tráfico del
+        aeropuerto, dato que debe pedirse a LAP y que este informe no
+        supone.
+  \item \textbf{Accesibilidad.} Altura y ubicación que permitan la
+        lectura desde una silla de ruedas. El criterio se enuncia aquí en
+        términos funcionales y no normativos: la normativa peruana de
+        accesibilidad aplicable a señalización en establecimientos de uso
+        público no se ha contrastado, de modo que las medidas concretas
+        deben tomarse de ella y no de este anexo.
+  \item \textbf{Registro de la colocación.} Documentar fotográficamente
+        cada cartel instalado, con fecha y ubicación. Ante una
+        fiscalización, el cumplimiento del deber de información debe
+        poder acreditarse, y la fotografía fechada es la evidencia más
+        simple de producir.
+\end{enumerate}
+
+\subsection{Observación final sobre este anexo}
+
+Este cartel es el punto donde el análisis normativo de este informe se
+vuelve visible para el pasajero. Todo lo demás --- la arquitectura, las
+medidas de privacidad desde el diseño, la auditoría --- ocurre en
+documentos que el titular de los datos nunca verá. La frase
+\enquote{este sistema no identifica personas} solo es defendible si las
+medidas M-02, M-03 y M-04 de la Sección~\ref{sec:privacidad-diseno}
+están efectivamente implementadas.
+
+\cajaaviso{Advertencia}{Colocar un cartel que declare más de lo que el
+sistema cumple es peor que no colocarlo: convierte una deficiencia
+técnica en una declaración inexacta hacia el titular. La redacción final
+del cartel debe fijarse \emph{después} de que la arquitectura esté
+congelada, y debe revisarse si la arquitectura cambia.}

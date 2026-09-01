@@ -1,0 +1,262 @@
+%=====================================================================
+%  Capstone I -- Universidad ESAN -- Ingenieria de Inteligencia Artificial
+%  Proyecto: Sistema de Computer Vision para estimacion de aglomeraciones
+%            de personas en el Aeropuerto Internacional Jorge Chavez
+%  Cliente:  Lima Airport Partners (LAP)
+%
+%  Compilacion: pdfLaTeX + Biber + pdfLaTeX + pdfLaTeX
+%               latexmk -pdf main.tex
+%
+%  Mantenimiento del informe: Fabian Moreno Ugarte
+%  (Validacion Etica/Legal y Documentacion)
+%
+%  Los archivos .tex estan codificados en UTF-8 sin BOM.
+%=====================================================================
+\documentclass[11pt,a4paper]{article}
+
+%--------------------- Codificacion e idioma -------------------------
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+% es-tabla     -> "Tabla" en lugar de "Cuadro"
+% es-noquoting -> evita que babel-spanish capture el caracter " , que
+%                 entra en conflicto con csquotes/biblatex
+\usepackage[spanish,es-tabla,es-noquoting,es-lcroman]{babel}
+
+%--------------------- Geometria y estilo ----------------------------
+\usepackage[a4paper,left=3cm,right=2.5cm,top=3cm,bottom=2.5cm]{geometry}
+\usepackage{fancyhdr}
+\usepackage{setspace}
+\usepackage{parskip}
+
+%--------------------- Tablas, listas, graficos ----------------------
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{enumitem}
+\usepackage{ragged2e}
+
+% Tipos de columna propios para las tablas del informe.
+% En columnas estrechas el texto justificado produce lineas muy sueltas
+% (avisos "Underfull \hbox"); se usa alineacion a la izquierda, que ademas
+% es la opcion tipografica correcta a estos anchos.
+%   L{ancho} -> columna de ancho fijo, alineada a la izquierda
+%   Y        -> como la columna X de tabularx, alineada a la izquierda
+\newcolumntype{L}[1]{>{\RaggedRight\arraybackslash}p{#1}}
+\newcolumntype{Y}{>{\RaggedRight\arraybackslash}X}
+
+% NOTA DE COMPATIBILIDAD (longtable)
+% Las versiones v4.24 a v4.26 de longtable (oct-dic 2025) tienen una
+% regresion: al partir entre paginas una tabla con columnas de tipo p{},
+% pdfTeX emite
+%     "Infinite glue shrinkage found in box being split"
+% y devuelve codigo de salida distinto de cero, aunque igualmente genere
+% el PDF. No depende de este documento: se reproduce con un longtable
+% minimo de una sola columna p{} que cruce un salto de pagina.
+% Esta corregido a partir de v4.27 (2026-01-28), que es la version con la
+% que se verifico este proyecto.
+% Si en Overleaf aparece ese error, hay dos salidas equivalentes:
+%   (a) cambiar la version de TeX Live del proyecto (Menu > Compilador)
+%       a una que traiga longtable <= v4.23 o >= v4.27, o
+%   (b) pedir la version estable antigua cambiando la linea siguiente por
+%       \usepackage{longtable}[=v4.13]
+%       (funciona, pero avisa "Command \LT@p@ftntext has changed").
+\usepackage{longtable}
+
+%--------------------- Bibliografia ----------------------------------
+% csquotes DEBE cargarse antes que biblatex.
+\usepackage{csquotes}
+\usepackage[
+  backend=biber,
+  style=numeric-comp,
+  sorting=none,
+  maxbibnames=99,
+  giveninits=true,
+  isbn=false,
+  doi=false,
+  url=false
+]{biblatex}
+\addbibresource{referencias.bib}
+
+%--------------------- Colores y macros propias ----------------------
+\definecolor{azulesan}{RGB}{0,51,102}
+\definecolor{grisclaro}{RGB}{242,242,242}
+
+% Caja de aviso reutilizable, construida solo con \fcolorbox + minipage
+% para no depender de tcolorbox ni mdframed.
+\newcommand{\cajaaviso}[2]{%
+  \par\vspace{0.6em}\noindent
+  \fcolorbox{azulesan}{grisclaro}{%
+    \begin{minipage}{\dimexpr\linewidth-2\fboxsep-2\fboxrule\relax}
+      \vspace{0.3em}
+      \textbf{\color{azulesan}#1}\par\vspace{0.35em}
+      \small #2
+      \vspace{0.3em}
+    \end{minipage}%
+  }\par\vspace{0.6em}
+}
+
+% NOTA SOBRE LOS MARCADORES RETIRADOS
+% Este documento tuvo una macro \pendiente{tipo}{texto} que imprimia en
+% ambar, dentro del cuerpo, los puntos que requerian decision o
+% verificacion. El cuerpo ya no lleva ninguno: todos se trasladaron a
+% PENDIENTES.md, agrupados por quien puede resolverlos.
+% La macro se retiro a proposito y no se dejo definida como no-op: si
+% alguien vuelve a escribir \pendiente{...}{...} en una seccion, la
+% compilacion falla de inmediato. Esa es la salvaguarda que impide que un
+% marcador reaparezca en el PDF sin que nadie lo advierta.
+
+%--------------------- Hiperenlaces (siempre al final) ---------------
+\usepackage{hyperref}
+\hypersetup{
+  unicode=true,
+  colorlinks=true,
+  linkcolor=azulesan,
+  citecolor=azulesan,
+  urlcolor=azulesan,
+  pdftitle={Estimacion de aglomeraciones mediante vision computacional
+            en el Aeropuerto Internacional Jorge Chavez},
+  pdfauthor={Equipo Capstone I -- Universidad ESAN},
+  pdfsubject={Capstone I -- Ingenieria de Inteligencia Artificial}
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textit{Capstone I -- Aglomeraciones LAP}}
+\fancyhead[R]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\onehalfspacing
+
+%=====================================================================
+\begin{document}
+%=====================================================================
+
+%--------------------------- PORTADA ---------------------------------
+\begin{titlepage}
+\centering
+\vspace*{1.5cm}
+
+{\scshape\large Universidad ESAN\par}
+{\scshape Facultad de Ingeniería\par}
+{\scshape Carrera de Ingeniería de Inteligencia Artificial\par}
+
+\vspace{2.5cm}
+
+{\color{azulesan}\rule{\linewidth}{1.2pt}}
+\vspace{0.8cm}
+
+{\huge\bfseries Estimación de aglomeraciones de personas\par}
+\vspace{0.3cm}
+{\huge\bfseries mediante visión computacional en el\par}
+\vspace{0.3cm}
+{\huge\bfseries Aeropuerto Internacional Jorge Chávez\par}
+
+\vspace{0.8cm}
+{\Large Informe de Capstone I\par}
+\vspace{0.4cm}
+{\large Cliente: Lima Airport Partners (LAP)\par}
+
+\vspace{0.8cm}
+{\color{azulesan}\rule{\linewidth}{1.2pt}}
+
+\vspace{2cm}
+
+{\large\bfseries Equipo de trabajo\par}
+\vspace{0.6cm}
+
+\begin{tabular}{@{}ll@{}}
+Angel Aguilar & Liderazgo e integración \\[0.25cm]
+Stephano Rivadeneyra & Ciencia de datos \\[0.25cm]
+José Ortega & Ingeniería de datos \\[0.25cm]
+Fabián Moreno Ugarte & Validación ética/legal y documentación \\
+\end{tabular}
+
+\vfill
+
+{\large Lima, Perú\par}
+
+\end{titlepage}
+
+%--------------------------- INDICE ----------------------------------
+\pagenumbering{roman}
+\tableofcontents
+\clearpage
+
+\phantomsection
+\addcontentsline{toc}{section}{Nota sobre el estado de este documento}
+\section*{Nota sobre el estado de este documento}
+
+Este informe se encuentra en elaboración. Las secciones de
+\emph{Antecedentes}, \emph{Marco ético y legal}, \emph{Análisis de
+impacto} y el \emph{Anexo A} corresponden al frente de validación
+ético-legal y documentación. Las secciones de \emph{Introducción},
+\emph{Metodología}, \emph{Resultados} y \emph{Conclusiones} están a cargo
+de otros integrantes del equipo y se incorporarán en la siguiente
+entrega; sus apartados figuran ya con la numeración reservada.
+
+El cuerpo del documento no contiene marcadores de relleno. Los puntos que
+siguen abiertos se registran fuera de este texto, en el archivo
+\texttt{PENDIENTES.md} del repositorio, agrupados según quién puede
+resolverlos: decisiones del frente ético-legal, decisiones del equipo e
+información que solo puede proporcionar LAP.
+
+Dos criterios de redacción se aplicaron de forma sistemática, y conviene
+enunciarlos porque explican el tono del documento:
+
+\begin{itemize}[leftmargin=1.4em,itemsep=0.25em]
+  \item \textbf{Ninguna cifra tomada de la literatura se reproduce si no
+        pudo contrastarse contra el texto en prosa del artículo de
+        origen.} Las cifras que solo constaban en tablas cuya conversión
+        a texto se degrada fueron retiradas, aunque resultaran
+        favorables al argumento.
+  \item \textbf{Ninguna afirmación normativa se enuncia en indicativo si
+        su respaldo documental exacto no ha sido verificado.} Donde la
+        verificación está pendiente, la afirmación se formula en
+        condicional o se remite expresamente a la validación del área
+        legal de LAP.
+\end{itemize}
+
+El detalle de la trazabilidad de cada afirmación normativa se encuentra
+en el archivo \texttt{NOTAS\_\allowbreak FUENTES.md} del repositorio, y el estado de
+cumplimiento en \texttt{CHECKLIST\_\allowbreak CUMPLIMIENTO.md}.
+
+\cajaaviso{Alcance de este documento}{Este informe es un trabajo
+académico de análisis de cumplimiento. No constituye asesoría legal ni un
+dictamen jurídico. Las zonas de interpretación normativa se presentan
+como riesgos a validar con el área legal de LAP y, de ser necesario, con
+la Autoridad Nacional de Protección de Datos Personales.}
+
+\clearpage
+\pagenumbering{arabic}
+
+%------------------------- SECCIONES ---------------------------------
+\input{secciones/introduccion}
+\clearpage
+\input{secciones/antecedentes}
+\clearpage
+\input{secciones/marco_etico_legal}
+\clearpage
+\input{secciones/analisis_impacto}
+\clearpage
+\input{secciones/metodologia}
+\clearpage
+\input{secciones/resultados}
+\clearpage
+\input{secciones/conclusiones}
+\clearpage
+
+%------------------------ BIBLIOGRAFIA -------------------------------
+\phantomsection
+\addcontentsline{toc}{section}{Referencias}
+\printbibliography[title={Referencias}]
+
+\clearpage
+
+%--------------------------- ANEXOS ----------------------------------
+\appendix
+\input{secciones/anexo_cartel}
+
+\end{document}

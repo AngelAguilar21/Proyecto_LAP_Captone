@@ -1,0 +1,47 @@
+% =====================================================================
+% METODOLOGIA -- SECCION A CARGO DE OTRO INTEGRANTE
+% Responsable: no corresponde al frente etico-legal.
+%
+% NOTA PARA EL EQUIPO: las decisiones tecnicas que se documenten aqui son
+% auditadas en la Seccion \ref{sec:auditoria} del marco etico-legal.
+% Cualquier cambio de arquitectura, de dataset o de politica de retencion
+% debe comunicarse al frente etico-legal, porque cambia la auditoria.
+%
+% Los marcadores \pendiente{PLACEHOLDER}{...} que este archivo tenia se
+% retiraron del cuerpo. El encargo consta en PENDIENTES.md, seccion (b).
+% =====================================================================
+\section{Metodología}
+\label{sec:metodologia}
+
+\cajaaviso{Sección en elaboración}{El contenido de esta sección está a
+cargo de otro integrante del equipo. El frente ético-legal la audita:
+véase la Sección~\ref{sec:auditoria}. Dos decisiones que se documenten
+aquí condicionan directamente esa auditoría --- la arquitectura elegida y
+el lugar donde se ejecuta la inferencia ---, por lo que conviene que se
+fijen por escrito antes de cerrarla.}
+
+\subsection{Arquitectura propuesta}
+\label{sec:arquitectura}
+
+Este apartado documentará la arquitectura del sistema de visión
+computacional. La Sección~\ref{sec:sintesis-antecedentes} deja planteada
+la elección entre los tres enfoques revisados y, sobre todo, la
+granularidad de la salida, que es la decisión con mayor consecuencia para
+el análisis de proporcionalidad.
+
+\subsection{Datos y entrenamiento}
+\label{sec:datos-entrenamiento}
+
+Este apartado documentará los conjuntos de datos utilizados, la
+estrategia de entrenamiento y la de adaptación de dominio. La
+verificación de las licencias de los conjuntos públicos se sigue en
+\texttt{CHECKLIST\_\allowbreak CUMPLIMIENTO.md}, sección B, conforme a lo
+expuesto en la Sección~\ref{sec:licencias}.
+
+\subsection{Métricas de evaluación}
+\label{sec:metricas}
+
+Este apartado justificará las métricas seleccionadas --- MAE, MSE, nAP u
+otras. La Sección~\ref{sec:ant-p2pnet} señala una restricción que
+conviene tener presente al elegirlas: los compromisos de exactitud deben
+formularse a nivel de zona agregada y no de posición individual.

@@ -1,0 +1,478 @@
+% =====================================================================
+% ANALISIS DE IMPACTO -- Responsable: Fabian Moreno Ugarte
+% Orden solicitado: etico, social, economico, ambiental, sintesis.
+% =====================================================================
+\section{Análisis de impacto}
+\label{sec:analisis}
+
+Esta sección evalúa el impacto del sistema en cuatro dimensiones ---
+ética, social, económica y ambiental --- y cierra con una síntesis que
+las integra. Su estructura --- identificar el tratamiento, valorar
+necesidad y proporcionalidad, identificar riesgos para los derechos de
+las personas y proponer medidas de mitigación --- reproduce
+deliberadamente la de una Evaluación de Impacto en Protección de Datos.
+
+Esto no es una analogía metodológica. Como se expone en la
+Sección~\ref{sec:eipd}, el D.S. 016-2024-JUS exige una EIPD antes de
+iniciar tratamientos de alto riesgo, y la videovigilancia masiva figura
+expresamente entre los supuestos que la activan. Esta sección es, por
+tanto, el insumo sustantivo de un documento que el proyecto está obligado
+a producir, y no un ejercicio analítico de acompañamiento.
+
+Un criterio guía la redacción: se prefiere declarar un impacto como no
+cuantificado antes que estimarlo sin base. Varias de las magnitudes que
+naturalmente irían en esta sección --- número de pasajeros afectados,
+costo evitado, consumo energético --- dependen de información operativa
+de LAP o de mediciones que el equipo aún no ha realizado. Donde ocurre,
+se indica expresamente.
+
+% =====================================================================
+\subsection{Impacto ético}
+\label{sec:impacto-etico}
+
+\subsubsection{Asimetría entre el sujeto observado y el operador}
+
+El pasajero de un aeropuerto no elige ser observado. No puede negociar
+las condiciones, no puede optar por un terminal sin cámaras y, en la
+práctica, tampoco puede optar por no volar. Esta ausencia de alternativa
+razonable es lo que hace que el consentimiento sea una base inadecuada
+para este tratamiento: un consentimiento que no puede negarse sin
+renunciar al servicio no es libre.
+
+De ahí se sigue una consecuencia que conviene enunciar con claridad: si
+el consentimiento no es la base habilitante, la legitimidad del sistema
+descansa enteramente en que supere el examen de proporcionalidad y en que
+el deber de información se cumpla de manera efectiva. El cartel del
+Anexo~\ref{anx:cartel} no es un trámite: es, junto con la
+proporcionalidad, uno de los dos pilares sobre los que se sostiene la
+licitud del tratamiento.
+
+\subsubsection{Riesgo de deslizamiento de finalidad}
+
+Este es, a juicio de este frente, el riesgo ético principal del proyecto,
+y no proviene de un defecto técnico sino del éxito del sistema.
+
+Una vez desplegada la infraestructura --- cámaras calibradas, canal de
+video, capacidad de inferencia, tablero de visualización --- el costo
+marginal de añadir capacidades es bajo. Añadir reidentificación para
+medir tiempos de permanencia, o reconocimiento facial para detectar
+personas de interés, es una decisión de configuración y de presupuesto,
+no un rediseño. La barrera que impide ese deslizamiento no es técnica: es
+documental y contractual.
+
+\cajaaviso{Medida de mitigación propuesta}{Documentar la finalidad de
+forma restrictiva y explícita, e incorporar en el entregable una
+declaración de finalidades excluidas: el sistema no realiza
+identificación de personas, no realiza seguimiento individual de
+trayectorias, no realiza reconocimiento de emociones y no alimenta
+decisiones automatizadas sobre pasajeros individuales. Una lista de lo
+que el sistema \emph{no} hace es más difícil de erosionar silenciosamente
+que una lista de lo que sí hace.
+
+Este frente propone que esa declaración se incorpore como entregable
+formal del proyecto. Es una de las contribuciones más concretas que puede
+aportar, y su valor depende precisamente de que sea explícita: una
+finalidad excluida que solo consta en el ánimo del equipo no restringe
+nada.}
+
+\subsubsection{Sesgo y desempeño desigual}
+
+Ninguno de los tres artículos revisados reporta desempeño desagregado por
+características demográficas de las personas contadas. No se trata de una
+omisión de este informe sino de una ausencia en la literatura consultada,
+y tiene consecuencias concretas para un aeropuerto internacional, donde la
+población observada es considerablemente más heterogénea que la de los
+conjuntos de entrenamiento disponibles.
+
+Los factores que razonablemente podrían inducir desempeño desigual son
+identificables aunque no estén cuantificados:
+
+\begin{itemize}[leftmargin=1.5em,itemsep=0.3em]
+  \item \textbf{Estatura.} Un contador entrenado con anotaciones de
+        cabezas puede subcontar sistemáticamente a niños, especialmente
+        en escenas densas donde quedan ocluidos por adultos.
+  \item \textbf{Vestimenta y cubrimientos de cabeza.} Sombreros, gorras,
+        capuchas y prendas religiosas alteran la apariencia de la región
+        de la cabeza, que es precisamente la señal que estos métodos
+        explotan.
+  \item \textbf{Equipaje y sillas de ruedas.} Un pasajero con equipaje
+        voluminoso o en silla de ruedas presenta una silueta distinta de
+        la típica en los conjuntos de entrenamiento.
+  \item \textbf{Composición demográfica del conjunto de origen.} Los
+        conjuntos de referencia proceden mayoritariamente de escenas de
+        otras regiones del mundo. La brecha de dominio documentada en
+        \cite{Lin_2025_CVPR} es geográfica y de escena; no hay evidencia
+        de que sea neutral respecto de la población retratada.
+\end{itemize}
+
+\cajaaviso{Por qué el sesgo importa aquí, y por qué importa menos que en otros sistemas}{
+Conviene ser preciso para no exagerar el riesgo ni minimizarlo. El sistema
+no toma decisiones sobre personas individuales: no deniega embarques ni
+señala sospechosos. Un error de conteo no perjudica directamente a la
+persona mal contada. Sin embargo, si el subconteo se concentra en un
+grupo, las zonas del terminal donde ese grupo se concentra reciben
+sistemáticamente menos recursos --- menos personal, menos apertura de
+mostradores. El daño no es individual sino distributivo, y es real aunque
+sea indirecto.}
+
+De aquí se sigue una recomendación concreta al frente técnico: que la
+campaña de validación en sitio incluya una evaluación de desempeño
+desagregada, al menos por franja de estatura y por presencia de equipaje
+voluminoso. La recomendación es condicional en un sentido estricto ---
+sin acceso a material del terminal no es realizable ---, y esa
+dependencia refuerza la solicitud de acceso planteada en la
+Sección~\ref{sec:auditoria}.
+
+\subsubsection{Efecto sobre el comportamiento de las personas observadas}
+
+Existe un impacto ético que no depende de que el sistema funcione bien y
+que conviene dejar planteado con la cautela que corresponde. Se sostiene
+habitualmente que saberse observado modifica la conducta; este informe no
+puede afirmarlo como hecho acreditado, porque las únicas referencias
+validadas del proyecto son los tres artículos técnicos de antecedentes y
+no se ha incorporado literatura sobre efectos conductuales de la
+videovigilancia. Formulado en condicional: si ese efecto existe en la
+magnitud que la discusión pública le atribuye, en un aeropuerto ---
+donde la vigilancia ya está normalizada --- el efecto marginal de añadir
+un sistema de conteo sería previsiblemente pequeño, aunque no nulo, y la
+normalización misma formaría parte del fenómeno. Sostener el punto con
+firmeza exigiría respaldo bibliográfico que este informe todavía no
+tiene.
+
+% =====================================================================
+\subsection{Impacto social}
+\label{sec:impacto-social}
+
+\subsubsection{Beneficios esperados}
+
+El beneficio social principal es la seguridad. Las aglomeraciones densas
+en espacios cerrados son un factor de riesgo conocido, y un sistema que
+las detecta antes de que alcancen niveles críticos habilita una respuesta
+preventiva en lugar de reactiva. En un terminal aéreo, donde la
+concentración puede formarse rápidamente ante una demora o una
+cancelación, el margen temporal que ofrece la detección temprana es el
+beneficio más tangible.
+
+Un beneficio secundario es la equidad en la asignación de recursos: la
+medición sistemática permite fundamentar decisiones de dotación de
+personal en evidencia y no en percepción, lo que tiende a favorecer a las
+zonas y horarios con menor visibilidad.
+
+Ambos beneficios se afirman aquí pero no se dimensionan, y así deben
+presentarse al cliente. Su magnitud depende de la situación de partida en
+el terminal --- si existen incidentes documentados por aglomeración y
+cómo se decide hoy la dotación de personal ---, y esa es información que
+solo LAP puede aportar. Mientras no la aporte, cualquier cifra de
+beneficio sería una estimación sin base.
+
+\subsubsection{Distribución de beneficios y cargas}
+
+Una observación que conviene registrar por honestidad analítica: los
+beneficios y las cargas de este sistema no recaen sobre los mismos
+sujetos en la misma proporción.
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}L{3.2cm}YY@{}}
+\toprule
+\textbf{Actor} & \textbf{Beneficio} & \textbf{Carga} \\
+\midrule
+Pasajero &
+Indirecto: menor tiempo de espera, mayor seguridad. &
+Directa: su imagen es captada; no eligió participar. \\
+\addlinespace
+LAP (operador) &
+Directo: eficiencia operativa, evidencia para decisiones, cumplimiento
+de estándares de servicio. &
+Indirecta: costo del sistema y responsabilidad por el tratamiento. \\
+\addlinespace
+Personal del terminal &
+Apoyo a la toma de decisiones operativas. &
+Riesgo de que la métrica se use para evaluación de desempeño individual,
+finalidad distinta de la declarada. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+La carga del pasajero es directa y el beneficio es indirecto; para el
+operador la relación se invierte. Esto no invalida el proyecto --- es
+la estructura habitual de las medidas de seguridad colectiva --- pero es
+exactamente la razón por la cual el examen de proporcionalidad y el deber
+de información no son formalidades.
+
+La última fila merece atención específica: si los conteos por zona se
+cruzan con los turnos del personal, el sistema se convierte de facto en
+una herramienta de evaluación de desempeño laboral, con implicancias
+laborales propias.
+
+\cajaaviso{Riesgo a validar con el cliente}{El uso de los datos del
+sistema para evaluar el desempeño del personal del terminal constituiría
+una finalidad distinta de la declarada, con su propia base de
+legitimación y su propio deber de información hacia los trabajadores.
+Debe excluirse expresamente o tratarse por separado. Este frente propone
+incorporar esa exclusión a la declaración de finalidades excluidas de la
+Sección~\ref{sec:impacto-etico}, junto con las relativas a los
+pasajeros.}
+
+\subsubsection{Riesgo de dependencia y de exceso de confianza}
+
+Un riesgo social poco discutido es la sustitución del criterio humano.
+Si el personal de operaciones llega a confiar en el tablero más que en su
+propia observación, un fallo del sistema en un momento crítico produce un
+efecto peor que su ausencia, porque la atención humana ya se retiró.
+
+La medida M-10 de la Sección~\ref{sec:privacidad-diseno} --- el sistema
+alerta pero no decide --- responde a este riesgo, pero es insuficiente por
+sí sola: requiere que los operadores conozcan las limitaciones del modelo,
+incluido el modo de fallo por sobreestimación severa documentado en
+\cite{Lin_2025_CVPR}. La capacitación del personal es una medida de
+mitigación, no un accesorio.
+
+% =====================================================================
+\subsection{Impacto económico}
+\label{sec:impacto-economico}
+
+\cajaaviso{Nota sobre la ausencia de cifras}{Esta subsección identifica
+categorías de costo y de beneficio, pero no las cuantifica. Hacerlo
+requeriría información de LAP sobre infraestructura existente, costos de
+personal y volumen de pasajeros que el equipo no posee. Una estimación
+numérica sin esa base sería inventada, y este informe prefiere una
+categoría sin cifra antes que una cifra sin sustento.}
+
+\subsubsection{Costos}
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}L{3.3cm}YL{2.4cm}@{}}
+\toprule
+\textbf{Categoría} & \textbf{Contenido} & \textbf{Estado} \\
+\midrule
+Infraestructura de captura &
+Cámaras adicionales o recalibración de las existentes. Depende
+críticamente de si la infraestructura de CCTV actual es reutilizable. &
+No cuantificado \\
+\addlinespace
+Cómputo de inferencia &
+Servidores o dispositivos de borde. La medida M-01 (procesamiento local)
+incrementa este rubro respecto de una solución en nube, y ese sobrecosto
+es el precio del control de datos. &
+No cuantificado \\
+\addlinespace
+Anotación de datos &
+Etiquetado de material del terminal para adaptación de dominio. Es el
+rubro que el enfoque de \cite{Lin_2025_CVPR} reduce de forma
+sustancial. &
+No cuantificado \\
+\addlinespace
+Cumplimiento &
+Elaboración de documentación, señalización, auditorías, eventual
+designación de ODP. &
+No cuantificado \\
+\addlinespace
+Operación y mantenimiento &
+Monitoreo del modelo, reentrenamiento periódico, soporte. &
+No cuantificado \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+De este cuadro se desprende cuál es la pregunta económica decisiva, y
+conviene formularla explícitamente porque condiciona todas las demás: si
+la infraestructura de CCTV existente en el terminal es reutilizable, el
+costo del proyecto se concentra en cómputo y desarrollo; si no lo es,
+cambia de orden de magnitud. Es una pregunta que solo LAP puede
+responder, y hasta que lo haga ninguna de las categorías anteriores
+admite una cifra.
+
+\subsubsection{Beneficios económicos}
+
+Los beneficios plausibles son la optimización de la dotación de personal
+mediante asignación basada en demanda medida; la reducción de tiempos de
+espera, con su efecto sobre indicadores de calidad de servicio y sobre el
+gasto de los pasajeros en zonas comerciales; y el valor de evitar
+incidentes, que es el rubro de mayor magnitud potencial y el más difícil
+de estimar, por tratarse de eventos de baja probabilidad y alto impacto.
+
+\subsubsection{Costo del incumplimiento}
+
+Un análisis económico que omitiera el costo del incumplimiento estaría
+sesgado. Debe considerarse la exposición a sanciones administrativas de
+la autoridad de protección de datos, el costo reputacional de un
+incidente de privacidad en una infraestructura de alta visibilidad
+pública, y el costo de rehacer el sistema si se detecta una no
+conformidad después del despliegue.
+
+Este informe no consigna los rangos de sanción aplicables. El régimen
+sancionador de la Ley 29733 y de su reglamento se expresa en UIT, y
+reproducir un rango o un importe sin haberlo contrastado contra el texto
+vigente y contra el valor de la UIT del ejercicio correspondiente sería
+introducir en el análisis económico exactamente el tipo de cifra sin
+respaldo que el resto del documento evita. La exposición a sanción se
+afirma, por tanto, como categoría de costo y no como monto.
+
+Este último punto tiene una implicancia de secuenciación que conviene
+subrayar: el costo de incorporar los requisitos de privacidad en la fase
+de diseño es una fracción del costo de reconstruir un sistema desplegado.
+La privacidad desde el diseño es, además de una obligación, la opción
+económicamente racional.
+
+% =====================================================================
+\subsection{Impacto ambiental}
+\label{sec:impacto-ambiental}
+
+\cajaaviso{Nota sobre la ausencia de mediciones}{El equipo no ha medido
+el consumo energético del entrenamiento ni de la inferencia. Las
+consideraciones que siguen son cualitativas y estructurales. Se indica
+expresamente qué mediciones permitirían convertirlas en cuantitativas.}
+
+\subsubsection{Huella del entrenamiento}
+
+El entrenamiento de modelos de visión es intensivo en cómputo y, por
+tanto, en energía. Tres decisiones de diseño ya adoptadas o previstas
+tienen efecto directo sobre esta huella:
+
+\begin{itemize}[leftmargin=1.5em,itemsep=0.3em]
+  \item \textbf{Reutilización de modelos preentrenados.} CSRNet parte de
+        capas de VGG-16 ya entrenadas \cite{Li_2018_CVPR}, evitando
+        entrenar desde cero.
+  \item \textbf{Eficiencia de etiquetado.} El enfoque semi-supervisado de
+        \cite{Lin_2025_CVPR} reduce el trabajo de anotación, aunque
+        conviene no sobrevender el punto: reduce el esfuerzo humano, no
+        necesariamente el cómputo, pues el esquema maestro-estudiante
+        implica dos modelos en entrenamiento.
+  \item \textbf{Eliminación del algoritmo húngaro.} Los autores de
+        \cite{Lin_2025_CVPR} señalan expresamente que P2R prescinde de
+        ese componente, que identifican como costoso en tiempo dentro de
+        la estrategia de emparejamiento punto a punto.
+\end{itemize}
+
+Convertir esta subsección de cualitativa en cuantitativa depende de una
+sola medición: las horas de GPU efectivamente empleadas durante el
+desarrollo. Es un registro sencillo, pero tiene una propiedad que obliga
+a pedirlo cuanto antes al frente técnico: no es reconstruible a
+posteriori. Si no se lleva desde el inicio del entrenamiento, la huella
+del desarrollo queda definitivamente sin cuantificar.
+
+\subsubsection{Huella de la inferencia continua}
+
+A escala de la vida útil del sistema, el consumo de la inferencia
+continua supera previsiblemente al del entrenamiento: el entrenamiento
+ocurre unas pocas veces, la inferencia se ejecuta permanentemente sobre
+múltiples flujos de video.
+
+Dos decisiones de diseño con motivación distinta convergen en reducir
+esta huella:
+
+\begin{itemize}[leftmargin=1.5em,itemsep=0.3em]
+  \item \textbf{Frecuencia de muestreo.} Las aglomeraciones se forman en
+        escalas de minutos. Procesar un fotograma cada varios segundos en
+        lugar de a velocidad completa reduce el cómputo en un factor
+        elevado sin pérdida operativa relevante. La misma decisión reduce
+        el volumen de imágenes tratadas, por lo que sirve simultáneamente
+        al principio de minimización.
+  \item \textbf{Procesamiento en el borde.} La medida M-01, adoptada por
+        razones de protección de datos, evita transmitir video de forma
+        continua hacia la nube, con el ahorro de transmisión asociado.
+\end{itemize}
+
+\cajaaviso{Convergencia entre minimización y sostenibilidad}{Es un
+resultado analítico útil de esta sección: las decisiones que reducen la
+exposición de datos personales --- muestrear menos, procesar localmente,
+no persistir imágenes, agregar la salida --- son las mismas que reducen
+el consumo de cómputo, de transmisión y de almacenamiento. Ambos
+principios apuntan en la misma dirección, y conviene presentarlos así
+ante el cliente porque refuerza el argumento de privacidad con una
+justificación adicional que no depende del cumplimiento normativo.}
+
+\subsubsection{Hardware y residuos electrónicos}
+
+Si el proyecto requiere cámaras o servidores nuevos, su fabricación y su
+eventual disposición final integran la huella. Reutilizar la
+infraestructura de CCTV existente, además de su efecto económico
+(Sec.~\ref{sec:impacto-economico}), es la opción ambientalmente
+preferible.
+
+Queda un punto por confirmar con el cliente antes de cerrar esta
+subsección: si LAP cuenta con una política institucional de
+sostenibilidad o con compromisos de reporte ambiental. De existir, este
+apartado debería alinearse con ellos y utilizar sus propias categorías de
+medición, en lugar de proponer un marco paralelo.
+
+% =====================================================================
+\subsection{Síntesis del análisis de impacto}
+\label{sec:sintesis-impacto}
+
+Integrando las cuatro dimensiones, el perfil de impacto del sistema puede
+resumirse así.
+
+{\footnotesize
+\begin{longtable}{@{}L{1.9cm}L{4.0cm}L{4.0cm}L{2.6cm}@{}}
+\toprule
+\textbf{Dimensión} & \textbf{Impacto positivo} & \textbf{Riesgo principal} & \textbf{Mitigación} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Dimensión} & \textbf{Impacto positivo} & \textbf{Riesgo principal} & \textbf{Mitigación} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+Ética &
+Alternativa menos invasiva que la identificación biométrica para la misma
+finalidad. &
+Deslizamiento de finalidad hacia identificación o seguimiento. &
+Declaración de finalidades excluidas; M-02, M-03. \\
+\addlinespace
+Social &
+Prevención de incidentes por aglomeración; asignación de recursos basada
+en evidencia. &
+Distribución desigual de beneficio y carga; uso laboral no declarado;
+exceso de confianza en el sistema. &
+Deber de información; exclusión expresa del uso laboral; capacitación;
+M-10. \\
+\addlinespace
+Económica &
+Eficiencia operativa; valor de incidentes evitados. &
+Costo de reconstrucción si se detecta no conformidad tras el
+despliegue. &
+Privacidad desde el diseño; auditoría previa
+(Sec.~\ref{sec:auditoria}). \\
+\addlinespace
+Ambiental &
+Menor huella que alternativas de mayor granularidad; reutilización de
+modelos preentrenados. &
+Consumo de la inferencia continua a lo largo de la vida útil. &
+Frecuencia de muestreo reducida; procesamiento en el borde;
+reutilización de hardware. \\
+\end{longtable}}
+
+Tres conclusiones transversales se desprenden del análisis.
+
+\begin{enumerate}[leftmargin=1.6em,itemsep=0.4em]
+  \item \textbf{Las decisiones de minimización operan simultáneamente en
+        las cuatro dimensiones.} No persistir imágenes, agregar la salida
+        y muestrear a baja frecuencia reducen a la vez el riesgo ético,
+        la exposición social, el costo de almacenamiento y la huella
+        ambiental. Son el núcleo de la propuesta de este frente
+        precisamente porque ningún objetivo compite con otro.
+  \item \textbf{El riesgo dominante es de gobernanza, no de tecnología.}
+        El deslizamiento de finalidad y el uso no declarado no se
+        previenen con mejor ingeniería sino con documentación,
+        compromisos contractuales y auditoría. Esto significa que el
+        entregable de este frente --- la documentación de cumplimiento
+        --- no es accesorio al proyecto técnico: es la mitigación
+        principal del riesgo principal.
+  \item \textbf{Varios impactos permanecen sin cuantificar por falta de
+        información del cliente y de mediciones propias.} Se ha optado
+        por declararlo antes que por estimar sin base. La lista completa
+        de lo pendiente, con la indicación de quién puede cerrar cada
+        punto, está en \texttt{PENDIENTES.md}, y el estado de cumplimiento
+        en \texttt{CHECKLIST\_\allowbreak CUMPLIMIENTO.md}.
+\end{enumerate}
+
+La segunda de esas conclusiones merece una nota final, porque tiene una
+consecuencia sobre cómo se presenta el proyecto. Si el riesgo dominante
+es de gobernanza, entonces el trabajo de documentación de cumplimiento no
+es un requisito administrativo del curso sino la mitigación principal del
+riesgo principal, y así debería exponerse ante el cliente. Este frente
+sostiene ese argumento y recomienda presentarlo de forma explícita.
