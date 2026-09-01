@@ -16,37 +16,44 @@ documentación.
 
 ---
 
-## Overleaf es la fuente de verdad
+## Dónde se edita el documento
 
-**El documento vivo está en Overleaf.** Es ahí donde el equipo escribe, donde se
-resuelven los conflictos de edición y desde donde sale el PDF que se entrega.
+**El documento se edita en Overleaf.** Ahí escribe el equipo, ahí se resuelven
+los conflictos de edición simultánea y de ahí sale el PDF que se entrega.
 
-Este repositorio es una copia de trabajo: sirve para tener el proyecto en local,
-compilarlo sin conexión, revisar el histórico y editar cómodamente con
-herramientas de escritorio. **No es la referencia.** Ante cualquier discrepancia
-entre lo que hay aquí y lo que hay en Overleaf, manda Overleaf.
+**Lo que hay en esta carpeta del repositorio es una copia de referencia**, no una
+segunda línea de trabajo. Sirve para que el informe quede junto al resto del
+proyecto, para poder consultarlo o compilarlo sin abrir Overleaf, y para dejar
+constancia versionada de cada estado estable del documento.
 
-En la práctica esto significa dos cosas:
+### La sincronización es manual
 
-- **Antes de editar en local**, traer los cambios de Overleaf. Editar sobre una
-  copia desactualizada es la forma más rápida de pisar el trabajo de otro.
-- **Después de editar en local**, subir los cambios a Overleaf en el mismo día.
-  Un cambio que solo existe en local no existe para el equipo.
+No hay sincronización automática entre Overleaf y este repositorio, ni está
+previsto montarla. La copia se actualiza **a mano, en cada versión estable** del
+documento: cuando se cierra un avance que vale la pena dejar registrado, se
+descarga de Overleaf y se sube aquí en un commit.
 
-Overleaf ofrece una URL de Git por proyecto (**Menu → Git**), que es la forma
-menos frágil de sincronizar en ambos sentidos:
+De ese funcionamiento se siguen dos consecuencias que conviene tener claras:
 
-```bash
-git clone https://git.overleaf.com/<id-del-proyecto>
-# ... editar ...
-git add .
-git commit -m "Descripción del cambio"
-git push
-```
+- **Entre una versión estable y la siguiente, esta copia está desactualizada.**
+  Es lo esperado, no un fallo. Si necesitas el estado más reciente del
+  documento, ábrelo en Overleaf.
+- **No edites el `.tex` aquí para trabajar en el informe.** Un cambio hecho solo
+  en el repositorio se pierde en la siguiente sincronización, porque la copia se
+  sobrescribe desde Overleaf. Los cambios se hacen en Overleaf.
 
-La alternativa manual es **Menu → Upload / Download**, subiendo y bajando los
-archivos modificados. Funciona, pero no deja histórico y es fácil olvidar un
-archivo.
+### Cómo se actualiza la copia
+
+Responsable: el frente de validación ético-legal y documentación.
+
+1. En Overleaf, **Menu → Download → Source** (descarga el proyecto en ZIP).
+2. Sustituir en `informe/` los `.tex`, el `.bib` y los `.md` por los del ZIP.
+3. Descargar también el PDF compilado y guardarlo como `informe/main.pdf`.
+4. Compilar en local para comprobar que la copia está completa y sin errores.
+5. Un commit describiendo qué versión es y qué avanzó respecto de la anterior.
+
+Los auxiliares de LaTeX que traiga el ZIP no hace falta borrarlos a mano: el
+`.gitignore` de esta carpeta los deja fuera.
 
 ---
 
@@ -68,6 +75,7 @@ Proyecto_LAP_Captone/
     ├── referencias.bib             copia LITERAL de papers/citas_oficiales.txt
     ├── main.pdf                    PDF compilado (se versiona: es el entregable)
     ├── .gitignore                  reglas de LaTeX, solo rigen dentro de informe/
+    ├── .gitattributes              fija LF en los fuentes; solo rige aquí dentro
     ├── PENDIENTES.md               puntos abiertos, agrupados por quién los cierra
     ├── RESUMEN_ANTECEDENTES.md     los tres papers en prosa, sin LaTeX de por medio
     ├── NOTAS_FUENTES.md            trazabilidad de cada afirmación del informe
@@ -97,8 +105,10 @@ Todos los comandos de compilación de este README se ejecutan **desde
 | `NOTAS_FUENTES.md` | ¿De dónde sale cada afirmación del informe y cuánto se puede confiar en ella hoy? |
 | `CHECKLIST_CUMPLIMIENTO.md` | ¿En qué estado está cada requisito de cumplimiento? |
 
-Codificación: **UTF-8 sin BOM**, saltos de línea LF. Los acentos van escritos
-directamente (`á`, no `\'a`).
+Codificación: **UTF-8 sin BOM**, saltos de línea **LF**. Los acentos van escritos
+directamente (`á`, no `\'a`). El LF lo fija `.gitattributes` para los `.tex`,
+`.md` y `.bib`, de modo que no depende de la configuración `core.autocrlf` de
+cada máquina.
 
 `papers/` no se versiona: son PDFs de terceros, pesan varios MB y no interviene
 en la compilación. Las citas oficiales están en `referencias.bib` y la
