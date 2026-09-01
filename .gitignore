@@ -20,3 +20,8 @@ checkpoints/
 .DS_Store
 .vscode/
 .idea/
+
+# Configuracion local de herramientas.
+# Son preferencias de cada maquina, no del proyecto: cada quien tiene las
+# suyas y no deben viajar en el repo.
+.claude/
