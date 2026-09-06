@@ -110,4 +110,6 @@ ya son razonables.
 
 Dato de desempeño confirmado en prosa (introducción): MAE de 49,34 en ShanghaiTech PartA.
 
-## 7. RELEVANCIA PARA LAP: [PENDIENTE - lo completo yo]
+## 7. RELEVANCIA PARA LAP
+
+Su quadtree adaptativo procesa dinámicamente regiones densas y dispersas dentro de una misma imagen, lo cual es directamente aplicable al terminal, donde una sola cámara observa simultáneamente colas congestionadas y pasillos vacíos. El aprendizaje con anotación parcial reduce el costo de etiquetado sobre el video que proporcione la empresa. Al igual que P2PNet, opera sobre imágenes individuales sin asociación temporal.

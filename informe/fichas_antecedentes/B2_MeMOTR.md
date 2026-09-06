@@ -131,4 +131,6 @@ los objetivos podrían necesitar una tasa más alta para adaptarse a caracterís
 Datos de desempeño confirmados en prosa (resumen): MeMOTR supera al método del estado del arte en
 DanceTrack en 7,9 % en HOTA y 13,0 % en AssA.
 
-## 7. RELEVANCIA PARA LAP: [PENDIENTE - lo completo yo]
+## 7. RELEVANCIA PARA LAP
+
+Evaluado y descartado. Su contribución central es una memoria de largo plazo que mantiene la identidad de cada objeto a lo largo del tiempo, lo cual constituye seguimiento individual persistente. Bajo el alcance acordado para el proyecto, ese tipo de tratamiento excede el principio de proporcionalidad y aproxima la solución al régimen de datos sensibles del D.S. 016-2024-JUS. Se documenta como alternativa considerada dentro del estado del arte, no como componente de la arquitectura propuesta.

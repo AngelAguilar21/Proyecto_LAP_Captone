@@ -106,4 +106,6 @@ El artículo no tiene una sección de limitaciones. En prosa los autores sí rec
 Dato de desempeño confirmado en prosa: en NWPU-Crowd, P2PNet obtiene el mejor MAE global, con una
 reducción del 12,4 % respecto al segundo mejor método, DM-Count.
 
-## 7. RELEVANCIA PARA LAP: [PENDIENTE - lo completo yo]
+## 7. RELEVANCIA PARA LAP
+
+Entrega conteo y localización simultáneos mediante predicción de puntos, sin detección de rostros ni identificadores persistentes. La salida en coordenadas permite construir mapas de calor por zona comercial del terminal, que es el nivel de granularidad que requiere el área usuaria de LAP. Cada fotograma se procesa de forma independiente, por lo que no se generan trayectorias individuales.

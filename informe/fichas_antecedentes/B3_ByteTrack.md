@@ -146,4 +146,6 @@ Datos de desempeño confirmados en prosa (resumen y conclusión): aplicado a 9 t
 estado del arte, el método mejora el IDF1 entre 1 y 10 puntos; ByteTrack alcanza 80,3 MOTA, 77,3 IDF1
 y 63,1 HOTA en el test set de MOT17 con 30 FPS sobre una sola GPU V100.
 
-## 7. RELEVANCIA PARA LAP: [PENDIENTE - lo completo yo]
+## 7. RELEVANCIA PARA LAP
+
+Evaluado y descartado en su configuración completa. Es el estándar de referencia en seguimiento multi-objeto y su mecanismo de asociación por cajas de detección de baja confianza resulta técnicamente sólido, pero produce identificadores persistentes entre fotogramas. Se documenta como referencia del estado del arte en seguimiento; el alcance acordado se limita a estimación de densidad y conteo direccional agregado.
