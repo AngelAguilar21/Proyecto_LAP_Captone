@@ -4,36 +4,149 @@
 % Fabian: no editar el contenido; mantener el \section y los \label para
 % que las referencias cruzadas del resto del informe no se rompan.
 %
-% Los marcadores \pendiente{PLACEHOLDER}{...} que este archivo tenia se
-% retiraron del cuerpo. Lo que falta escribir en cada apartado esta
-% enunciado en prosa, y el encargo consta en PENDIENTES.md, seccion (b).
+% ESTADO (ver PENDIENTES.md): la decision de arquitectura (B-01/D-11) sigue
+% abierta -- hay una contradiccion sin resolver entre PENDIENTES.md /
+% CHECKLIST_CUMPLIMIENTO.md (la marcan abierta) y fichas_antecedentes/
+% B3_ByteTrack.md (que da por acordado un alcance limitado a conteo
+% agregado). Por eso esta Introduccion se redacta a proposito SIN
+% comprometerse con una granularidad de salida especifica: los objetivos
+% remiten esa decision a la Seccion de Metodologia y a la auditoria de
+% marco_etico_legal.tex (Sec. sec:auditoria), que la resuelven cuando el
+% frente tecnico la documente. Metodologia, Resultados y Conclusiones
+% siguen pendientes por ese motivo y no se tocan en este cambio.
 % =====================================================================
 \section{Introducción}
 \label{sec:introduccion}
 
-\cajaaviso{Sección en elaboración}{El contenido de esta sección está a
-cargo de otro integrante del equipo y se incorporará en la siguiente
-entrega. Los apartados que siguen reservan la estructura y la numeración
-que el resto del informe da por establecidas.}
-
 \subsection{Contexto del problema}
 \label{sec:contexto}
 
-Este apartado describirá el problema de las aglomeraciones de personas en
-el Aeropuerto Internacional Jorge Chávez y la relación del proyecto con
-Lima Airport Partners como cliente.
+El Aeropuerto Internacional Jorge Chávez, operado por Lima Airport
+Partners (LAP), concentra en determinadas franjas horarias y en puntos
+específicos del terminal --- filtros de seguridad, migraciones,
+mostradores de \emph{check-in}, salas de embarque --- un volumen de
+pasajeros considerablemente mayor que el de otras zonas del recinto en el
+mismo momento. Conocer dónde y cuándo se concentran las personas es
+información operativa de valor para un operador aeroportuario: permite,
+en principio, anticipar la apertura de mostradores adicionales, redirigir
+el flujo de pasajeros o dimensionar al personal de atención con mayor
+precisión que una revisión manual o periódica.
+
+LAP cuenta ya con infraestructura de videovigilancia de circuito cerrado
+en el terminal. Este proyecto explora si esa misma infraestructura puede
+aprovecharse, mediante técnicas de visión computacional, para producir
+una estimación automatizada de la concentración de personas por zona, sin
+que ello suponga identificar, individualizar ni caracterizar
+biométricamente a los pasajeros que aparecen en la imagen. Esta última
+condición no es una preferencia de diseño sino un límite impuesto por la
+Ley 29733 de Protección de Datos Personales y su reglamento vigente
+(D.S.\ 016-2024-JUS): un dato biométrico que por sí mismo identifica al
+titular constituye dato sensible, y el proyecto se plantea evitar ese
+tratamiento desde el diseño en lugar de mitigarlo después. La
+Sección~\ref{sec:marco} desarrolla en detalle el marco normativo
+aplicable, y la Sección~\ref{sec:antecedentes} revisa la literatura
+técnica que hace posible, en principio, estimar una aglomeración sin
+recurrir a identificación individual.
+
+Conviene precisar el alcance de esta afirmación desde ya, para no
+sobredimensionar el problema que el proyecto atiende. El equipo no cuenta,
+al momento de escribir este informe, con evidencia documentada por LAP
+--- incidentes registrados de aglomeración, tiempos de espera medidos o
+quejas de pasajeros --- que cuantifique el problema en el propio
+terminal; esa evidencia se ha solicitado al cliente y su ausencia se deja
+constancia expresa en \texttt{PENDIENTES.md}. El proyecto parte, por
+tanto, de una necesidad operativa plausible y compartida por la literatura
+de conteo de multitudes en espacios de alto tránsito, y no de una cifra
+propia de incidentes en el Aeropuerto Jorge Chávez.
 
 \subsection{Objetivos}
 \label{sec:objetivos}
 
-Este apartado enunciará el objetivo general del proyecto y los objetivos
-específicos que se derivan de él.
+\subsubsection*{Objetivo general}
+
+Desarrollar y evaluar un sistema de visión computacional capaz de estimar
+la concentración de personas en distintas zonas del Aeropuerto
+Internacional Jorge Chávez a partir de imágenes de cámaras fijas, sin
+recurrir a reconocimiento facial ni a la extracción de rasgos biométricos
+identificantes, y en condiciones de cumplimiento con el marco normativo
+peruano de protección de datos personales.
+
+\subsubsection*{Objetivos específicos}
+
+\begin{enumerate}[leftmargin=1.6em,itemsep=0.35em]
+  \item Revisar el estado del arte en detección, localización y conteo de
+        personas en escenas congestionadas, e identificar qué enfoque
+        técnico resulta más adecuado para un entorno aeroportuario y para
+        las restricciones de privacidad del proyecto (desarrollado en la
+        Sección~\ref{sec:antecedentes}).
+  \item Determinar el marco de cumplimiento normativo aplicable al
+        tratamiento de imágenes de un espacio de uso público bajo gestión
+        concesionada, incluyendo el análisis de impacto y los requisitos
+        de privacidad desde el diseño que ese tratamiento exige
+        (desarrollado en las Secciones~\ref{sec:marco}
+        y~\ref{sec:analisis}).
+  \item Diseñar e implementar el componente de detección y estimación,
+        con la granularidad de salida --- superficie de densidad, conteo
+        agregado por zona o localización individual --- que resulte de
+        aplicar el principio de proporcionalidad desarrollado en la
+        Sección~\ref{sec:directiva} y la síntesis de
+        antecedentes de la Sección~\ref{sec:sintesis-antecedentes}. Esta
+        decisión se documentará en la Sección de Metodología cuando el
+        frente técnico la cierre; hasta entonces queda registrada como
+        abierta en \texttt{PENDIENTES.md} (puntos B-01 y D-11).
+  \item Evaluar el desempeño del sistema mediante métricas cuantitativas y
+        cualitativas, indicando en cada caso sobre qué conjunto de datos
+        fue medido cada resultado --- ninguna cifra obtenida sobre
+        conjuntos públicos se presentará como desempeño esperable en el
+        terminal sin la validación en sitio que la
+        Sección~\ref{sec:ant-p2r} señala como condición previa.
+  \item Identificar los requisitos de validación adicionales que quedan
+        fuera del alcance material de este Capstone --- en particular el
+        acceso a datos del propio terminal y la evaluación de sesgo
+        demográfico --- y dejarlos documentados como trabajo pendiente en
+        lugar de darlos por resueltos (retomado en la
+        Sección~\ref{sec:conclusiones}).
+\end{enumerate}
 
 \subsection{Alcance y limitaciones del proyecto}
 \label{sec:alcance}
 
-Este apartado delimitará el alcance funcional del sistema, las zonas del
-terminal cubiertas y las limitaciones asumidas. Conviene que recoja
-también la limitación señalada en la Sección~\ref{sec:ant-p2r}: las
-métricas publicadas sobre conjuntos de datos públicos no son
-extrapolables al terminal sin una validación en sitio.
+\textbf{Alcance funcional.} El proyecto cubre la estimación de la
+concentración de personas por zona a partir de imágenes de cámaras fijas.
+Queda expresamente fuera de su alcance cualquier forma de identificación,
+reidentificación o caracterización individual de las personas detectadas:
+el sistema está pensado para responder \emph{cuántas personas hay, y
+dónde}, no \emph{quién es cada una}. La Sección~\ref{sec:ant-p2pnet}
+señala, sin embargo, que esta distinción es una cuestión de política de
+persistencia y no solo de algoritmo: el mismo modelo que localiza personas
+puede, si sus salidas se retienen y se asocian entre cuadros, aproximarse
+a un seguimiento de trayectorias. Por eso la granularidad de salida que
+finalmente se implemente es, como se indica en el objetivo específico 3,
+una decisión que debe quedar documentada por escrito antes de cerrar la
+Sección de Metodología.
+
+\textbf{Zonas cubiertas.} Las zonas concretas del terminal sobre las que
+se entrena y evalúa el sistema dependen de qué cámaras y qué material
+audiovisual habilite LAP para el proyecto, dato que a la fecha de este
+informe no ha sido confirmado por el cliente (\texttt{PENDIENTES.md},
+punto C-09). Donde este informe menciona zonas a título de ejemplo ---
+filtros de seguridad, mostradores de \emph{check-in}, salas de embarque
+--- lo hace como ilustración del tipo de espacio al que el sistema podría
+aplicarse, no como una cobertura ya acordada con el cliente.
+
+\textbf{Fase del proyecto y limitación de dominio.} Esta primera entrega
+corresponde a Capstone I: un desarrollo y validación conceptual del
+sistema sobre conjuntos de datos públicos de conteo de multitudes, sin
+acceso todavía a material propio del Aeropuerto Jorge Chávez. Esto impone
+la limitación más importante del proyecto en esta etapa, y conviene
+enunciarla sin atenuarla porque condiciona la lectura de todo lo que
+sigue: como documenta en detalle la Sección~\ref{sec:ant-p2r}, los propios
+autores de la literatura revisada reconocen una brecha de dominio entre
+los conjuntos públicos de entrenamiento y un entorno de despliegue nuevo,
+y señalan que el desempeño se degrada de forma marcada cuando no media una
+etapa de adaptación de dominio. En consecuencia, ninguna cifra de
+desempeño que se reporte en la Sección de Resultados debe leerse como una
+predicción de exactitud para el Aeropuerto Jorge Chávez: es, en el mejor
+de los casos, una cota de referencia sobre datos públicos, sujeta a
+validarse en sitio antes de comunicarse a LAP como una expectativa de
+desempeño (Sección~\ref{sec:auditoria}).

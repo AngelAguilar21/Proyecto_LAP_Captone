@@ -13,6 +13,12 @@ data/processed/
 *.pth
 checkpoints/
 
+# Prototipo LAP: salidas generadas y pesos de modelos externos
+proyecto_lap_prototipo/data/*.sqlite
+proyecto_lap_prototipo/data/*.csv
+proyecto_lap_prototipo/data/camera_*.mp4
+proyecto_lap_prototipo/external/P2PNet/weights/
+
 # Entorno / credenciales
 .env
 

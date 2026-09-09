@@ -1,0 +1,10 @@
+{
+  "_comentario": "Poligonos en coordenadas de PLANO COMPARTIDO (metros), el mismo sistema de referencia para camara A y B (ver homografias en config/calibracion.json). Por ahora una sola zona para toda la explanada; subdividir aqui cuando se sepa que subzonas importan para el analisis comercial (entrada, zona de espera, etc).",
+  "zonas": [
+    {
+      "id": "explanada",
+      "tipo": "area_comun",
+      "poligono": [[0.0, 0.0], [12.0, 0.0], [12.0, 8.0], [0.0, 8.0]]
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "_comentario": "Camera A y B ven la MISMA explanada exterior desde angulos/alturas distintas del mismo edificio (campo de vision superpuesto), no dos extremos de un pasillo con tramo ciego. area_comun es el bounding box aproximado del plano compartido -- placeholder hasta calibrar (ver src/calibrar_camara.py). Si al calibrar se conto en losetas en vez de medir en metros (no se sabia el tamano real), 'metros_por_unidad' queda en null; poner ahi el tamano real de una loseta en cuanto se mida, solo afecta como se REPORTAN distancias/velocidades, no la logica de fusion entre camaras.",
+  "metros_por_unidad": null,
+  "area_comun": {
+    "largo_metros": 12.0,
+    "ancho_metros": 8.0
+  },
+  "camaras": [
+    {
+      "id": "A",
+      "video_path": "data/camera_A.mp4",
+      "vecinos": ["B"]
+    },
+    {
+      "id": "B",
+      "video_path": "data/camera_B.mp4",
+      "vecinos": ["A"]
+    }
+  ],
+  "umbral_distancia_fusion_metros": 1.5
+}
