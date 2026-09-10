@@ -1,10 +1,13 @@
-# Python
-__pycache__/
-*.pyc
+# Python virtual environments
+lap_env/
 .venv/
 venv/
 
-# Datasets y videos pesados (no subir al repo, usar Drive)
+# Python cache
+__pycache__/
+*.pyc
+
+# Datasets, videos and model artifacts
 *.mp4
 *.avi
 data/raw/
@@ -21,8 +24,10 @@ proyecto_lap_prototipo/external/P2PNet/weights/
 
 # Entorno / credenciales
 .env
+.env.*
+!.env.example
 
-# Sistema operativo / editor
+# Operating system / editors
 .DS_Store
 .vscode/
 .idea/

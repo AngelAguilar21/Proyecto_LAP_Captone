@@ -1,17 +1,21 @@
-# Base de visión por computadora (CPU) para el Proyecto LAP
-# Entrenamiento pesado con GPU: usar Google Colab / Kaggle, no este contenedor.
+# Base de visión por computadora para el Proyecto LAP
+# Dependencias validadas del pipeline UCF-QNRF:
+# Python 3.9.6, numpy 2.0.2, matplotlib 3.9.4,
+# Pillow 11.3.0 y scipy 1.13.1.
 
-numpy
+numpy==2.0.2
 opencv-python-headless
-matplotlib
+matplotlib==3.9.4
 pandas
-Pillow
+Pillow==11.3.0
+scipy==1.13.1
 
-# PyTorch CPU (para probar/afinar modelos livianos localmente)
-torch --index-url https://download.pytorch.org/whl/cpu
-torchvision --index-url https://download.pytorch.org/whl/cpu
+# PyTorch CPU
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchvision
 
-# Detección de objetos (YOLO)
+# Detección de objetos
 ultralytics
 
 # Tracking multi-objeto
@@ -20,4 +24,4 @@ filterpy
 
 # Utilidades
 tqdm
-pyyaml
+PyYAML
