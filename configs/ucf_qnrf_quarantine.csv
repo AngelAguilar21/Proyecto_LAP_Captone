@@ -1,0 +1,4 @@
+split,image,reason
+Train,img_1070.jpg,image_annotation_misalignment
+Train,img_1066.jpg,image_annotation_misalignment
+Train,img_0191.jpg,image_annotation_misalignment

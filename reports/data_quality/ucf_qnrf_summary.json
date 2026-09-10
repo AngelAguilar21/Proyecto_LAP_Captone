@@ -1,0 +1,14 @@
+{
+    "images": 1535,
+    "annotations_files": 1532,
+    "total_points": 1244517,
+    "quarantined_images": 3,
+    "corrupted_images": 0,
+    "missing_annotations": 0,
+    "invalid_annotation_format": 0,
+    "images_with_oob_points": 253,
+    "oob_points": 402,
+    "oob_le_5px": 209,
+    "oob_5_to_50px": 60,
+    "oob_gt_50px": 133
+}
