@@ -42,3 +42,8 @@ proyecto_lap_prototipo/external/P2PNet/weights/
 # papers dentro): es un artefacto, no fuente. El informe se trabaja en
 # informe/, no en el zip.
 informe.zip
+proyecto_lap_prototipo/config/live.local.json
+proyecto_lap_prototipo/config/live.local.tmp
+proyecto_lap_prototipo/dashboard/node_modules/
+proyecto_lap_prototipo/dashboard/dist/
+proyecto_lap_prototipo/data/uploads/
