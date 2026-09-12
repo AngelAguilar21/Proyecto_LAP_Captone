@@ -147,9 +147,26 @@ Cita bibliográfica: `Lin_2025_CVPR`, copiada literalmente de `papers/citas_ofic
 
 ## 2. Fuentes normativas
 
-> **Ninguna de las siguientes fue consultada en su texto oficial durante la
-> redacción.** El informe las cita en términos generales y marca con
-> `%% VERIFICAR` todo numeral, fecha o redacción literal. Esta tabla es la
+> **Actualización del 11 de septiembre de 2026.** El enunciado que sigue dejó de
+> ser cierto para una parte de las normas. Al redactar
+> `secciones/03_marco_normativo.md` y `secciones/04_analisis_impacto.md` se
+> consultaron en texto primario la **Ley 29733** y el **D.S. 007-2020-IN**, y en
+> reproducción íntegra de fuente secundaria la **Directiva 01-2020-JUS/DGTAIPD**
+> y los **incisos 6 y 7 del artículo 2 de la Constitución**. Lo verificado se
+> detalla en §2.7 y se cita entrecomillado en el informe. El **D.S. 016-2024-JUS
+> sigue sin contrastarse contra su texto**: su articulado continúa marcado
+> `[VERIFICAR]` en el cuerpo de la Sección 3.
+>
+> Se añade un estado nuevo a la leyenda de este archivo:
+>
+> | Estado | Significado |
+> |---|---|
+> | **VERIFICADO-PRIMARIA** | Contrastado contra el texto de la norma publicado por fuente oficial (portal del Estado, *El Peruano*). Se cita entrecomillado en el informe. |
+> | **VERIFICADO-SECUNDARIA** | Contrastado contra una reproducción íntegra del texto en fuente secundaria fiable, **no** contra el documento oficial. Se cita entrecomillado pero conserva su `[VERIFICAR]` de contraste. |
+
+> **Lo que sigue conserva el enunciado original**, aplicable a las normas que
+> todavía no se contrastaron. El informe las cita en términos generales y marca
+> con `[VERIFICAR]` todo numeral, fecha o redacción literal. Esta tabla es la
 > lista de trabajo de verificación.
 
 ### 2.1 Nivel constitucional
@@ -305,6 +322,89 @@ abierto** en cada uno, para que la distinción no se pierda.
   terminal); evaluar así material de LAP sería transferencia internacional.
 - **Queda abierto:** términos del servicio del servidor de evaluación y
   jurisdicción del operador (checklist B-07).
+
+---
+
+### 2.7 Normas contrastadas al redactar las Secciones 3 y 4 (11/09/2026)
+
+Todo lo que en `03_marco_normativo.md` y `04_analisis_impacto.md` aparece
+**entrecomillado** procede de esta tabla. Lo que no pudo contrastarse quedó
+marcado `[VERIFICAR]` dentro del propio cuerpo del informe, no aquí.
+
+#### Ley 29733 — VERIFICADO-PRIMARIA
+
+Texto consultado: Ley de Protección de Datos Personales, reproducción oficial
+publicada por el Estado peruano (portal institucional, documento PDF completo).
+
+| Precepto | Qué se cita en el informe | Dónde se usa |
+|---|---|---|
+| Art. 1 | Objeto: garantizar el derecho del art. 2 numeral 6 de la Constitución | §3.1 |
+| Art. 2.4 | «Toda información sobre una persona natural que la identifica o la hace identificable a través de medios que pueden ser razonablemente utilizados» | §3.2 |
+| **Art. 2.5** | Definición de datos sensibles, incluidos «los datos biométricos que por sí mismos pueden identificar al titular» | §3.2, §3.9 |
+| Art. 2.6 | Encargado del banco de datos personales | §3.8 |
+| Art. 2.8 | Flujo transfronterizo de datos personales | §3.8 |
+| **Art. 2.12** | Anonimización: «El procedimiento es **irreversible**» | §3.2 — base de la contradicción D-02 |
+| **Art. 2.13** | Disociación: «El procedimiento es **reversible**» | §3.2 — base de la contradicción D-02 |
+| Art. 5 / 13.5 | Consentimiento «previo, informado, expreso e inequívoco» | §3.3 |
+| **Art. 6** | Principio de finalidad; prohibición de extender el tratamiento a otra finalidad | §3.3 — base de la contradicción D-03 |
+| **Art. 7** | Proporcionalidad: «adecuado, relevante y no excesivo a la finalidad» | §3.4 |
+| **Art. 8** | Calidad: conservar «solo por el tiempo necesario para cumplir con la finalidad» | §3.6 |
+| Art. 11 / 15 | Nivel de protección adecuado y flujo transfronterizo | §3.8 |
+| Art. 14 | Limitaciones al consentimiento; **numeral 9** (intereses legítimos) y numeral 8 (anonimización o disociación) | §3.3 |
+| Arts. 18–25 | Derechos del titular. **Art. 23**, tratamiento objetivo, citado literalmente | §3.7, §4.3 |
+| **Art. 28.4** | «No utilizar los datos personales […] para finalidades distintas de aquellas que motivaron su recopilación» | §3.3 — contradicción D-03 |
+| **Art. 28.7** | Deber de supresión cuando los datos dejan de ser necesarios | §3.6 |
+| Art. 30 | Prestación de servicios de tratamiento por cuenta de terceros | §3.8 |
+
+> **Nota sobre el art. 14 numeral 9.** Su redacción peruana —«salvaguardar
+> intereses legítimos **del titular de datos personales** por parte del titular
+> de datos personales o por el encargado»— **no coincide** con el interés
+> legítimo del responsable del RGPD. El informe lo advierte expresamente en §3.3
+> y **no** afirma que ampare la finalidad del proyecto. Es una de las preguntas
+> a elevar al área legal de LAP (C-02).
+
+#### D.S. 007-2020-IN — VERIFICADO-PRIMARIA
+
+Reglamento del D.L. 1218 y de la Ley 30120, consultado en *El Peruano*.
+Publicación: 24/04/2020. **Hallazgo nuevo, no registrado antes en este archivo.**
+
+| Precepto | Qué se cita | Consecuencia |
+|---|---|---|
+| **Art. 3** | Ámbito: «establecimientos comerciales abiertos al público con un aforo de cincuenta (50) personas o más» | El terminal supera el umbral: el régimen **prima facie** lo alcanza (§3.1). Cierra parcialmente A-21 |
+| **Art. 17.1** | Entrega a PNP o Ministerio Público «en un plazo máximo de veinticuatro (24) horas» | §3.6 |
+| **Art. 17.2** | «Almacenar las imágenes, videos o audios grabados por un plazo **mínimo de cuarenta y cinco (45) días calendario**» | §3.6. **Tensión con el techo de 60 días de la Directiva**; sostiene la recomendación de separar el subsistema de conteo del CCTV de seguridad |
+
+#### Directiva 01-2020-JUS/DGTAIPD — VERIFICADO-SECUNDARIA
+
+Denominación oficial: «Directiva de Tratamiento de Datos Personales mediante
+Sistemas de Videovigilancia». Aprobada por **Resolución Directoral
+02-2020-JUS/DGTAIPD**, publicada el **16/01/2020**. Cierra A-19 en cuanto a
+identificación formal.
+
+| Numeral | Qué se cita | Dónde |
+|---|---|---|
+| 6.3 | Bases de legitimación: consentimiento, ley, o supuestos del art. 14 de la Ley 29733 | §3.3 |
+| 6.4 | Proporcionalidad: «adecuado, pertinente y no excesivo en relación con el ámbito y las finalidades» | §3.4 |
+| 6.11 | Contenido mínimo del cartel y dimensión mínima **297 × 210 mm** | §3.7, Anexo A |
+| 6.13 y 7.18 | Conservación de imágenes: **de 30 a 60 días como máximo** | §3.6 |
+
+> **Pendiente A-19b:** estos numerales proceden de una reproducción del texto
+> íntegro, no del documento oficial. Contrastar antes de la entrega.
+
+#### Constitución de 1993, art. 2 — VERIFICADO-SECUNDARIA
+
+Incisos 6 y 7 obtenidos en su redacción literal y citados como tales en §3.1.
+Queda contrastarlos contra la edición oficial del Congreso (A-12).
+
+#### D.S. 016-2024-JUS — SIN CONTRASTAR
+
+Se confirmaron en varias fuentes secundarias concordantes la fecha de
+publicación (30/11/2024), la de entrada en vigor (30/03/2025), la derogación del
+D.S. 003-2013-JUS, el plazo de 48 horas para notificar brechas y el carácter
+exigible de la EIPD para tratamientos de alto riesgo —con la videovigilancia
+masiva entre los supuestos—. **No se obtuvo el articulado.** Por eso §3.5 y §3.8
+conservan marcadores `[VERIFICAR]` sobre los artículos concretos, y A-13 sigue
+siendo el pendiente prioritario de este frente.
 
 ---
 

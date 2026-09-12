@@ -4,7 +4,7 @@ Registro de los puntos abiertos del informe.
 
 **Responsable del archivo:** Fabián Moreno Ugarte — Validación ética/legal y documentación
 **Proyecto:** Capstone I, Universidad ESAN — Estimación de aglomeraciones, Aeropuerto Jorge Chávez (cliente: LAP)
-**Última actualización:** 1 de septiembre de 2026
+**Última actualización:** 11 de septiembre de 2026
 
 ---
 
@@ -62,16 +62,17 @@ está en `NOTAS_FUENTES.md`.
 
 | # | Qué verificar | Dónde |
 |---|---|---|
-| A-12 | Transcripción literal del artículo 2, incisos 6 y 7 de la Constitución, desde la edición oficial. | Nivel constitucional |
-| A-13 | **Prioritario.** Las cuatro fechas del D.S. 016-2024-JUS contra *El Peruano*: publicación (30/11/2024), vigencia (30/03/2025), derogación del D.S. 003-2013-JUS. Un error aquí arrastra todo el análisis de régimen transitorio. | Ley 29733 y reglamento |
-| A-14 | Numeral exacto del artículo 2 de la Ley 29733 sobre dato sensible; si el D.S. 016-2024-JUS precisó la definición. | Datos biométricos |
+| A-12 | ~~Transcripción literal del artículo 2, incisos 6 y 7 de la Constitución~~ → **texto obtenido y citado literalmente en §3.1.** Queda contrastarlo contra la edición oficial del Congreso. | Nivel constitucional |
+| A-13 | **Prioritario y aún abierto.** Las fechas del D.S. 016-2024-JUS (publicación 30/11/2024, vigencia 30/03/2025, derogación del D.S. 003-2013-JUS) se confirmaron en varias fuentes secundarias concordantes, **pero no contra *El Peruano***. Un error aquí arrastra todo el análisis de régimen transitorio. | Ley 29733 y reglamento |
+| A-14 | ~~Numeral exacto del artículo 2 sobre dato sensible~~ → **cerrado: art. 2 numeral 5**, citado literalmente en §3.2. Sigue abierto si el D.S. 016-2024-JUS precisó la definición. | Datos biométricos |
 | A-15 | Artículo que regula la EIPD, contenido mínimo exigido y supuestos en que la consulta previa a la ANPD pasa de facultativa a obligatoria, con su plazo. | EIPD |
 | A-16 | Artículo del plazo de notificación de brechas; desde qué hecho se computa; horas hábiles o calendario; destinatario (ANPD, titulares o ambos); umbral de gravedad. | Brechas |
 | A-17 | Artículo del cronograma del ODP; umbrales de ingresos de cada tramo y sus fechas; comunicación de la designación a la ANPD; requisitos de independencia. | ODP |
 | A-18 | Artículo del alcance extraterritorial y sus criterios de conexión. | Extraterritorialidad |
-| A-19 | Denominación oficial completa de la Directiva 01-2020-JUS/DGTAIPD y número y fecha de la resolución directoral que la aprueba. Su vigencia ya está verificada; falta descartar una derogación parcial revisando las disposiciones derogatorias del D.S. 016-2024-JUS. | Directiva |
-| A-20 | D.L. 1218: denominación oficial, fecha, obligaciones de entrega de imágenes a PNP y Ministerio Público, plazos de conservación. | D.L. 1218 y Ley 30120 |
-| A-21 | Ley 30120: denominación oficial, fecha y, sobre todo, si alcanza a establecimientos privados abiertos al público. Decide si aplica al terminal. | D.L. 1218 y Ley 30120 |
+| A-19 | ~~Denominación oficial y resolución que aprueba la Directiva~~ → **cerrado:** «Directiva de Tratamiento de Datos Personales mediante Sistemas de Videovigilancia», Resolución Directoral 02-2020-JUS/DGTAIPD, 16/01/2020. **Sigue abierto** descartar una derogación parcial revisando las disposiciones derogatorias del D.S. 016-2024-JUS. | Directiva |
+| A-19b | Contrastar contra el texto oficial los numerales de la Directiva ya citados en §3.3, §3.4, §3.6 y §3.7: 6.3, 6.4, 6.11, 6.13 y 7.18. Se obtuvieron de una reproducción del texto íntegro, no del documento oficial. | Directiva |
+| A-20 | D.L. 1218: **reglamento identificado y verificado contra *El Peruano* — D.S. 007-2020-IN (24/04/2020)**, art. 17.1 (entrega a PNP/Ministerio Público en máx. 24 h) y art. 17.2 (almacenamiento mínimo 45 días calendario). Falta la fecha y denominación del propio D.L. | D.L. 1218 y Ley 30120 |
+| A-21 | Ley 30120: **hallazgo relevante.** El art. 3 del D.S. 007-2020-IN incluye en su ámbito los «establecimientos comerciales abiertos al público con un aforo de cincuenta (50) personas o más», umbral que el terminal supera con holgura. El régimen prima facie lo alcanza; la calificación definitiva es de LAP (ver C-13). | D.L. 1218 y Ley 30120 |
 | A-22 | Redacción literal del artículo 35 del RGPD antes de citarlo textualmente. | Referencia comparada |
 | A-23 | Artículos del Reglamento (UE) 2024/1689 sobre identificación biométrica remota y sobre alto riesgo, y su calendario de aplicación escalonada. | Referencia comparada |
 | A-24 | Año de edición vigente y denominación oficial en español de ISO/IEC 27001 e ISO/IEC 42001. | Referencia comparada |
@@ -118,6 +119,49 @@ sucesivos. Varias respuestas se condicionan entre sí.
 | C-12 | Composición del tráfico de pasajeros por procedencia. | Decide si el cartel necesita idiomas adicionales al español y el inglés. |
 | C-13 | Régimen jurídico del terminal y normativa aeronáutica aplicable en materia de vigilancia (contrato de concesión). | Zona gris identificada y **no resuelta** en el informe: de esta calificación depende qué régimen de videovigilancia resulta exigible. Primer punto a elevar al área legal de LAP. |
 | C-14 | Acceso a material del terminal para la campaña de validación en sitio. | Sin él, dos hallazgos de la auditoría —exactitud validada en el dominio de destino y evaluación de sesgo— quedan sin cerrar, y así deben reportarse en las conclusiones. Ver A-11 y B-03. |
+
+---
+
+## (d) Contradicciones entre documentos del proyecto
+
+Detectadas al redactar las Secciones 3 y 4 (11/09/2026) y **revisadas contra el
+prototipo del frente técnico** tras incorporar los seis *commits* del remoto ese
+mismo día. **Este frente las deja registradas y expresamente no las resuelve por
+su cuenta:** afectan al alcance del sistema y no a la redacción del informe, de
+modo que su cierre es una decisión del equipo.
+
+La revisión del prototipo cambió el cuadro en dos sentidos, y conviene no
+presentarlo solo como una lista de incumplimientos: **D-01 se cerró a favor del
+frente técnico**, porque la implementación evita deliberadamente los *embeddings*
+de reidentificación que la presentación sugería; y apareció **D-05**, que no
+estaba previsto y que es el hallazgo más accionable de todo el análisis.
+
+| # | Contradicción | Por qué importa | Dónde se trata |
+|---|---|---|---|
+| D-01 | ~~La presentación contempla reidentificación por *embeddings* de apariencia frente al RNF-01~~ | ✅ **No se confirma. Cerrado el 11/09/2026** tras revisar el prototipo (`proyecto_lap_prototipo/src/cross_camera.py`, `nodes.py`). La fusión entre cámaras es **asociación espacio-temporal sobre plano compartido** como capa obligatoria; el desempate usa un descriptor de histograma de color del torso más proporción alto/ancho, documentado como no biométrico, nunca como identificador único, y **no persistido**. No hay ReID ni *embeddings*. La decisión de diseño va en la dirección que exige el RNF-01 y así se reconoce en §3.9. **Queda vigilar** que el criterio se sostenga si se busca mayor exactitud en la fusión. | `03_marco_normativo.md` §3.9 |
+| D-02 | El material del equipo habla de **«personas anonimizadas»** donde hay un identificador persistente que reconstruye trayectorias. **Ahora también en el código.** | La Ley 29733 separa ambas figuras: art. 2 numeral 12, anonimización, **procedimiento irreversible**; art. 2 numeral 13, disociación, **procedimiento reversible**. Un ID persistente es disociación, y **el dato disociado sigue siendo dato personal sujeto al régimen general**. El comentario de `proyecto_lap_prototipo/src/persistence.py` lo llama «el id temporal **no reversible**», pero ese id es `PRIMARY KEY` de la tabla `personas` y enlaza el historial completo de `posiciones`: es reversible por construcción. | `03_marco_normativo.md` §3.2 y §3.9 |
+| D-03 | **Medir permanencia en zona comercial** se presenta junto a la estimación de aglomeraciones, y se vincula a un interés comercial del cliente. | Son finalidades distintas. El art. 6 prohíbe extender el tratamiento a una finalidad no establecida de forma inequívoca al momento de la recopilación, y el art. 28 numeral 4 lo repite como obligación. La finalidad comercial exigiría **declaración, base de legitimación y deber de información propios**. **Ya no es hipotética:** el esquema del prototipo guarda `zona` por posición y `primera_deteccion`/`ultima_deteccion` por persona, que es maquinaria de permanencia por zona. | `03_marco_normativo.md` §3.3 y `04_analisis_impacto.md` §4.5 |
+| D-04 | El **texto literal del RNF-01** no consta en el repositorio. | Se buscó en `secciones/`, en los `.md` de seguimiento, en el `.docx` y en el árbol remoto tras el *pull*: no aparece. Su formulación se recoge en §3.9 con marcador `[VERIFICAR]`. Pierde urgencia al cerrarse D-01, pero sigue siendo necesario para poder afirmar la conformidad por escrito. | `03_marco_normativo.md` §3.9 |
+| **D-05** | **La medida M-03 no se cumple en el prototipo.** M-03 exige salida agregada por zona **sin coordenadas individuales persistidas**; `persistence.py` escribe en SQLite una tabla `posiciones` con `id_persona, camara, x, y, t, zona` por detección. | **Hallazgo no conforme, y el más accionable de todo el análisis.** Es el tercer tipo de dato de §3.2 —espacio-temporal encadenado a un identificador persistente— escrito en disco. Excede lo que la finalidad de estimar aglomeraciones requiere (art. 7), y la defensa basada en que «la salida es agregada» deja de estar disponible. **M-02 sí se respeta:** no se almacenan fotogramas. Subsanable por el propio equipo, sin depender de LAP: agregar por zona antes de escribir, o fijar retención muy corta sobre `posiciones`. | `03_marco_normativo.md` §3.5 y §3.9; `04_analisis_impacto.md` §4.5 |
+
+---
+
+## (e) Puntos estructurales abiertos sobre el propio informe
+
+Surgidos al redactar las nuevas secciones. No son cuestiones de contenido sino
+de organización del documento, y conviene cerrarlos antes de la siguiente
+entrega porque afectan a qué versión es la buena.
+
+| # | Punto | Estado |
+|---|---|---|
+| E-01 | **Duplicidad de fuente para las Secciones 3 y 4.** | ✅ **Cerrado el 11/09/2026.** Los `.md` son la fuente única. Los `.tex` se archivaron en `secciones/_archivo/` y quedan congelados; `main.tex` repunta ahí sus `\input` para que el PDF histórico siga siendo reproducible. Lo que quedó solo en el `.tex` está listado en `secciones/_archivo/README.md`. |
+| E-02 | **Overleaf abandonado.** La compilación dejó de funcionar por el límite de la cuenta gratuita; el entregable es ahora el `.docx`. | ✅ **Cerrado el 11/09/2026** en cuanto a la decisión y al `README.md`. **Queda abierto** el procedimiento de integración `.md` → `.docx`: no hay acordado un método ni constancia de qué versión del `.md` está incorporada al `.docx` en cada momento. Ver E-07. |
+| E-03 | **El `.docx` y el `.tex` divergieron en Antecedentes.** El `.docx` (últ. mod. 09/09/2026, Ángel) añade MOTRv2, GeneralTrack, seguimiento multicámara por clustering y MCBLT, que no están en `antecedentes.tex`; y `fichas_antecedentes/` cubre PET, MeMOTR y ByteTrack, que tampoco coinciden con los del `.docx`. | **Abierto.** Las tres contradicciones de la sección (d) proceden justamente de los antecedentes nuevos del `.docx`. |
+| E-04 | **Título de la sección.** El `.tex` archivado la titula «Marco ético y legal aplicable»; el `.md` vigente, «Marco normativo aplicable». Las referencias cruzadas dicen solo «Sección 3», así que ninguna se rompe. | ✅ **Cerrado por consecuencia de E-01:** manda el `.md`, luego el título es «Marco normativo aplicable». |
+| E-05 | **Extensión.** La Sección 3 quedó en 4.744 palabras frente al objetivo inicial de 2.500–3.500. | ✅ **Cerrado el 11/09/2026:** se mantiene en 4.744. El límite era arbitrario y recortar exigía retirar citas verificadas. |
+| E-06 | **Normas legales fuera de `referencias.bib`.** Se respetó la regla 4 del `README`: las normas se citan en prosa y su trazabilidad va a `NOTAS_FUENTES.md`. | ✅ **Cerrado** por decisión de 11/09/2026. Se deja constancia porque el encargo inicial pedía lo contrario. |
+| E-07 | **Integración `.md` → `.docx`.** Falta acordar cómo se convierten las Secciones 3 y 4 al `.docx` y cómo se deja constancia de qué versión del `.md` está incorporada. Sin eso, ambos divergen en silencio, que es el problema que E-01 acaba de resolver para el `.tex`. | **Abierto.** Depende de Ángel (integración) y de este frente. |
+| E-08 | **Migración del resto de secciones.** `introduccion`, `antecedentes`, `metodologia`, `resultados`, `conclusiones` y `anexo_cartel` siguen en `.tex` y no se han migrado: hoy conviven dos formatos. El Anexo A importa especialmente, porque las Secciones 3.5 y 3.7 lo citan como modelo de cartel. | **Abierto.** Decidir si se migran todas a `.md` o si el `.docx` las absorbe de otra forma. |
 
 ---
 

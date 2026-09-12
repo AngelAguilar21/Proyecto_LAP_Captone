@@ -1,8 +1,31 @@
 # Informe Capstone I — Aglomeraciones LAP
 
-Proyecto LaTeX del informe de Capstone I (Universidad ESAN, Ingeniería de IA).
-Sistema de visión computacional para estimar aglomeraciones de personas en el
-Aeropuerto Internacional Jorge Chávez, para Lima Airport Partners (LAP).
+Informe de Capstone I (Universidad ESAN, Ingeniería de IA). Sistema de visión
+computacional para estimar aglomeraciones de personas en el Aeropuerto
+Internacional Jorge Chávez, para Lima Airport Partners (LAP).
+
+> ## ⚠ Cambio de herramienta — 11 de septiembre de 2026
+>
+> **El entregable es ahora `Informe_LAP_Aglomeraciones.docx`, no el PDF de
+> LaTeX.** El equipo dejó de trabajar en Overleaf porque la compilación dejó de
+> funcionar por el límite de la cuenta gratuita.
+>
+> En consecuencia:
+>
+> - **Las Secciones 3 y 4 se mantienen en Markdown**, en
+>   `secciones/03_marco_normativo.md` y `secciones/04_analisis_impacto.md`.
+>   Son la **fuente única** de esas dos secciones y convierten a Word sin pasar
+>   por LaTeX.
+> - Sus versiones `.tex` se archivaron en `secciones/_archivo/` y **no se
+>   editan**. El porqué y lo que quedó sólo allí está en
+>   `secciones/_archivo/README.md`.
+> - **El `.tex` ya no es la fuente del informe.** `main.tex` sigue compilando
+>   —sus `\input` apuntan al archivo— para que el PDF histórico siga siendo
+>   reproducible, pero esa compilación es **legado**: no es lo que se entrega.
+> - Las demás secciones (`introduccion`, `antecedentes`, `metodologia`,
+>   `resultados`, `conclusiones`, `anexo_cartel`) siguen en `.tex` y **no se han
+>   migrado**. Hoy conviven dos formatos; unificarlos está registrado como punto
+>   abierto E-01/E-03 en `PENDIENTES.md`.
 
 | Integrante | Frente |
 |---|---|
@@ -18,42 +41,32 @@ documentación.
 
 ## Dónde se edita el documento
 
-**El documento se edita en Overleaf.** Ahí escribe el equipo, ahí se resuelven
-los conflictos de edición simultánea y de ahí sale el PDF que se entrega.
+**Ya no se edita en Overleaf.** El repositorio dejó de ser una copia de
+referencia y pasó a ser el sitio donde se trabaja.
 
-**Lo que hay en esta carpeta del repositorio es una copia de referencia**, no una
-segunda línea de trabajo. Sirve para que el informe quede junto al resto del
-proyecto, para poder consultarlo o compilarlo sin abrir Overleaf, y para dejar
-constancia versionada de cada estado estable del documento.
+| Qué | Dónde se edita | Quién |
+|---|---|---|
+| **Secciones 3 y 4** | `secciones/03_marco_normativo.md` y `secciones/04_analisis_impacto.md`, aquí en el repositorio | Frente ético-legal |
+| **Informe que se entrega** | `Informe_LAP_Aglomeraciones.docx` | Ángel (integración) |
+| Resto de secciones | `.tex` en `secciones/`, sin migrar | Sus responsables |
 
-### La sincronización es manual
+El flujo hoy es: las Secciones 3 y 4 se escriben en Markdown, se convierten a
+Word y se integran en el `.docx` que mantiene Ángel. **El `.md` es la fuente;
+lo que esté en el `.docx` es el resultado de la última integración.** Si ambos
+difieren, manda el `.md` y hay que reintegrar.
 
-No hay sincronización automática entre Overleaf y este repositorio, ni está
-previsto montarla. La copia se actualiza **a mano, en cada versión estable** del
-documento: cuando se cierra un avance que vale la pena dejar registrado, se
-descarga de Overleaf y se sube aquí en un commit.
+> **Punto abierto.** No hay todavía un procedimiento acordado de integración
+> `.md` → `.docx` ni constancia de qué versión del `.md` está incorporada al
+> `.docx` en cada momento. Registrado en `PENDIENTES.md` (E-01, E-02).
 
-De ese funcionamiento se siguen dos consecuencias que conviene tener claras:
+### Qué NO hacer
 
-- **Entre una versión estable y la siguiente, esta copia está desactualizada.**
-  Es lo esperado, no un fallo. Si necesitas el estado más reciente del
-  documento, ábrelo en Overleaf.
-- **No edites el `.tex` aquí para trabajar en el informe.** Un cambio hecho solo
-  en el repositorio se pierde en la siguiente sincronización, porque la copia se
-  sobrescribe desde Overleaf. Los cambios se hacen en Overleaf.
-
-### Cómo se actualiza la copia
-
-Responsable: el frente de validación ético-legal y documentación.
-
-1. En Overleaf, **Menu → Download → Source** (descarga el proyecto en ZIP).
-2. Sustituir en `informe/` los `.tex`, el `.bib` y los `.md` por los del ZIP.
-3. Descargar también el PDF compilado y guardarlo como `informe/main.pdf`.
-4. Compilar en local para comprobar que la copia está completa y sin errores.
-5. Un commit describiendo qué versión es y qué avanzó respecto de la anterior.
-
-Los auxiliares de LaTeX que traiga el ZIP no hace falta borrarlos a mano: el
-`.gitignore` de esta carpeta los deja fuera.
+- **No editar los `.tex` de `secciones/_archivo/`.** Están congelados. Cualquier
+  cambio en las Secciones 3 o 4 va al `.md` correspondiente.
+- **No reintroducir las Secciones 3 y 4 en el `.tex`.** Volvería a haber dos
+  fuentes para lo mismo, que es justamente lo que este cambio elimina.
+- **No editar a mano en el `.docx` el texto de las Secciones 3 o 4.** Ese cambio
+  se pierde en la siguiente integración desde el `.md`.
 
 ---
 
@@ -71,9 +84,10 @@ Proyecto_LAP_Captone/
 ├── Tareas equipo.md                raíz: coordinación del equipo
 ├── .gitignore                      raíz: reglas de Python/Docker (NO tocar)
 └── informe/                        ← todo lo de este README
-    ├── main.tex                    preámbulo, portada, índice, \input de secciones
+    ├── Informe_LAP_Aglomeraciones.docx   ← EL ENTREGABLE (lo mantiene Ángel)
+    ├── main.tex                    LEGADO: preámbulo, portada, \input de secciones
     ├── referencias.bib             copia LITERAL de papers/citas_oficiales.txt
-    ├── main.pdf                    PDF compilado (se versiona: es el entregable)
+    ├── main.pdf                    LEGADO: PDF compilado, ya no es el entregable
     ├── .gitignore                  reglas de LaTeX, solo rigen dentro de informe/
     ├── .gitattributes              fija LF en los fuentes; solo rige aquí dentro
     ├── PENDIENTES.md               puntos abiertos, agrupados por quién los cierra
@@ -82,21 +96,29 @@ Proyecto_LAP_Captone/
     ├── CHECKLIST_CUMPLIMIENTO.md   estado de cumplimiento
     ├── README.md                   este archivo
     ├── papers/                     PDFs fuente + citas_oficiales.txt (no versionado)
+    ├── fichas_antecedentes/        fichas de PET, MeMOTR, ByteTrack, P2PNet
     └── secciones/
+        ├── 03_marco_normativo.md   ← FUENTE de la Sección 3 (frente ético-legal)
+        ├── 04_analisis_impacto.md  ← FUENTE de la Sección 4 (frente ético-legal)
         ├── introduccion.tex        a cargo de otro integrante
         ├── antecedentes.tex        ← frente ético-legal
-        ├── marco_etico_legal.tex   ← frente ético-legal
-        ├── analisis_impacto.tex    ← frente ético-legal
         ├── metodologia.tex         a cargo de otro integrante
         ├── resultados.tex          a cargo de otro integrante
         ├── conclusiones.tex        a cargo de otro integrante
-        └── anexo_cartel.tex        ← frente ético-legal (Anexo A)
+        ├── anexo_cartel.tex        ← frente ético-legal (Anexo A)
+        └── _archivo/               .tex retirados de las Secciones 3 y 4
+            ├── README.md           por qué se archivaron y qué quedó solo aquí
+            ├── marco_etico_legal.tex    CONGELADO — no editar
+            └── analisis_impacto.tex     CONGELADO — no editar
 ```
 
 Todos los comandos de compilación de este README se ejecutan **desde
 `informe/`**, no desde la raíz del repositorio.
 
-### Los cuatro archivos `.md` y para qué sirve cada uno
+### Los cuatro archivos `.md` de seguimiento y para qué sirve cada uno
+
+No confundirlos con los `.md` de `secciones/`, que son texto del informe. Estos
+cuatro son de seguimiento y no se entregan al cliente.
 
 | Archivo | Responde a la pregunta |
 |---|---|
@@ -116,7 +138,17 @@ trazabilidad, en `NOTAS_FUENTES.md`.
 
 ---
 
-## Cómo compilar
+## Cómo compilar (legado)
+
+> **Esta sección es legado.** El PDF ya no es el entregable y compilar no es
+> parte del flujo de trabajo normal. Se conserva porque `main.tex` sigue
+> compilando —sus `\input` de las Secciones 3 y 4 apuntan a
+> `secciones/_archivo/`— y conviene que el PDF histórico siga siendo
+> reproducible. **El PDF resultante no incluye las versiones vigentes de las
+> Secciones 3 y 4**, que están en los `.md`.
+>
+> Overleaf ya no se usa: la compilación dejó de funcionar por el límite de la
+> cuenta gratuita. Lo que sigue vale para compilar en local.
 
 Requiere **pdfLaTeX + Biber**, ambos incluidos en MiKTeX y TeX Live.
 
@@ -134,10 +166,8 @@ pdflatex main
 pdflatex main
 ```
 
-En Overleaf no hay que hacer nada especial: **Recompile** basta. Comprobar en
-**Menu** que el compilador es `pdfLaTeX`, que el documento principal es
-`main.tex` y que la versión de TeX Live es 2025 o posterior (ver la nota sobre
-`longtable`).
+El documento principal es `main.tex` y requiere TeX Live 2025 o posterior (ver
+la nota sobre `longtable`).
 
 ### Notas para Windows / MiKTeX
 
@@ -171,10 +201,9 @@ PDF. **No depende de este documento:** se reproduce con un `longtable` mínimo d
 una sola columna `p{}` que cruce un salto de página. Está corregido desde
 **v4.27 (2026-01-28)**, que es la versión con la que se verificó este proyecto.
 
-Si aparece ese error en Overleaf, hay dos salidas equivalentes:
+Si aparece ese error, hay dos salidas equivalentes:
 
-- cambiar la versión de TeX Live del proyecto (**Menu → Compiler**) a una que
-  traiga `longtable` ≤ v4.23 o ≥ v4.27; o
+- usar una distribución de TeX que traiga `longtable` ≤ v4.23 o ≥ v4.27; o
 - pedir la versión estable antigua, cambiando en `main.tex`:
   ```latex
   \usepackage{longtable}[=v4.13]
@@ -188,19 +217,25 @@ del preámbulo.
 
 ## Trabajo en equipo
 
-**Menu → Share** en Overleaf e invitar a los otros integrantes. Cada uno edita su
-archivo en `secciones/`; al estar separados en archivos distintos, no hay
-conflictos de edición simultánea.
+Cada integrante edita su propio archivo en `secciones/`; al estar separados, no
+hay conflictos de edición. El control de versiones es git, no Overleaf.
 
-Dos reglas que conviene leer antes de tocar nada:
+Tres reglas que conviene leer antes de tocar nada:
 
-1. **Los `\label{...}` no se borran.** Las secciones ético-legales referencian
-   los de las demás. Si desaparecen, el documento compila con referencias `??`
-   en lugar de números de sección.
-2. **Nada de marcadores de relleno en el cuerpo.** El documento ya no lleva
-   ninguno. Si algo falta o hay que decidirlo, va a `PENDIENTES.md`, no al
-   `.tex`. La macro `\pendiente` se eliminó del preámbulo a propósito: si
-   alguien la escribe, la compilación falla en el acto, y eso es deliberado.
+1. **La numeración de las Secciones 3 y 4 es vinculante.** El informe las
+   referencia doce veces, y tres de esas referencias apuntan a un subapartado
+   concreto: «Sección 3.4» para el principio de proporcionalidad, «Sección 3.9»
+   para la auditoría de dato biométrico y «Sección 4.4» para la lectura
+   ambiental del costo de cómputo. **No renumerar** sin corregir las
+   referencias que apuntan ahí.
+2. **Nada de marcadores de relleno en el cuerpo.** Si algo falta o hay que
+   decidirlo, va a `PENDIENTES.md`. La única excepción es `[VERIFICAR: ...]` en
+   los `.md` de las Secciones 3 y 4, que marca una afirmación normativa cuyo
+   respaldo documental exacto todavía no se ha contrastado: es deliberado y
+   preferible a una cita inventada. Hoy quedan siete, todos sobre el articulado
+   del D.S. 016-2024-JUS.
+3. **Los `\label{...}` del `.tex` no se borran** mientras `main.tex` siga
+   compilando. Si desaparecen, el documento compila con referencias `??`.
 
 Cualquier cambio de arquitectura, de conjunto de datos o de política de
 retención debe comunicarse al frente ético-legal: la auditoría de conformidad
@@ -259,12 +294,27 @@ Cuatro criterios se aplicaron de forma consistente y conviene mantenerlos:
 
 ## Estado
 
-Compila limpio: **0 errores, 0 avisos, 0 cajas overfull/underfull**, 43 páginas,
-3 entradas de bibliografía resueltas por Biber.
+**Secciones 3 y 4 (`.md`, vigentes).** Redactadas el 11/09/2026 con la
+numeración 3.1–3.9 / 4.1–4.5 que exigen las referencias cruzadas. La Sección 3
+cita contra **fuente primaria** la Ley 29733 (arts. 2, 5–8, 11, 13–15, 18–25,
+28 y 30) y el D.S. 007-2020-IN (arts. 3, 17.1 y 17.2); la Directiva
+01-2020-JUS/DGTAIPD y los incisos constitucionales están contrastados contra
+reproducción íntegra de fuente secundaria. Quedan **siete `[VERIFICAR]`**, todos
+sobre el articulado del D.S. 016-2024-JUS. Trazabilidad completa en
+`NOTAS_FUENTES.md` §2.7.
 
-El cuerpo del PDF no contiene marcadores de relleno ni texto en ámbar.
+**Compilación LaTeX (legado).** Verificada el 11/09/2026, después de mover las
+Secciones 3 y 4 a `secciones/_archivo/` y repuntar los `\input` de `main.tex`:
+compila con **0 errores**, 43 páginas y `main.pdf` byte a byte idéntico al
+anterior (532.770 bytes). Se contrastó contra una compilación del estado
+commiteado previo para descartar que el archivado introdujera regresiones, y no
+la introdujo.
 
-Verificado con MiKTeX 25.12 (LaTeX2e 2025-11-01, `longtable` v4.27, Biber 2.21)
-en Windows 11.
+Una corrección sobre lo que este README afirmaba antes: la compilación **no está
+libre de avisos**. Tanto antes como después del cambio, `hyperref` emite varios
+avisos de *destination with the same identifier has been already used*
+(8 en el estado previo, 6 ahora), y el estado previo producía además 5 cajas
+overfull/underfull. No impiden la generación del PDF y son anteriores a este
+cambio, pero conviene no repetir que la salida es limpia sin matizarlo.
 
 Qué falta y en qué orden: ver `PENDIENTES.md` y `CHECKLIST_CUMPLIMIENTO.md`.

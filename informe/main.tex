@@ -233,13 +233,23 @@ la Autoridad Nacional de Protección de Datos Personales.}
 \pagenumbering{arabic}
 
 %------------------------- SECCIONES ---------------------------------
+% NOTA (2026-09-11) -- LA COMPILACION LaTeX ES LEGADO
+% El informe que se entrega ya no es este PDF sino
+% Informe_LAP_Aglomeraciones.docx. Las Secciones 3 y 4 se mantienen
+% ahora en secciones/03_marco_normativo.md y 04_analisis_impacto.md,
+% que son la fuente unica de esas dos secciones.
+% Los .tex de ambas se archivaron en secciones/_archivo/ y estos dos
+% \input siguen apuntando ahi para que este documento compile igual que
+% antes y el PDF historico siga siendo reproducible. NO se editan: si
+% hay que cambiar algo de la Seccion 3 o 4, se cambia en el .md.
+% Ver secciones/_archivo/README.md y el README.md principal.
 \input{secciones/introduccion}
 \clearpage
 \input{secciones/antecedentes}
 \clearpage
-\input{secciones/marco_etico_legal}
+\input{secciones/_archivo/marco_etico_legal}
 \clearpage
-\input{secciones/analisis_impacto}
+\input{secciones/_archivo/analisis_impacto}
 \clearpage
 \input{secciones/metodologia}
 \clearpage

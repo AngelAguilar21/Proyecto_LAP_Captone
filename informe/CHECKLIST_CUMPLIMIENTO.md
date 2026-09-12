@@ -3,7 +3,14 @@
 Estado de cumplimiento del sistema de estimación de aglomeraciones.
 
 **Responsable:** Fabián Moreno Ugarte — Validación ética/legal y documentación
-**Última actualización:** 2026-08-30
+**Última actualización:** 2026-09-11
+
+> **Cambio de esta revisión.** Se redactaron `secciones/03_marco_normativo.md` y
+> `secciones/04_analisis_impacto.md`. Varios ítems de la sección A pasaron a ✅
+> o 🟡 tras contrastar la Ley 29733 y el D.S. 007-2020-IN contra fuente primaria.
+> Se añadió la **sección H** con las contradicciones entre documentos del
+> proyecto, y el ítem **A-10b** con la tensión de plazos de retención entre el
+> régimen de protección de datos y el de seguridad ciudadana.
 
 ## Leyenda
 
@@ -28,9 +35,12 @@ Detalle y trazabilidad en `NOTAS_FUENTES.md`.
 
 | # | Ítem | Estado | Nota |
 |---|---|---|---|
-| A-01 | Transcribir literalmente Constitución art. 2 inc. 6 y 7 | ⬜ | Hoy parafraseados en el informe |
-| A-02 | Confirmar fechas del D.S. 016-2024-JUS (publicación, vigencia, derogación) contra El Peruano | ⬜ | **Prioritario.** Un error invalida el análisis de régimen transitorio |
-| A-03 | Numeral exacto de «dato sensible» en la Ley 29733 | ⬜ | Y si el reglamento de 2024 lo precisó |
+| A-01 | Transcribir literalmente Constitución art. 2 inc. 6 y 7 | 🟡 | **Texto obtenido y citado literalmente** en `03_marco_normativo.md` §3.1. Falta contrastar contra la edición oficial del Congreso |
+| A-02 | Confirmar fechas del D.S. 016-2024-JUS (publicación, vigencia, derogación) contra El Peruano | 🟡 | **Prioritario.** Publicación 30/11/2024, vigencia 30/03/2025 y derogación del D.S. 003-2013-JUS confirmadas en varias fuentes secundarias concordantes; **falta el diario oficial**. Un error invalida el análisis de régimen transitorio |
+| A-03 | Numeral exacto de «dato sensible» en la Ley 29733 | ✅ | **Verificado: art. 2 numeral 5.** Texto literal citado en `03_marco_normativo.md` §3.2. Fuente primaria: Ley 29733 publicada en portal del Estado. Queda abierto si el D.S. 016-2024-JUS precisó la definición |
+| A-03b | Definiciones de la Ley 29733 usadas en §3.2 y §3.8 | ✅ | **Verificadas y citadas literalmente:** art. 2.4 (dato personal), 2.6 (encargado), 2.8 (flujo transfronterizo), **2.12 (anonimización — irreversible)** y **2.13 (disociación — reversible)** |
+| A-03c | Principios rectores y obligaciones invocados en §3.3, §3.4 y §3.6 | ✅ | **Verificados y citados literalmente:** art. 6 (finalidad), art. 7 (proporcionalidad), art. 8 (calidad/conservación), art. 13.5, art. 14 (limitaciones al consentimiento), art. 28.4 y 28.7, art. 30 (prestación de servicios), art. 15 (flujo transfronterizo) |
+| A-03d | Derechos del titular invocados en §3.7 | ✅ | **Verificados:** arts. 18 a 25, incluido el **art. 23 (tratamiento objetivo)**, fundamento normativo de M-10 |
 | A-04 | Régimen de notificación de brechas: artículo, cómputo del plazo, destinatario, umbral | ⬜ | El informe solo afirma «48 horas» según el encargo |
 | A-05 | Régimen del ODP: artículo, **umbrales de ingresos de cada tramo del cronograma escalonado** y sus fechas | 🟡 | Verificado que la designación sigue un cronograma escalonado por ingresos anuales. Falta el detalle de los tramos |
 | A-06 | Alcance extraterritorial: artículo y criterios de conexión | ⬜ | Condiciona A-14 y B-07 |
@@ -39,9 +49,11 @@ Detalle y trazabilidad en `NOTAS_FUENTES.md`.
 | A-07c | Artículo que consagra privacidad por diseño y por defecto | ⬜ | Verificado que es exigencia, no buena práctica. Falta la referencia formal |
 | A-08 | Directiva 01-2020-JUS/DGTAIPD: **vigencia tras el reglamento de 2024** | ✅ | **Verificado.** Vigente: el Congreso la cita como base legal en su Resolución 088-2025, posterior al D.S. Confirmación definitiva pendiente de A-08b |
 | A-08b | Revisar disposiciones derogatorias y complementarias del D.S. 016-2024-JUS | ⬜ | Descartar derogación parcial. Registrado como nota al pie en el informe |
-| A-08c | Denominación oficial completa de la Directiva y resolución directoral que la aprueba | ⬜ | Solo para citarla con la referencia formal correcta |
-| A-09 | D.L. 1218: denominación, obligaciones de entrega a autoridades, plazos de conservación | ⬜ | |
-| A-10 | Ley 30120: denominación y **si alcanza a establecimientos privados abiertos al público** | ⬜ | Define si la norma alcanza al terminal |
+| A-08c | Denominación oficial completa de la Directiva y resolución directoral que la aprueba | ✅ | **Verificado:** «Directiva de Tratamiento de Datos Personales mediante Sistemas de Videovigilancia», aprobada por **Resolución Directoral 02-2020-JUS/DGTAIPD**, publicada el **16/01/2020** |
+| A-08d | Numerales de la Directiva invocados en §3.3, §3.4, §3.6 y §3.7 | 🟡 | Obtenidos de una reproducción del texto íntegro: **6.3** (bases de legitimación), **6.4** (proporcionalidad), **6.11** (contenido mínimo del cartel y dimensión 297 × 210 mm), **6.13 y 7.18** (conservación de 30 a 60 días máximo). Contrastar contra el texto oficial antes de la entrega |
+| A-09 | D.L. 1218: denominación, obligaciones de entrega a autoridades, plazos de conservación | 🟡 | Denominación confirmada vía su reglamento. **Reglamento identificado y verificado contra El Peruano: D.S. 007-2020-IN (24/04/2020)**, art. 17.1 (entrega a PNP/Ministerio Público en **máx. 24 h**) y art. 17.2 (**almacenamiento mínimo 45 días calendario**). Falta fecha del propio D.L. |
+| A-10 | Ley 30120: denominación y **si alcanza a establecimientos privados abiertos al público** | 🟡 | **Hallazgo relevante.** El art. 3 del D.S. 007-2020-IN incluye en el ámbito los «establecimientos comerciales abiertos al público con un aforo de cincuenta (50) personas o más». El terminal supera el umbral, de modo que **el régimen prima facie lo alcanza**. La calificación definitiva corresponde al área legal de LAP (ver A-14) |
+| A-10b | Tensión de plazos de retención entre regímenes | ⛔ | **Hallazgo nuevo.** Directiva: máx. 60 días. D.S. 007-2020-IN: mín. 45 días. Compatibles solo en ventana estrecha y solo por recaer sobre finalidades distintas. Refuerza la separación del subsistema de conteo respecto del CCTV de seguridad (`04`/`03` §3.6) |
 | A-11 | RGPD art. 35: redacción literal | ⬜ | Solo si se cita textualmente |
 | A-12 | AI Act: artículos sobre biometría remota y alto riesgo; calendario | ⬜ | El informe no cita numerales |
 | A-13 | ISO/IEC 27001 y 42001: edición vigente | ⬜ | Y si LAP ya está certificada en 27001 |
@@ -122,8 +134,8 @@ diseño y por defecto.
 | R-02 | Inventario de flujos y ubicaciones de almacenamiento | 🟡 | Revisión documental |
 | R-03 | Procedimiento de respuesta a incidentes | 🟡 | Documento + ensayo. Puede exceder el alcance del Capstone (ver D-03) |
 | M-01 | Procesamiento en el borde; el fotograma no sale del perímetro | ❓ | Inspección de arquitectura de red. Depende de D-04 |
-| M-02 | No persistencia del fotograma | 🟡 | Revisión de código y de esquema de almacenamiento. Depende de D-05 |
-| M-03 | Salida agregada por zona, sin coordenadas individuales | 🟡 | Inspección del esquema de base de datos. Depende de D-01 |
+| M-02 | No persistencia del fotograma | ✅ | **Verificado en el prototipo (11/09/2026):** el esquema solo guarda coordenadas, zonas y tiempos; no almacena fotogramas |
+| M-03 | Salida agregada por zona, sin coordenadas individuales | ⛔ | **NO CONFORME (11/09/2026).** `persistence.py` escribe `posiciones(id_persona, camara, x, y, t, zona)` por detección. Ver H-05. Lo cierra el equipo solo |
 | M-04 | Difuminado irreversible de rostros en material conservado | 🟡 | Muestreo del material conservado |
 | M-05 | Plazo de retención definido y purga automática | ❓ | Requiere que LAP fije el plazo (ver D-06) |
 | M-06 | Control de acceso por roles + auditoría | 🟡 | Matriz de roles |
@@ -177,8 +189,9 @@ una y dónde impacta.
 
 ## E. Auditoría de las técnicas del equipo
 
-Corresponde a `secciones/marco_etico_legal.tex`, §Auditoría de conformidad.
-Redactada de forma condicional mientras D-11 siga abierta.
+Corresponde a `secciones/03_marco_normativo.md` §3.9. Redactada de forma
+condicional mientras D-11 siga abierta, pero **contrastada contra el prototipo
+del frente técnico el 11/09/2026** (`proyecto_lap_prototipo/`).
 
 | # | Criterio | Estado | Nota |
 |---|---|---|---|
@@ -186,24 +199,35 @@ Redactada de forma condicional mientras D-11 siga abierta.
 | E-09 | Privacidad por diseño y por defecto | 🟡 | Parcial: M-01…M-10 definidas, pero la dimensión «por defecto» sin fijar (C-DEF) |
 | E-01 | Exactitud validada en el dominio de destino | ⛔ | **Hallazgo abierto.** La brecha de dominio documentada en el paper de P2R impide extrapolar cifras publicadas |
 | E-02 | Ausencia de sesgo demográfico evaluada | ⛔ | **Hallazgo abierto.** Ninguno de los tres artículos reporta desempeño desagregado |
-| E-03 | No se extraen rasgos biométricos identificantes | 🟡 | Favorable en los tres métodos, condicionado a que no se añada reidentificación aguas abajo |
-| E-04 | La salida no permite identificar personas | 🟡 | Favorable con CSRNet; a validar con P2PNet/P2R |
+| E-03 | No se extraen rasgos biométricos identificantes | ✅ | **Verificado en el prototipo (11/09/2026):** sin ReID ni *embeddings*. El descriptor de desempate es histograma de color del torso + proporción alto/ancho, no persistido y nunca usado como identificador único. No es dato biométrico (art. 2.5) |
+| E-04 | La salida no permite identificar personas | ⛔ | **Degradado a no conforme (11/09/2026).** No es cuestión del modelo sino de persistencia: `posiciones` guarda coordenadas individuales enlazadas a un ID por persona, lo que reconstruye trayectorias. Ver H-05 y M-03 |
 | E-05 | Minimización en el proceso de anotación | 🟡 | Favorable si se adopta el enfoque semi-supervisado |
 | E-06 | Política de retención definida | ❓ | Depende de D-05 y D-06 |
 | E-07 | Localización del procesamiento | ❓ | Depende de D-04 |
 | E-08 | Trazabilidad de licencias de datos | ⛔ | Asignado a Data Engineering (B-01…B-04, B-07) |
 
-> **Los tres hallazgos no conformes no son iguales.**
+> **Los cuatro hallazgos no conformes no son iguales.**
+>
+> **E-04 / H-05 (M-03: coordenadas individuales persistidas)** es el único
+> **defecto de implementación**, y por eso el más accionable de todos: se cierra
+> con un cambio de código —agregar por zona antes de escribir, o fijar una
+> retención muy corta sobre `posiciones`— sin depender de LAP ni de acceso a
+> datos del terminal. Debería ir primero por coste/beneficio.
 >
 > **E-00 (EIPD)** es una obligación normativa incumplida, no una carencia de
-> evidencia — y es el único que el equipo puede cerrar por sí solo, con el
-> material que ya tiene redactado. Debería ser lo primero.
+> evidencia — y también se cierra sin terceros, con el material que ya está
+> redactado en la Sección 4.
 >
 > **E-01 y E-02** son ausencias de evidencia: subsanables con una campaña de
 > validación en sitio y con una evaluación de desempeño desagregada, pero ambas
 > requieren acceso a datos del terminal (D-07). Si ese acceso no se obtiene,
 > **deben reportarse como abiertos en las conclusiones**, no presentarse como
 > resueltos.
+>
+> **Lo que sí mejoró:** E-03 pasó a conforme al verificarse que el prototipo no
+> extrae rasgos biométricos ni usa reidentificación por *embeddings*. Conviene
+> decirlo al equipo junto con lo anterior: la auditoría no es solo una lista de
+> incumplimientos.
 
 ## F. Información que debe pedirse a LAP
 
@@ -230,6 +254,24 @@ Redactada de forma condicional mientras D-11 siga abierta.
 | G-02 | Consumo de la inferencia continua | ⬜ | Convierte el análisis ambiental de cualitativo en cuantitativo |
 | G-03 | Frecuencia de muestreo elegida | ⬜ | Sirve a la vez a minimización y a sostenibilidad |
 | G-04 | Desempeño desagregado (estatura, equipaje voluminoso) | ⬜ | Cierra E-02. Requiere D-07 |
+
+---
+
+## H. Contradicciones entre documentos del proyecto
+
+> Detectadas al redactar las Secciones 3 y 4. **Este frente las registra y no las
+> resuelve por su cuenta:** las tres afectan al alcance del sistema, no a la
+> redacción del informe, y su cierre corresponde al equipo. Detalle y discusión
+> en `PENDIENTES.md`, sección (d); los puntos estructurales del propio informe,
+> en la sección (e).
+
+| # | Contradicción | Estado | Dónde se trata |
+|---|---|---|---|
+| H-01 | ~~Reidentificación por *embeddings* frente al RNF-01~~ | ✅ | **No se confirma.** El prototipo fusiona por asociación espacio-temporal; el desempate es un descriptor de color no biométrico, no persistido y nunca usado como identificador único. Sin ReID ni *embeddings*. Ver §3.9 |
+| H-02 | El material del equipo —y ahora el comentario de `persistence.py`— dice «no reversible» donde un ID persistente que reconstruye trayectorias es **disociación** (art. 2.13, reversible) y no **anonimización** (art. 2.12, irreversible) | ⛔ | `03_marco_normativo.md` §3.2 y §3.9. El dato disociado **sigue siendo dato personal** |
+| H-03 | Medir permanencia en zona comercial es finalidad distinta de estimar aglomeraciones y exige base de legitimación propia (arts. 6 y 28.4) | ⛔ | Ya no es hipotética: el esquema guarda `zona` y `primera/ultima_deteccion`. §3.3 y §4.5 |
+| H-04 | El texto literal del **RNF-01** no consta en el repositorio | ⬜ | Marcado `[VERIFICAR]` en §3.9. Pierde urgencia al cerrarse H-01, pero hace falta para afirmar conformidad por escrito |
+| **H-05** | **M-03 incumplida: el prototipo persiste coordenadas individuales** (`posiciones`: `id_persona, camara, x, y, t, zona`) en vez de agregar por zona | ⛔ | **El hallazgo más accionable: lo cierra el equipo solo, sin depender de LAP.** M-02 sí se respeta. §3.5, §3.9 y §4.5 |
 
 ---
 

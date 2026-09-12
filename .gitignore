@@ -36,3 +36,9 @@ proyecto_lap_prototipo/external/P2PNet/weights/
 # Son preferencias de cada maquina, no del proyecto: cada quien tiene las
 # suyas y no deben viajar en el repo.
 .claude/
+
+# Descargas y empaquetados del informe.
+# informe.zip es una descarga puntual del proyecto (14 MB, con los PDF de
+# papers dentro): es un artefacto, no fuente. El informe se trabaja en
+# informe/, no en el zip.
+informe.zip
