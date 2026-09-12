@@ -6,7 +6,7 @@ Los nueve videos fueron capturados directamente por **José Ortega** durante la 
 
 Este directorio contiene **derivados de privacidad para distribución mediante Git LFS**. Los RAW canónicos permanecen intactos fuera del repositorio, en `data_collection/raw/`. Solo se eliminó metadata sensible explícita de geolocalización del contenedor; no hubo recodificación y los datos audiovisuales codificados permanecen idénticos byte por byte.
 
-Los nueve derivados están verificados y añadidos al índice mediante punteros Git LFS, sin commit ni push. Consultar `DISTRIBUTION_REPORT.md` para resultados, hashes completos y límites de la inspección.
+Los nueve derivados están verificados y fueron publicados mediante Git LFS. Están disponibles en la rama `pilot-video-lfs`; el [PR #2](https://github.com/AngelAguilar21/Proyecto_LAP_Captone/pull/2) está abierto hacia `main`. Consultar `DISTRIBUTION_REPORT.md` para resultados, hashes completos y límites de la inspección.
 
 ## Cómo usar el catálogo
 
@@ -21,7 +21,7 @@ Los nueve derivados están verificados y añadidos al índice mediante punteros 
 - `geolocation_removed = true` se refiere a la metadata explícita de ubicación detectada, no a las referencias visuales ni a una anonimización integral.
 - `encoded_media_identical = true` confirma identidad byte por byte del contenido multimedia codificado respecto del RAW.
 - `filesystem_created` y `filesystem_modified` se conservan como datos de procedencia del RAW; no representan la creación del archivo derivado. `embedded_creation_date` se preserva en la copia. `original_unchanged = true` significa que el RAW fue verificado intacto.
-- `status = distribution_verified_staged` indica el estado de entrega actual; no implica publicación en GitHub.
+- `status = distribution_published_lfs` indica que el derivado está publicado en GitHub mediante Git LFS en la rama `pilot-video-lfs`; su integración en `main` se gestiona mediante el PR #2, actualmente abierto.
 
 ## Semántica y limitaciones del piloto
 
