@@ -86,8 +86,8 @@ latexmk -pdf main.tex
   `.md`.
 - **No editar los `.tex` de `secciones/_archivo/`.** Están congelados, quedaron
   **fuera de la compilación** y ya no intervienen en nada. Su `README.md`
-  explica qué eran; está redactado desde el flujo de la mañana del 11/09 y
-  describe el `.docx` como entregable, lo que ya no es cierto.
+  explica qué son y advierte de lo importante: nada de ahí se reintroduce sin
+  revisarlo antes contra los `.md`, porque el texto divergió.
 - **No editar el texto del informe en el `.docx`.** No es el entregable ni está
   versionado. Lo que cambie ahí no llega al PDF.
 - **No tocar los `\label{...}`** de ninguna sección: el documento compilaría con
@@ -262,10 +262,15 @@ Tres reglas que conviene leer antes de tocar nada:
    ambiental del costo de cómputo. **No renumerar** sin corregir las
    referencias que apuntan ahí.
 2. **Nada de marcadores de relleno en el cuerpo.** Si algo falta o hay que
-   decidirlo, va a `PENDIENTES.md`. La única excepción es `[VERIFICAR: ...]` en
-   los `.md` de las Secciones 3 y 4, que marca una afirmación normativa cuyo
-   respaldo documental exacto todavía no se ha contrastado: es deliberado y
-   preferible a una cita inventada.
+   decidirlo, va a `PENDIENTES.md`. Hay dos excepciones, ambas deliberadas y
+   preferibles a inventar un dato:
+   - `[VERIFICAR: ...]` en los `.md` de las Secciones 3 y 4, que marca una
+     afirmación normativa cuyo respaldo documental exacto todavía no se ha
+     contrastado.
+   - `[VERIFICAR: ...]` en el **ciclo académico y la fecha de entrega de la
+     portada** de `main.tex`. Los dos valores deben salir del sílabo del curso;
+     hasta entonces el hueco se ve, que es mejor que una portada afirmando un
+     ciclo o una fecha que nadie ha confirmado. Es el pendiente **A-10**.
 3. **Los `\label{...}` no se borran.** Si desaparecen, el documento compila con
    referencias `??`.
 
@@ -330,7 +335,7 @@ Cuatro criterios se aplicaron de forma consistente y conviene mantenerlos:
 ## Estado
 
 **Compilación.** Verificada el 12/09/2026 desde limpio (`latexmk -C` y después
-`latexmk -pdf main.tex`): **0 errores, 40 páginas**, `main.pdf` de 430.920
+`latexmk -pdf main.tex`): **0 errores, 40 páginas**, `main.pdf` de 450.554
 bytes, **ninguna cita sin resolver y ninguna referencia cruzada sin resolver**.
 
 La salida **no está libre de avisos**, y conviene no decir que lo está. Quedan
@@ -349,7 +354,7 @@ tres cosas, las tres cosméticas y ninguna impide generar el PDF:
 Dos correcciones sobre lo que este README afirmaba antes:
 
 - Decía «43 páginas» y «532.770 bytes». Eran los del PDF anterior a la
-  consolidación; hoy son 40 páginas y 430.920 bytes.
+  consolidación; hoy son 40 páginas y 450.554 bytes (eran 430.920 antes de añadir las dos líneas de la portada).
 - Decía «8 en el estado previo, 6 ahora» avisos de `hyperref` y «5 cajas
   overfull/underfull». Hoy son **2** y **1** respectivamente.
 
@@ -360,8 +365,10 @@ primaria** la Ley 29733 (arts. 2, 5-8, 11, 13-15, 18-25, 28 y 30) y el D.S.
 incisos constitucionales están contrastados contra reproducción íntegra de
 fuente secundaria. Trazabilidad completa en `NOTAS_FUENTES.md` §2.7.
 
-Quedan **seis `[VERIFICAR]`**, todos en la Sección 3; la Sección 4 no tiene
-ninguno. Corrige lo que este README decía antes —«siete, todos sobre el
+Quedan **seis `[VERIFICAR]`** en el cuerpo, todos en la Sección 3; la Sección 4
+no tiene ninguno. Aparte de esos seis, la **portada** lleva otros dos, por el
+ciclo académico y la fecha de entrega (A-10): no son normativos y se cierran con
+el sílabo del curso. Corrige lo que este README decía antes —«siete, todos sobre el
 articulado del D.S. 016-2024-JUS»—: son seis (el séptimo era el ejemplo del
 comentario de cabecera del `.md`) y **solo dos** versan sobre el articulado del
 D.S. 016-2024-JUS. Los otros cuatro son sobre las fechas y la disposición
