@@ -32,6 +32,18 @@
 # referencias.bib y la trazabilidad en NOTAS_FUENTES.md.
 papers/
 
+# --- Entregable en Word (integracion de Angel) ---
+# Informe_LAP_Aglomeraciones.docx es la copia en Word que mantiene el
+# frente de integracion. No se versiona: es un binario de 2 MB que Git no
+# puede fusionar, cambia en cada guardado y su contenido ya esta en el
+# repositorio como fuente (.tex + .md). Versionarlo crearia un tercer
+# entregable en conflicto con main.pdf y con los .tex. Ver E-07/E-10 en
+# PENDIENTES.md.
+Informe_LAP_Aglomeraciones.docx
+
+# El empaquetado informe.zip esta ignorado en el .gitignore de la raiz,
+# porque el archivo vive alli y no dentro de informe/.
+
 # =====================================================================
 # main.pdf NO se ignora: es el entregable y debe poder descargarse del
 # repositorio sin necesidad de compilar. No anadir *.pdf a este archivo.

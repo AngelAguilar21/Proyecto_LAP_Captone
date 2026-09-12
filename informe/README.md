@@ -4,28 +4,21 @@ Informe de Capstone I (Universidad ESAN, Ingeniería de IA). Sistema de visión
 computacional para estimar aglomeraciones de personas en el Aeropuerto
 Internacional Jorge Chávez, para Lima Airport Partners (LAP).
 
-> ## ⚠ Cambio de herramienta — 11 de septiembre de 2026
+> ## El entregable es el PDF de LaTeX — 11 de septiembre de 2026 (tarde)
 >
-> **El entregable es ahora `Informe_LAP_Aglomeraciones.docx`, no el PDF de
-> LaTeX.** El equipo dejó de trabajar en Overleaf porque la compilación dejó de
-> funcionar por el límite de la cuenta gratuita.
+> **`main.pdf`, compilado desde `main.tex`, es el entregable.** El informe se
+> consolidó en LaTeX y el PDF vuelve a contener el documento completo: 40
+> páginas, 0 errores, sin citas ni referencias cruzadas sin resolver.
 >
-> En consecuencia:
+> Esto **revierte** el cambio de herramienta de la mañana del mismo día, que
+> había declarado el PDF «legado» y puesto a `Informe_LAP_Aglomeraciones.docx`
+> como entregable. Ese `.docx` sigue existiendo como copia de trabajo del frente
+> de integración, pero **no se versiona** (está en `.gitignore`) y **no es el
+> entregable**. Si este README contradijera a alguna versión anterior de sí
+> mismo, manda esta.
 >
-> - **Las Secciones 3 y 4 se mantienen en Markdown**, en
->   `secciones/03_marco_normativo.md` y `secciones/04_analisis_impacto.md`.
->   Son la **fuente única** de esas dos secciones y convierten a Word sin pasar
->   por LaTeX.
-> - Sus versiones `.tex` se archivaron en `secciones/_archivo/` y **no se
->   editan**. El porqué y lo que quedó sólo allí está en
->   `secciones/_archivo/README.md`.
-> - **El `.tex` ya no es la fuente del informe.** `main.tex` sigue compilando
->   —sus `\input` apuntan al archivo— para que el PDF histórico siga siendo
->   reproducible, pero esa compilación es **legado**: no es lo que se entrega.
-> - Las demás secciones (`introduccion`, `antecedentes`, `metodologia`,
->   `resultados`, `conclusiones`, `anexo_cartel`) siguen en `.tex` y **no se han
->   migrado**. Hoy conviven dos formatos; unificarlos está registrado como punto
->   abierto E-01/E-03 en `PENDIENTES.md`.
+> Overleaf no se recuperó y no se va a usar: la compilación dejó de funcionar
+> por el límite de la cuenta gratuita. Se compila en local.
 
 | Integrante | Frente |
 |---|---|
@@ -41,32 +34,68 @@ documentación.
 
 ## Dónde se edita el documento
 
-**Ya no se edita en Overleaf.** El repositorio dejó de ser una copia de
-referencia y pasó a ser el sitio donde se trabaja.
+El repositorio es el sitio donde se trabaja. No hay copia de referencia externa.
 
-| Qué | Dónde se edita | Quién |
-|---|---|---|
-| **Secciones 3 y 4** | `secciones/03_marco_normativo.md` y `secciones/04_analisis_impacto.md`, aquí en el repositorio | Frente ético-legal |
-| **Informe que se entrega** | `Informe_LAP_Aglomeraciones.docx` | Ángel (integración) |
-| Resto de secciones | `.tex` en `secciones/`, sin migrar | Sus responsables |
+| Qué | Se edita en | Se genera | Quién |
+|---|---|---|---|
+| **Secciones 3 y 4** | `secciones/03_marco_normativo.md` y `secciones/04_analisis_impacto.md` | el `.tex` del mismo nombre, con `herramientas/md2tex.py` | Frente ético-legal |
+| Secciones 1, 2, 5, 6, 7 y Anexo A | `secciones/*.tex`, directamente | — | Sus responsables |
+| **Entregable** | no se edita: se compila | `main.pdf`, con `latexmk -pdf main.tex` | Frente ético-legal |
 
-El flujo hoy es: las Secciones 3 y 4 se escriben en Markdown, se convierten a
-Word y se integran en el `.docx` que mantiene Ángel. **El `.md` es la fuente;
-lo que esté en el `.docx` es el resultado de la última integración.** Si ambos
-difieren, manda el `.md` y hay que reintegrar.
+Hay, por tanto, **dos clases de sección** y conviene no confundirlas:
 
-> **Punto abierto.** No hay todavía un procedimiento acordado de integración
-> `.md` → `.docx` ni constancia de qué versión del `.md` está incorporada al
-> `.docx` en cada momento. Registrado en `PENDIENTES.md` (E-01, E-02).
+- **Secciones escritas en `.tex`.** Se editan en el `.tex` y ya está. Son la
+  Introducción, Antecedentes, Metodología, Resultados, Conclusiones y el
+  Anexo A.
+- **Secciones 3 y 4, escritas en `.md`.** El `.md` es la **fuente**; el `.tex`
+  es **producto derivado** y se regenera. Nunca se edita a mano.
+
+El motivo de la asimetría es que las Secciones 3 y 4 se habían pasado a Markdown
+durante el episodio de Overleaf. Al volver a LaTeX no se rehízo el trabajo a
+mano: se automatizó la conversión, que es reproducible y verificable palabra por
+palabra. Unificar todo en un solo formato sigue abierto como **E-08** en
+`PENDIENTES.md`.
+
+### Cómo se regeneran las Secciones 3 y 4
+
+Desde `informe/`, después de tocar cualquiera de los dos `.md`:
+
+```bash
+py herramientas/md2tex.py secciones/03_marco_normativo.md secciones/03_marco_normativo.tex 3
+py herramientas/md2tex.py secciones/04_analisis_impacto.md  secciones/04_analisis_impacto.tex  4
+py herramientas/verificar_fidelidad.py secciones/03_marco_normativo.md secciones/03_marco_normativo.tex
+py herramientas/verificar_fidelidad.py secciones/04_analisis_impacto.md  secciones/04_analisis_impacto.tex
+latexmk -pdf main.tex
+```
+
+- El tercer argumento de `md2tex.py` (`3` o `4`) selecciona la tabla de
+  `\label`. Esos `\label` reproducen los anclajes de la versión archivada para
+  que las referencias cruzadas del resto del informe sigan resolviendo.
+- `md2tex.py` **no reescribe prosa**: solo traduce marcado. Una ejecución limpia
+  no imprime ningún `AVISO`; si imprime alguno, hay una construcción Markdown no
+  prevista que hay que revisar a mano.
+- `verificar_fidelidad.py` compara la prosa del `.md` con la del `.tex` palabra
+  por palabra. La única diferencia esperada es un `\allowbreak` tipográfico en la
+  Sección 4.
 
 ### Qué NO hacer
 
-- **No editar los `.tex` de `secciones/_archivo/`.** Están congelados. Cualquier
-  cambio en las Secciones 3 o 4 va al `.md` correspondiente.
-- **No reintroducir las Secciones 3 y 4 en el `.tex`.** Volvería a haber dos
-  fuentes para lo mismo, que es justamente lo que este cambio elimina.
-- **No editar a mano en el `.docx` el texto de las Secciones 3 o 4.** Ese cambio
-  se pierde en la siguiente integración desde el `.md`.
+- **No editar `secciones/03_marco_normativo.tex` ni
+  `secciones/04_analisis_impacto.tex`.** Son generados. Cualquier edición a mano
+  se pierde en la siguiente conversión, y sin dejar rastro. El cambio va al
+  `.md`.
+- **No editar los `.tex` de `secciones/_archivo/`.** Están congelados, quedaron
+  **fuera de la compilación** y ya no intervienen en nada. Su `README.md`
+  explica qué eran; está redactado desde el flujo de la mañana del 11/09 y
+  describe el `.docx` como entregable, lo que ya no es cierto.
+- **No editar el texto del informe en el `.docx`.** No es el entregable ni está
+  versionado. Lo que cambie ahí no llega al PDF.
+- **No tocar los `\label{...}`** de ninguna sección: el documento compilaría con
+  referencias `??`.
+- **No añadir `\pendiente{...}{...}`.** La macro se eliminó de `main.tex` a
+  propósito y no se dejó como no-op: si alguien la escribe, la compilación
+  falla. Es la salvaguarda que impide que un marcador de relleno reaparezca en
+  el PDF. Lo que falte va a `PENDIENTES.md`.
 
 ---
 
@@ -74,7 +103,9 @@ difieren, manda el `.md` y hay que reintegrar.
 
 El informe vive en la subcarpeta `informe/` del repositorio del equipo. La raíz
 del repositorio es del frente de ingeniería (`Dockerfile`, `requirements.txt`,
-`Tareas equipo.md`) y **no se toca desde aquí**, incluido su `.gitignore`.
+`Tareas equipo.md`) y **no se toca desde aquí**, salvo su `.gitignore` cuando
+hay que ignorar un artefacto del informe que vive en la raíz (es el caso de
+`informe.zip`).
 
 ```
 Proyecto_LAP_Captone/
@@ -82,79 +113,80 @@ Proyecto_LAP_Captone/
 ├── dockercompose.yml               raíz: frente de ingeniería
 ├── requirements.txt                raíz: frente de ingeniería
 ├── Tareas equipo.md                raíz: coordinación del equipo
-├── .gitignore                      raíz: reglas de Python/Docker (NO tocar)
+├── .gitignore                      raíz: Python/Docker + informe.zip
+├── informe.zip                     IGNORADO: empaquetado puntual, no fuente
 └── informe/                        ← todo lo de este README
-    ├── Informe_LAP_Aglomeraciones.docx   ← EL ENTREGABLE (lo mantiene Ángel)
-    ├── main.tex                    LEGADO: preámbulo, portada, \input de secciones
+    ├── main.tex                    preámbulo, portada y \input de secciones
+    ├── main.pdf                    ← EL ENTREGABLE (compilado, versionado)
     ├── referencias.bib             copia LITERAL de papers/citas_oficiales.txt
-    ├── main.pdf                    LEGADO: PDF compilado, ya no es el entregable
-    ├── .gitignore                  reglas de LaTeX, solo rigen dentro de informe/
+    ├── .gitignore                  reglas de LaTeX; solo rigen dentro de informe/
     ├── .gitattributes              fija LF en los fuentes; solo rige aquí dentro
+    ├── Informe_LAP_Aglomeraciones.docx   IGNORADO: copia de trabajo de Ángel
     ├── PENDIENTES.md               puntos abiertos, agrupados por quién los cierra
     ├── RESUMEN_ANTECEDENTES.md     los tres papers en prosa, sin LaTeX de por medio
     ├── NOTAS_FUENTES.md            trazabilidad de cada afirmación del informe
     ├── CHECKLIST_CUMPLIMIENTO.md   estado de cumplimiento
     ├── README.md                   este archivo
-    ├── papers/                     PDFs fuente + citas_oficiales.txt (no versionado)
-    ├── fichas_antecedentes/        fichas de PET, MeMOTR, ByteTrack, P2PNet
+    ├── herramientas/
+    │   ├── md2tex.py               conversor .md -> .tex de las Secciones 3 y 4
+    │   └── verificar_fidelidad.py  comprueba la conversión palabra por palabra
+    ├── papers/                     IGNORADO: PDFs fuente + citas_oficiales.txt
+    ├── fichas_antecedentes/        fichas A2, B1-B3, C1-C4
     └── secciones/
-        ├── 03_marco_normativo.md   ← FUENTE de la Sección 3 (frente ético-legal)
-        ├── 04_analisis_impacto.md  ← FUENTE de la Sección 4 (frente ético-legal)
         ├── introduccion.tex        a cargo de otro integrante
         ├── antecedentes.tex        ← frente ético-legal
+        ├── 03_marco_normativo.md   ← FUENTE de la Sección 3 (frente ético-legal)
+        ├── 03_marco_normativo.tex     GENERADO — no editar
+        ├── 04_analisis_impacto.md  ← FUENTE de la Sección 4 (frente ético-legal)
+        ├── 04_analisis_impacto.tex    GENERADO — no editar
         ├── metodologia.tex         a cargo de otro integrante
         ├── resultados.tex          a cargo de otro integrante
         ├── conclusiones.tex        a cargo de otro integrante
         ├── anexo_cartel.tex        ← frente ético-legal (Anexo A)
-        └── _archivo/               .tex retirados de las Secciones 3 y 4
-            ├── README.md           por qué se archivaron y qué quedó solo aquí
+        └── _archivo/               FUERA DE LA COMPILACIÓN, obsoleto
+            ├── README.md           por qué se archivaron
             ├── marco_etico_legal.tex    CONGELADO — no editar
             └── analisis_impacto.tex     CONGELADO — no editar
 ```
 
-Todos los comandos de compilación de este README se ejecutan **desde
-`informe/`**, no desde la raíz del repositorio.
+Todos los comandos de este README se ejecutan **desde `informe/`**, no desde la
+raíz del repositorio.
 
-### Los cuatro archivos `.md` de seguimiento y para qué sirve cada uno
+### Lo que está ignorado, y por qué importa saberlo
 
-No confundirlos con los `.md` de `secciones/`, que son texto del informe. Estos
-cuatro son de seguimiento y no se entregan al cliente.
+Tres cosas de esta carpeta no viajan en el repositorio. La primera tiene una
+consecuencia que ya ha causado un problema real:
 
-| Archivo | Responde a la pregunta |
-|---|---|
-| `PENDIENTES.md` | ¿Qué falta, y quién puede cerrarlo? Agrupado en decisiones del frente ético-legal, decisiones del equipo e información que solo puede dar LAP. |
-| `RESUMEN_ANTECEDENTES.md` | ¿Qué dicen los tres papers y por qué importan aquí? Redactado para leerse suelto, sin necesidad de abrir el informe. |
-| `NOTAS_FUENTES.md` | ¿De dónde sale cada afirmación del informe y cuánto se puede confiar en ella hoy? |
-| `CHECKLIST_CUMPLIMIENTO.md` | ¿En qué estado está cada requisito de cumplimiento? |
+| Ignorado | Dónde se declara | Por qué |
+|---|---|---|
+| `papers/` | `informe/.gitignore` | PDFs de terceros: pesan varios MB, no nos corresponde redistribuirlos y no intervienen en la compilación |
+| `Informe_LAP_Aglomeraciones.docx` | `informe/.gitignore` | Binario de 2 MB que Git no puede fusionar y que cambia en cada guardado. No es el entregable |
+| `informe.zip` | `.gitignore` de la raíz | Empaquetado puntual de 14 MB con los PDF dentro. Es un artefacto, no fuente |
+
+> **`papers/citas_oficiales.txt` solo existe en local.** Al estar `papers/`
+> ignorado, ese archivo **no está en el repositorio**: quien clone ve
+> `referencias.bib` pero no la copia oficial de la que procede. Eso es
+> exactamente lo que ocurrió el 08/09/2026, cuando se añadieron cuatro entradas
+> al `.bib` sin poder contrastarlas contra `citas_oficiales.txt`, y es la causa
+> registrada de **E-09** en `PENDIENTES.md`. Si necesitas el archivo, pídelo al
+> frente ético-legal; no intentes reconstruirlo desde el `.bib`.
 
 Codificación: **UTF-8 sin BOM**, saltos de línea **LF**. Los acentos van escritos
 directamente (`á`, no `\'a`). El LF lo fija `.gitattributes` para los `.tex`,
-`.md` y `.bib`, de modo que no depende de la configuración `core.autocrlf` de
-cada máquina.
-
-`papers/` no se versiona: son PDFs de terceros, pesan varios MB y no interviene
-en la compilación. Las citas oficiales están en `referencias.bib` y la
-trazabilidad, en `NOTAS_FUENTES.md`.
+`.md`, `.bib` y `.py`, de modo que no depende de la configuración
+`core.autocrlf` de cada máquina.
 
 ---
 
-## Cómo compilar (legado)
+## Cómo compilar
 
-> **Esta sección es legado.** El PDF ya no es el entregable y compilar no es
-> parte del flujo de trabajo normal. Se conserva porque `main.tex` sigue
-> compilando —sus `\input` de las Secciones 3 y 4 apuntan a
-> `secciones/_archivo/`— y conviene que el PDF histórico siga siendo
-> reproducible. **El PDF resultante no incluye las versiones vigentes de las
-> Secciones 3 y 4**, que están en los `.md`.
->
-> Overleaf ya no se usa: la compilación dejó de funcionar por el límite de la
-> cuenta gratuita. Lo que sigue vale para compilar en local.
-
-Requiere **pdfLaTeX + Biber**, ambos incluidos en MiKTeX y TeX Live.
+Requiere **pdfLaTeX + Biber**, ambos incluidos en MiKTeX y TeX Live. El
+documento principal es `main.tex` y requiere TeX Live 2025 o posterior (ver la
+nota sobre `longtable`).
 
 ```bash
 latexmk -pdf main.tex     # hace las pasadas y llama a Biber solo
-latexmk -C                # limpia los archivos auxiliares
+latexmk -C                # limpia los auxiliares (y también main.pdf)
 ```
 
 Sin `latexmk`, la secuencia manual es:
@@ -166,8 +198,9 @@ pdflatex main
 pdflatex main
 ```
 
-El documento principal es `main.tex` y requiere TeX Live 2025 o posterior (ver
-la nota sobre `longtable`).
+Si has tocado un `.md` de las Secciones 3 o 4, **antes hay que regenerar su
+`.tex`**: ver «Cómo se regeneran las Secciones 3 y 4» más arriba. Compilar sin
+regenerar produce un PDF con la versión anterior de esa sección, sin avisar.
 
 ### Notas para Windows / MiKTeX
 
@@ -203,7 +236,7 @@ una sola columna `p{}` que cruce un salto de página. Está corregido desde
 
 Si aparece ese error, hay dos salidas equivalentes:
 
-- usar una distribución de TeX que traiga `longtable` ≤ v4.23 o ≥ v4.27; o
+- usar una distribución de TeX que traiga `longtable` <= v4.23 o >= v4.27; o
 - pedir la versión estable antigua, cambiando en `main.tex`:
   ```latex
   \usepackage{longtable}[=v4.13]
@@ -232,10 +265,9 @@ Tres reglas que conviene leer antes de tocar nada:
    decidirlo, va a `PENDIENTES.md`. La única excepción es `[VERIFICAR: ...]` en
    los `.md` de las Secciones 3 y 4, que marca una afirmación normativa cuyo
    respaldo documental exacto todavía no se ha contrastado: es deliberado y
-   preferible a una cita inventada. Hoy quedan siete, todos sobre el articulado
-   del D.S. 016-2024-JUS.
-3. **Los `\label{...}` del `.tex` no se borran** mientras `main.tex` siga
-   compilando. Si desaparecen, el documento compila con referencias `??`.
+   preferible a una cita inventada.
+3. **Los `\label{...}` no se borran.** Si desaparecen, el documento compila con
+   referencias `??`.
 
 Cualquier cambio de arquitectura, de conjunto de datos o de política de
 retención debe comunicarse al frente ético-legal: la auditoría de conformidad
@@ -287,34 +319,58 @@ Cuatro criterios se aplicaron de forma consistente y conviene mantenerlos:
    interpretación se redactan como riesgos a validar con el cliente, en
    condicional.
 4. **`referencias.bib` es intocable.** Es una copia literal de
-   `papers/citas_oficiales.txt`. Las normas legales **no** van en el `.bib`: se
-   citan en el texto y se registran en `NOTAS_FUENTES.md`.
+   `papers/citas_oficiales.txt`, entrada por entrada. Las normas legales **no**
+   van en el `.bib`: se citan en el texto y se registran en `NOTAS_FUENTES.md`.
+   Si hay que añadir un paper, primero se pega su BibTeX oficial en
+   `citas_oficiales.txt` —el bloque que publica la propia página del artículo— y
+   solo después se copia al `.bib`. Nunca al revés.
 
 ---
 
 ## Estado
 
-**Secciones 3 y 4 (`.md`, vigentes).** Redactadas el 11/09/2026 con la
-numeración 3.1–3.9 / 4.1–4.5 que exigen las referencias cruzadas. La Sección 3
-cita contra **fuente primaria** la Ley 29733 (arts. 2, 5–8, 11, 13–15, 18–25,
-28 y 30) y el D.S. 007-2020-IN (arts. 3, 17.1 y 17.2); la Directiva
-01-2020-JUS/DGTAIPD y los incisos constitucionales están contrastados contra
-reproducción íntegra de fuente secundaria. Quedan **siete `[VERIFICAR]`**, todos
-sobre el articulado del D.S. 016-2024-JUS. Trazabilidad completa en
-`NOTAS_FUENTES.md` §2.7.
+**Compilación.** Verificada el 12/09/2026 desde limpio (`latexmk -C` y después
+`latexmk -pdf main.tex`): **0 errores, 40 páginas**, `main.pdf` de 430.920
+bytes, **ninguna cita sin resolver y ninguna referencia cruzada sin resolver**.
 
-**Compilación LaTeX (legado).** Verificada el 11/09/2026, después de mover las
-Secciones 3 y 4 a `secciones/_archivo/` y repuntar los `\input` de `main.tex`:
-compila con **0 errores**, 43 páginas y `main.pdf` byte a byte idéntico al
-anterior (532.770 bytes). Se contrastó contra una compilación del estado
-commiteado previo para descartar que el archivado introdujera regresiones, y no
-la introdujo.
+La salida **no está libre de avisos**, y conviene no decir que lo está. Quedan
+tres cosas, las tres cosméticas y ninguna impide generar el PDF:
 
-Una corrección sobre lo que este README afirmaba antes: la compilación **no está
-libre de avisos**. Tanto antes como después del cambio, `hyperref` emite varios
-avisos de *destination with the same identifier has been already used*
-(8 en el estado previo, 6 ahora), y el estado previo producía además 5 cajas
-overfull/underfull. No impiden la generación del PDF y son anteriores a este
-cambio, pero conviene no repetir que la salida es limpia sin matizarlo.
+- **2 avisos de `hyperref`** (*destination with the same identifier
+  (name{page.1}) has been already used, duplicate ignored*, e igual con
+  `page.2`). Vienen del cambio de numeración romana a árabe entre el material
+  preliminar y el cuerpo, no de ninguna sección concreta.
+- **1 caja `Overfull \hbox`** (3,2 pt) en `secciones/03_marco_normativo.tex`,
+  por la cadena `Directiva 01-2020-JUS/DGTAIPD`, que no admite guionado.
+- **3 avisos de Biber** por entradas cuyo campo `month` es un nombre de mes en
+  texto (`Li_2018_CVPR`, `Song_2021_ICCV`, `Lin_2025_CVPR`). Vienen del BibTeX
+  oficial de la CVF, que se copia sin retocar por la regla 4.
+
+Dos correcciones sobre lo que este README afirmaba antes:
+
+- Decía «43 páginas» y «532.770 bytes». Eran los del PDF anterior a la
+  consolidación; hoy son 40 páginas y 430.920 bytes.
+- Decía «8 en el estado previo, 6 ahora» avisos de `hyperref` y «5 cajas
+  overfull/underfull». Hoy son **2** y **1** respectivamente.
+
+**Secciones 3 y 4.** Vigentes, con la numeración 3.1-3.9 / 4.1-4.5 que exigen
+las referencias cruzadas. La Sección 3 (5.461 palabras) cita contra **fuente
+primaria** la Ley 29733 (arts. 2, 5-8, 11, 13-15, 18-25, 28 y 30) y el D.S.
+007-2020-IN (arts. 3, 17.1 y 17.2); la Directiva 01-2020-JUS/DGTAIPD y los
+incisos constitucionales están contrastados contra reproducción íntegra de
+fuente secundaria. Trazabilidad completa en `NOTAS_FUENTES.md` §2.7.
+
+Quedan **seis `[VERIFICAR]`**, todos en la Sección 3; la Sección 4 no tiene
+ninguno. Corrige lo que este README decía antes —«siete, todos sobre el
+articulado del D.S. 016-2024-JUS»—: son seis (el séptimo era el ejemplo del
+comentario de cabecera del `.md`) y **solo dos** versan sobre el articulado del
+D.S. 016-2024-JUS. Los otros cuatro son sobre las fechas y la disposición
+derogatoria del propio D.S., la vigencia de la Directiva 01-2020-JUS/DGTAIPD, la
+denominación del D.L. 1218 y la Ley 30120, y el texto literal del RNF-01.
+
+**Resto del informe.** Introducción, Antecedentes y Anexo A están redactados;
+Metodología, Resultados y Conclusiones siguen en **esqueleto** y son de otros
+integrantes. El detalle, con qué falta en cada una y de quién depende, está en
+`PENDIENTES.md` §(f).
 
 Qué falta y en qué orden: ver `PENDIENTES.md` y `CHECKLIST_CUMPLIMIENTO.md`.
