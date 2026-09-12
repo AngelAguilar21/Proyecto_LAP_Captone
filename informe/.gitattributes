@@ -11,6 +11,8 @@
 *.tex text eol=lf
 *.md  text eol=lf
 *.bib text eol=lf
+# Herramientas de conversion .md -> .tex (herramientas/).
+*.py  text eol=lf
 
 # El PDF compilado se versiona (es el entregable). Se marca binario de
 # forma explicita para que Git no intente normalizarlo ni fusionarlo
