@@ -202,13 +202,12 @@
 
 %--------------------------- PORTADA ---------------------------------
 % LOGO DE ESAN
-% No hay ningun archivo de logo en el repositorio (2026-09-13). Se deja el
-% \includegraphics condicionado con \IfFileExists para que, en cuanto se
-% coloque el archivo, entre solo y sin tocar este .tex.
-% Formato preferible: PDF o PNG vectorial/alta resolucion, en
-%   informe/imagenes/logo-esan.pdf   (o .png)
-% Mientras no exista, se compone un recuadro neutro del mismo tamano para
-% que la caratula no cambie de maquetacion al anadirlo.
+% Archivo: informe/imagenes/logo-esan.png (1073x352 px, anadido 2026-09-13).
+% Se fija por ancho (5 cm), no por alto: con la proporcion ~3:1 del PNG
+% queda en ~1,6 cm de alto. Si se sustituye por un logo-esan.pdf vectorial,
+% tiene prioridad sobre el PNG y hereda el mismo ancho.
+% Si faltan los dos, se compone un recuadro neutro del mismo tamano para
+% que la caratula no cambie de maquetacion.
 \begin{titlepage}
 \centering
 % La caratula no necesita interlineado 1,5: con el logo anadido, el
@@ -217,12 +216,12 @@
 \vspace*{0.2cm}
 
 \IfFileExists{imagenes/logo-esan.pdf}{%
-  \includegraphics[height=2.2cm]{imagenes/logo-esan.pdf}%
+  \includegraphics[width=5cm]{imagenes/logo-esan.pdf}%
 }{%
   \IfFileExists{imagenes/logo-esan.png}{%
-    \includegraphics[height=2.2cm]{imagenes/logo-esan.png}%
+    \includegraphics[width=5cm]{imagenes/logo-esan.png}%
   }{%
-    \framebox[5.5cm][c]{\rule{0pt}{2.2cm}\small\itshape Logo ESAN}%
+    \framebox[5cm][c]{\rule{0pt}{1.6cm}\small\itshape Logo ESAN}%
   }%
 }
 
