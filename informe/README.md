@@ -84,10 +84,10 @@ latexmk -pdf main.tex
   `secciones/04_analisis_impacto.tex`.** Son generados. Cualquier edición a mano
   se pierde en la siguiente conversión, y sin dejar rastro. El cambio va al
   `.md`.
-- **No editar los `.tex` de `secciones/_archivo/`.** Están congelados, quedaron
-  **fuera de la compilación** y ya no intervienen en nada. Su `README.md`
-  explica qué son y advierte de lo importante: nada de ahí se reintroduce sin
-  revisarlo antes contra los `.md`, porque el texto divergió.
+- **No reintroducir `secciones/_archivo/`.** La carpeta (con
+  `marco_etico_legal.tex`, `analisis_impacto.tex` y su `README.md`) se borró del
+  repositorio en el commit `4646d7a` y solo queda en el historial de git. Nada de
+  ahí se recupera sin revisarlo antes contra los `.md`, porque el texto divergió.
 - **No editar el texto del informe en el `.docx`.** No es el entregable ni está
   versionado. Lo que cambie ahí no llega al PDF.
 - **No tocar los `\label{...}`** de ninguna sección: el documento compilaría con
@@ -109,11 +109,16 @@ hay que ignorar un artefacto del informe que vive en la raíz (es el caso de
 
 ```
 Proyecto_LAP_Captone/
+├── README.md                       raíz: README del proyecto
+├── CLAUDE.md                       raíz: reglas para el asistente de código
 ├── Dockerfile                      raíz: frente de ingeniería
 ├── dockercompose.yml               raíz: frente de ingeniería
 ├── requirements.txt                raíz: frente de ingeniería
+├── .gitmodules                     raíz: submódulo P2PNet del prototipo
+├── configs/  docs/  reports/  scripts/  src/   raíz: frente de ingeniería
+├── proyecto_lap_prototipo/         raíz: prototipo (frente de ingeniería)
 ├── Tareas equipo.md                raíz: coordinación del equipo
-├── .gitignore                      raíz: Python/Docker + informe.zip
+├── .gitignore                      raíz: Python, datos, prototipo, .env, .claude/ + informe.zip
 ├── informe.zip                     IGNORADO: empaquetado puntual, no fuente
 └── informe/                        ← todo lo de este README
     ├── main.tex                    preámbulo, portada y \input de secciones
@@ -122,11 +127,15 @@ Proyecto_LAP_Captone/
     ├── .gitignore                  reglas de LaTeX; solo rigen dentro de informe/
     ├── .gitattributes              fija LF en los fuentes; solo rige aquí dentro
     ├── Informe_LAP_Aglomeraciones.docx   IGNORADO: copia de trabajo de Ángel
+    ├── INFORME_COMPLETO_ANGEL.md    consolidación en Markdown del frente de integración
     ├── PENDIENTES.md               puntos abiertos, agrupados por quién los cierra
     ├── RESUMEN_ANTECEDENTES.md     los tres papers en prosa, sin LaTeX de por medio
+    ├── RESUMEN_4_ANTECEDENTES_TRACKING.md   resumen de los cuatro antecedentes de tracking
     ├── NOTAS_FUENTES.md            trazabilidad de cada afirmación del informe
     ├── CHECKLIST_CUMPLIMIENTO.md   estado de cumplimiento
     ├── README.md                   este archivo
+    ├── imagenes/
+    │   └── logo-esan.png           logo de la carátula
     ├── herramientas/
     │   ├── md2tex.py               conversor .md -> .tex de las Secciones 3 y 4
     │   └── verificar_fidelidad.py  comprueba la conversión palabra por palabra
@@ -142,11 +151,7 @@ Proyecto_LAP_Captone/
         ├── metodologia.tex         a cargo de otro integrante
         ├── resultados.tex          a cargo de otro integrante
         ├── conclusiones.tex        a cargo de otro integrante
-        ├── anexo_cartel.tex        ← frente ético-legal (Anexo A)
-        └── _archivo/               FUERA DE LA COMPILACIÓN, obsoleto
-            ├── README.md           por qué se archivaron
-            ├── marco_etico_legal.tex    CONGELADO — no editar
-            └── analisis_impacto.tex     CONGELADO — no editar
+        └── anexo_cartel.tex        ← frente ético-legal (Anexo A)
 ```
 
 Todos los comandos de este README se ejecutan **desde `informe/`**, no desde la
@@ -255,12 +260,12 @@ hay conflictos de edición. El control de versiones es git, no Overleaf.
 
 Tres reglas que conviene leer antes de tocar nada:
 
-1. **La numeración de las Secciones 3 y 4 es vinculante.** El informe las
-   referencia doce veces, y tres de esas referencias apuntan a un subapartado
-   concreto: «Sección 3.4» para el principio de proporcionalidad, «Sección 3.9»
-   para la auditoría de dato biométrico y «Sección 4.4» para la lectura
-   ambiental del costo de cómputo. **No renumerar** sin corregir las
-   referencias que apuntan ahí.
+1. **La numeración de las Secciones 3 y 4 es vinculante.** El resto del
+   informe las referencia **20 veces** con `\ref`, y **15** de esas referencias
+   apuntan a un subapartado concreto: 3.1, 3.5, 3.9 (la auditoría de dato
+   biométrico y las licencias), 4.3, 4.4 (la lectura ambiental del costo de
+   cómputo) y 4.5. **No renumerar** sin corregir las referencias que apuntan
+   ahí.
 2. **Nada de marcadores de relleno en el cuerpo.** Si algo falta o hay que
    decidirlo, va a `PENDIENTES.md`. Hay dos excepciones, ambas deliberadas y
    preferibles a inventar un dato:
@@ -289,7 +294,7 @@ Todo el preámbulo usa paquetes de distribución estándar. **No se usan
 `\fcolorbox` + `minipage`, para que el proyecto compile en cualquier
 distribución sin instalar nada.
 
-Bibliografía con `biblatex` + `biber`, estilo `numeric-comp`, `sorting=none`
+Bibliografía con `biblatex` + `biber`, estilo `ieee`, `sorting=none`
 (las referencias se numeran por orden de aparición).
 
 ### Macros y tipos de columna propios
@@ -297,6 +302,8 @@ Bibliografía con `biblatex` + `biber`, estilo `numeric-comp`, `sorting=none`
 | Macro | Uso |
 |---|---|
 | `\cajaaviso{título}{texto}` | Caja destacada para advertencias y riesgos a validar |
+| `\verificar{texto}` | Marcador `[VERIFICAR]` oculto: no imprime nada y deja rastro en el log |
+| `\verificarhueco{texto}` | Variante de portada: no imprime el texto, compone una línea de relleno |
 
 | Tipo de columna | Equivale a |
 |---|---|
@@ -334,17 +341,17 @@ Cuatro criterios se aplicaron de forma consistente y conviene mantenerlos:
 
 ## Estado
 
-**Compilación.** Verificada el 12/09/2026 desde limpio (`latexmk -C` y después
-`latexmk -pdf main.tex`): **0 errores, 40 páginas**, `main.pdf` de 450.554
+**Compilación.** Verificada el 13/09/2026 desde limpio (`latexmk -C` y después
+`latexmk -pdf main.tex`): **0 errores, 40 páginas**, `main.pdf` de 646.341
 bytes, **ninguna cita sin resolver y ninguna referencia cruzada sin resolver**.
 
 La salida **no está libre de avisos**, y conviene no decir que lo está. Quedan
 tres cosas, las tres cosméticas y ninguna impide generar el PDF:
 
-- **2 avisos de `hyperref`** (*destination with the same identifier
-  (name{page.1}) has been already used, duplicate ignored*, e igual con
-  `page.2`). Vienen del cambio de numeración romana a árabe entre el material
-  preliminar y el cuerpo, no de ninguna sección concreta.
+- **1 aviso de `hyperref`** (*destination with the same identifier
+  (name{page.1}) has been already used, duplicate ignored*). Viene del cambio
+  de numeración romana a árabe entre el material preliminar y el cuerpo, no de
+  ninguna sección concreta.
 - **1 caja `Overfull \hbox`** (3,2 pt) en `secciones/03_marco_normativo.tex`,
   por la cadena `Directiva 01-2020-JUS/DGTAIPD`, que no admite guionado.
 - **3 avisos de Biber** por entradas cuyo campo `month` es un nombre de mes en
@@ -354,9 +361,11 @@ tres cosas, las tres cosméticas y ninguna impide generar el PDF:
 Dos correcciones sobre lo que este README afirmaba antes:
 
 - Decía «43 páginas» y «532.770 bytes». Eran los del PDF anterior a la
-  consolidación; hoy son 40 páginas y 450.554 bytes (eran 430.920 antes de añadir las dos líneas de la portada).
+  consolidación; hoy son 40 páginas y 646.341 bytes. El salto de tamaño lo
+  explica el logo de la carátula (`3686fbe`): el PDF anterior, también de 40
+  páginas, pesaba 432.226 bytes.
 - Decía «8 en el estado previo, 6 ahora» avisos de `hyperref` y «5 cajas
-  overfull/underfull». Hoy son **2** y **1** respectivamente.
+  overfull/underfull». Hoy son **1** y **1** respectivamente.
 
 **Secciones 3 y 4.** Vigentes, con la numeración 3.1-3.9 / 4.1-4.5 que exigen
 las referencias cruzadas. La Sección 3 (5.461 palabras) cita contra **fuente

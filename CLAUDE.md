@@ -46,7 +46,8 @@ leyendo el código y que más fácilmente se hace mal:
   regeneran con `herramientas/md2tex.py` y se comprueban con
   `herramientas/verificar_fidelidad.py`. Una edición a mano se pierde en la
   siguiente conversión sin dejar rastro.
-- **`secciones/_archivo/` está congelado** y fuera de la compilación.
+- **`secciones/_archivo/` ya no existe:** se borró en `4646d7a` y solo queda en
+  el historial de git. No se recupera nada de ahí sin contrastarlo con los `.md`.
 - **No añadir `\pendiente{...}{...}`:** la macro se eliminó a propósito y no es
   un no-op, así que la compilación falla. Lo que falte va a
   `informe/PENDIENTES.md`.
@@ -61,8 +62,9 @@ leyendo el código y que más fácilmente se hace mal:
   es decisión de la reunión del equipo (E-03 / E-09 en `PENDIENTES.md`).
   `Huang_2023_CVPR` es de **CVPR2023W** y `Wang_2025_ICCV` de **ICCV2025W**:
   ambas son de *Workshops*, no de la conferencia principal.
-- **No renumerar las Secciones 3 y 4:** doce referencias cruzadas del resto del
-  informe apuntan ahí, tres de ellas a un subapartado concreto (3.4, 3.9, 4.4).
+- **No renumerar las Secciones 3 y 4:** 20 referencias cruzadas (`\ref`) del
+  resto del informe apuntan ahí, 15 de ellas a un subapartado concreto (3.1,
+  3.5, 3.9, 4.3, 4.4, 4.5).
 
 ### Reparto por frentes
 
@@ -89,15 +91,16 @@ latexmk -pdf main.tex
 En Windows, **correr `latexmk` desde Git Bash, no desde PowerShell**: ahí MiKTeX no encuentra `perl` y latexmk falla sin compilar nada.
 
 Estado esperado: **40 páginas, 0 errores**, ninguna cita ni referencia cruzada
-sin resolver. Queda 1 caja `Overfull` y 3 avisos de Biber (`legacy month
-field`, en `main.blg`, no en `main.log`), todos cosméticos y conocidos. Si has
+sin resolver. Queda 1 caja `Overfull`, 1 aviso de `hyperref` (destino
+duplicado `page.1`) y 3 avisos de Biber (`legacy month field`, en `main.blg`,
+no en `main.log`), todos cosméticos y conocidos. Si has
 tocado un `.md` de las Secciones 3 o 4, **regenera su `.tex` antes de
 compilar**.
 
 Cambió el 13/09/2026: eran 40 páginas mientras los marcadores `[VERIFICAR]` se
-imprimían; ahora no se imprimen y la Sección 3 ocupa una página menos. Los «2
-avisos de `hyperref`» que este archivo daba por esperados ya no aparecen, y se
-comprobó que tampoco aparecían en el estado anterior: el dato estaba obsoleto.
+imprimían; ahora no se imprimen y la Sección 3 ocupa una página menos. De los
+«2 avisos de `hyperref`» que este archivo daba por esperados queda 1
+(`page.1`), comprobado en una compilación desde limpio el 13/09/2026.
 Volvió a 40 con el commit `d99701d` (reorientación de la Introducción); el
 logo de la carátula (`3686fbe`) no cambió el recuento.
 
