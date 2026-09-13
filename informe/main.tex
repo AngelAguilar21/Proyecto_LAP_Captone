@@ -143,13 +143,22 @@
 \newcommand{\verificar}[1]{%
   \stepcounter{verificarcount}%
   \typeout{[VERIFICAR \theverificarcount] marcador oculto en pagina \thepage.}}
-% Variante para los huecos de la PORTADA. Ahi un marcador invisible dejaria
-% "Codigo:" seguido de nada, que se lee como error de composicion en vez de
-% como dato faltante. Imprime una linea de relleno, que no afirma nada.
-\newcommand{\verificarhueco}[1]{%
-  \stepcounter{verificarcount}%
-  \typeout{[VERIFICAR \theverificarcount] hueco de portada en pagina \thepage.}%
-  \rule[-0.15em]{3.2cm}{0.4pt}}
+% Variante para los campos de la PORTADA (2026-09-13).
+%   \campoportada{marcador}{formato}{dato}
+% Un marcador invisible dejaria "Fecha:" o "( )" seguidos de nada, y una
+% linea de relleno se veia como hueco al imprimir. Por eso el campo entero
+% -- etiqueta, parentesis y espaciado incluidos, todo dentro de {formato} --
+% se imprime solo si {dato} no esta vacio; dentro de {formato}, el dato se
+% escribe como \datoportada. Mientras {dato} este vacio no sale nada en el
+% PDF y cuenta como marcador [VERIFICAR] en el log.
+% Para cerrar el marcador basta con escribir el dato en el tercer argumento.
+\newcommand{\campoportada}[3]{%
+  \if\relax\detokenize{#3}\relax
+    \stepcounter{verificarcount}%
+    \typeout{[VERIFICAR \theverificarcount] campo de portada omitido en pagina \thepage.}%
+  \else
+    \def\datoportada{#3}#2%
+  \fi}
 \AtEndDocument{%
   \typeout{^^J=====================================================^^J%
     MARCADORES [VERIFICAR] EN EL CUERPO: \theverificarcount^^J%
@@ -256,17 +265,18 @@
 \vspace{0.4cm}
 
 % Formato "Apellidos, Nombres (codigo)".
-% Los codigos no constan en el repositorio: van con \verificarhueco, que
-% imprime una linea de relleno en vez del texto del marcador.
-% Solo de Moreno Ugarte constan los dos apellidos; de los otros tres el
-% repositorio unicamente registra el apellido paterno.
-\verificar{apellido materno de Aguilar, Rivadeneyra y Ortega: el
-repositorio solo registra el apellido paterno.}%
-\begin{tabular}{@{}l@{\hspace{0.6em}}l@{}}
-Aguilar, Angel           & (\verificarhueco{código de Aguilar})      \\[0.2cm]
-Rivadeneyra, Stephano    & (\verificarhueco{código de Rivadeneyra})  \\[0.2cm]
-Ortega, José             & (\verificarhueco{código de Ortega})       \\[0.2cm]
-Moreno Ugarte, Fabián    & (\verificarhueco{código de Moreno})       \\
+% Los cuatro codigos y los apellidos completos los aportaron los propios
+% integrantes el 13/09/2026; antes no constaban en el repositorio y los
+% campos iban vacios. Cierra A-10b de PENDIENTES.md.
+% El orden es el historico de la portada (Aguilar, Rivadeneyra, Ortega,
+% Moreno), no alfabetico: se mantiene a proposito.
+% \campoportada se conserva aunque los datos ya esten: si alguien vacia un
+% codigo, el campo desaparece entero en vez de dejar "( )" colgando.
+\begin{tabular}{@{}l@{}l@{}}
+Aguilar Contreras, Ángel              & \campoportada{código de Aguilar}{\hspace{0.6em}(\datoportada)}{22200133}     \\[0.2cm]
+Rivadeneyra Huamán, Stephano Williams & \campoportada{código de Rivadeneyra}{\hspace{0.6em}(\datoportada)}{22101822} \\[0.2cm]
+Ortega Olazábal, José                 & \campoportada{código de Ortega}{\hspace{0.6em}(\datoportada)}{25200719}      \\[0.2cm]
+Moreno Ugarte, Fabián                 & \campoportada{código de Moreno}{\hspace{0.6em}(\datoportada)}{25200717}      \\
 \end{tabular}
 
 \vfill
@@ -276,10 +286,10 @@ Moreno Ugarte, Fabián    & (\verificarhueco{código de Moreno})       \\
 
 % Ciclo academico y fecha de entrega: pendiente A-10 en PENDIENTES.md. Los dos
 % valores deben salir del silabo del curso, no de una estimacion.
-{\large Ciclo académico: \verificarhueco{ciclo según sílabo}\par}
-\vspace{0.25cm}
-{\large Fecha: \verificarhueco{fecha de entrega según sílabo}\par}
-\vspace{0.45cm}
+% Cada campo lleva dentro el espacio que lo sigue: si falta, desaparece
+% tambien ese espacio y "Lima, Peru" no queda descolgado.
+\campoportada{ciclo según sílabo}{{\large Ciclo académico: \datoportada\par}\vspace{0.25cm}}{}
+\campoportada{fecha de entrega según sílabo}{{\large Fecha: \datoportada\par}\vspace{0.45cm}}{}
 
 {\large Lima, Perú\par}
 
@@ -302,11 +312,24 @@ impacto} y el \emph{Anexo A} corresponden al frente de validación
 de otros integrantes del equipo y se incorporarán en la siguiente
 entrega; sus apartados figuran ya con la numeración reservada.
 
-El cuerpo del documento no contiene marcadores de relleno. Los puntos que
-siguen abiertos se registran fuera de este texto, en el archivo
-\texttt{PENDIENTES.md} del repositorio, agrupados según quién puede
-resolverlos: decisiones del frente ético-legal, decisiones del equipo e
-información que solo puede proporcionar LAP.
+Ni la portada ni el cuerpo del documento contienen huecos ni marcadores de
+relleno. En la portada, un campo que todavía no está confirmado se omite
+entero en lugar de dejarse en blanco: donde no figura el ciclo académico ni
+la fecha de entrega es porque ninguno de los dos consta aún en el sílabo
+consultado por el equipo. Los puntos que siguen abiertos se registran fuera
+de este texto, en el archivo \texttt{PENDIENTES.md} del repositorio,
+agrupados según quién puede resolverlos: decisiones del frente ético-legal,
+decisiones del equipo e información que solo puede proporcionar LAP.
+
+Conviene advertir de una consecuencia de ese criterio. Seis afirmaciones
+normativas de la Sección~\ref{sec:marco} llevan asociada una reserva de
+verificación --- normas cuyas fechas o cuyo articulado exacto se
+contrastaron contra fuentes secundarias concordantes y no contra el diario
+oficial --- que \emph{no se imprime} en el cuerpo para no interrumpir la
+lectura. Esas seis reservas, con su alcance exacto y el efecto que tendría
+un error en cada una, constan en \texttt{PENDIENTES.md}, apartado a.3. El
+lector que necesite apoyarse en una fecha o en un número de artículo
+concreto de esa sección debería consultarlas antes de hacerlo.
 
 Dos criterios de redacción se aplicaron de forma sistemática, y conviene
 enunciarlos porque explican el tono del documento:

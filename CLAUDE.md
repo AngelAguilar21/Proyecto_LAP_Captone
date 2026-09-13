@@ -108,7 +108,8 @@ logo de la carátula (`3686fbe`) no cambió el recuento.
 
 No se imprimen en el PDF, pero **siguen en el fuente**. `md2tex.py` los
 convierte en `\verificar{...}`, macro de `main.tex` que se traga su argumento;
-la portada usa `\verificarhueco{...}`, que compone una línea de relleno. Cada
+la portada usa `\campoportada{marcador}{formato}{dato}`, que imprime el campo
+entero solo si el dato no está vacío y, si falta, no deja ni etiqueta ni hueco. Cada
 uno deja rastro en el log y al final se emite el recuento. La lista
 autoritativa, con archivo y línea, está en `PENDIENTES.md` §a.3.
 

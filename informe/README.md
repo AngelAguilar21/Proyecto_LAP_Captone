@@ -303,7 +303,7 @@ Bibliografía con `biblatex` + `biber`, estilo `ieee`, `sorting=none`
 |---|---|
 | `\cajaaviso{título}{texto}` | Caja destacada para advertencias y riesgos a validar |
 | `\verificar{texto}` | Marcador `[VERIFICAR]` oculto: no imprime nada y deja rastro en el log |
-| `\verificarhueco{texto}` | Variante de portada: no imprime el texto, compone una línea de relleno |
+| `\campoportada{marcador}{formato}{dato}` | Variante de portada: imprime el campo entero solo si `dato` no está vacío; si falta, no imprime nada |
 
 | Tipo de columna | Equivale a |
 |---|---|

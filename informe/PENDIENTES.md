@@ -51,7 +51,7 @@ ante el equipo y ante el cliente, y eso todavía no ha ocurrido.
 | A-07 | ¿M-02 en versión estricta, o versión atenuada con M-04? | `marco_etico_legal.tex`, privacidad desde el diseño | **Abierto.** La estricta es más defendible jurídicamente; la atenuada es la única que permite mejorar el modelo con datos del terminal. |
 | A-08 | ¿La EIPD se compromete como entregable formal del Capstone, o se entrega su estructura y contenido sustantivo? | `marco_etico_legal.tex`, EIPD | **Abierto.** Lo que no admite ambigüedad es que se diga cuál de las dos se ofrece. |
 | A-09 | Si algún conjunto de datos restringe el uso comercial: ¿se excluye, o se usa solo en fase académica documentándolo? | `marco_etico_legal.tex`, licencias | **Abierto.** Depende del resultado de B-06. |
-| A-10 | Ciclo académico y fecha de entrega que deben figurar en la portada. | `main.tex`, portada | **Abierto.** La portada ya lleva ambas líneas, cada una con marcador `[VERIFICAR]` en lugar de valor. Desde el 13/09/2026 el marcador **ya no se imprime**: en su lugar se compone una linea de relleno (`\verificarhueco`, ver a.3), de modo que se sigue viendo el hueco sin que el PDF muestre texto de trabajo. **Falta confirmar los dos datos contra el sílabo del curso** —no contra una estimación ni contra lo que figure en otro documento del equipo— y sustituir los dos marcadores. Es de este frente y se cierra en cuanto se tenga el sílabo delante. Se rectifica lo que decía este punto antes: la portada ya no está «sin línea de fecha». |
+| A-10 | Ciclo académico y fecha de entrega que deben figurar en la portada. | `main.tex`, portada | **Abierto.** La portada ya lleva ambas líneas, cada una con marcador `[VERIFICAR]` en lugar de valor. Desde el 13/09/2026 el campo **no se imprime en absoluto** cuando falta el dato (`\campoportada`, ver a.3): no queda ni la etiqueta «Ciclo academico:» ni una linea de relleno, de modo que la portada no muestra huecos. **Falta confirmar los dos datos contra el sílabo del curso** —no contra una estimación ni contra lo que figure en otro documento del equipo— y sustituir los dos marcadores. Es de este frente y se cierra en cuanto se tenga el sílabo delante. Se rectifica lo que decía este punto antes: la portada ya no está «sin línea de fecha». |
 | A-11 | Cursar la solicitud formal a LAP de acceso a material del terminal. | `marco_etico_legal.tex`, auditoría | **Abierto.** Sin ese acceso, dos hallazgos de la auditoría no cierran. Ver C-14. |
 
 ### a.2 Verificaciones documentales
@@ -102,17 +102,18 @@ de compilacion y al final se emite el recuento:
 ```
 [VERIFICAR 1] marcador oculto en pagina 11.
 ...
-MARCADORES [VERIFICAR] EN EL CUERPO: 17
+MARCADORES [VERIFICAR] EN EL CUERPO: 12
 ```
 
 Las macros **no** terminan en `\ignorespaces`. Terminaban, y se comian el espacio *posterior* al marcador: como los marcadores se escriben pegados al punto de la frase anterior, el PDF salia con «evalua.Si puede» sin separacion. Corregido el 13/09/2026; afectaba tambien a los seis marcadores de la Seccion 3. TeX colapsa los espacios consecutivos, asi que quitarlo no introduce espacios dobles.
 
-En la portada se usa la variante `\verificarhueco{...}`, que tampoco imprime
-el texto pero compone una linea de relleno: un hueco invisible dejaria
-«Ciclo academico:» seguido de nada, que se lee como error de composicion en
-vez de como dato faltante.
+En la portada se usa `\campoportada{marcador}{formato}{dato}`. Imprime el campo
+entero --- etiqueta, parentesis y espaciado incluidos --- **solo si {dato} no
+esta vacio**; si falta, no sale nada: ni etiqueta colgando ni linea de relleno.
+Para cerrar el marcador basta con escribir el dato en el tercer argumento, que
+es lo que se hizo con los cuatro codigos de alumno.
 
-**Los 17 marcadores vigentes.** Esta es la lista autoritativa; el `.md` es la
+**Los 12 marcadores vigentes.** Esta es la lista autoritativa; el `.md` es la
 fuente de los seis del cuerpo, de modo que **se corrigen en el `.md` y se
 reconvierte**, nunca en el `.tex`.
 
@@ -124,22 +125,21 @@ reconvierte**, nunca en el `.tex`.
 | 4 | `secciones/03_marco_normativo.md:73` | `03_marco_normativo.tex:285` | Articulo del D.S. 016-2024-JUS que consagra privacidad por diseno y por defecto | A-25 |
 | 5 | `secciones/03_marco_normativo.md:107` | `03_marco_normativo.tex:451` | Articulo del alcance extraterritorial y sus criterios de conexion | A-18 |
 | 6 | `secciones/03_marco_normativo.md:125` | `03_marco_normativo.tex:553` | Texto literal del RNF-01 y documento en que consta | — |
-| 7 | `main.tex:259` | — | Apellido materno de Aguilar, Rivadeneyra y Ortega | A-10b |
-| 8 | `main.tex:262` | — | Codigo de Aguilar | A-10b |
-| 9 | `main.tex:263` | — | Codigo de Rivadeneyra | A-10b |
-| 10 | `main.tex:264` | — | Codigo de Ortega | A-10b |
-| 11 | `main.tex:265` | — | Codigo de Moreno Ugarte | A-10b |
-| 12 | `main.tex:275` | — | Ciclo academico segun silabo | A-10 |
-| 13 | `main.tex:277` | — | Fecha de entrega segun silabo | A-10 |
+| 7 | `main.tex:291` | — | Ciclo academico segun silabo | A-10 |
+| 8 | `main.tex:292` | — | Fecha de entrega segun silabo | A-10 |
 
-| 14 | `secciones/introduccion.tex:61` | — | Como se decide hoy la dotacion de personal y la apertura de mostradores | C-08 |
-| 15 | `secciones/introduccion.tex:106` | — | Incidentes de aglomeracion, tiempos de cola y quejas documentados por LAP | C-07 |
-| 16 | `secciones/introduccion.tex:112` | — | Aforo declarado del terminal y superficie por zona | C-07 |
-| 17 | `secciones/introduccion.tex:216` | — | Numero de zonas a cubrir y de camaras disponibles por zona | C-09 |
+| 9 | `secciones/introduccion.tex:61` | — | Como se decide hoy la dotacion de personal y la apertura de mostradores | C-08 |
+| 10 | `secciones/introduccion.tex:106` | — | Incidentes de aglomeracion, tiempos de cola y quejas documentados por LAP | C-07 |
+| 11 | `secciones/introduccion.tex:112` | — | Aforo declarado del terminal y superficie por zona | C-07 |
+| 12 | `secciones/introduccion.tex:216` | — | Numero de zonas a cubrir y de camaras disponibles por zona | C-09 |
 
-La Seccion 4 no tiene ninguno. Los cuatro de la Introduccion (14-17) se editan directamente en el `.tex`, que ahi **si** es la fuente: la regla de no editar a mano solo alcanza a los `.tex` generados de las Secciones 3 y 4.
+La Seccion 4 no tiene ninguno.
 
-**A-10b (nuevo).** La portada pide los integrantes como «Apellidos, Nombres
+**Advertencia sobre los seis marcadores de la Seccion 3 (1-6).** Ocultarlos tuvo un efecto que conviene tener presente: en cuatro de los seis (1, 2, 3 y 6) la prosa visible **afirma el dato en indicativo** y la reserva ya no se ve. Un lector del PDF lee «publicado el 30 de noviembre de 2024 y en vigor desde el 30 de marzo de 2025» sin saber que las tres fechas se contrastaron contra fuentes secundarias y no contra *El Peruano*, y lee el RNF-01 como requisito establecido sin saber que su texto literal no consta en ningun documento del repositorio. En los otros dos (4 y 5) la prosa simplemente no cita el articulo, de modo que ahi no hay afirmacion que matizar.
+
+Por eso la nota de la pagina iii del informe **advierte expresamente** de que seis afirmaciones normativas de la Seccion 3 llevan una reserva de verificacion que no se imprime y remite a este apartado. Si el equipo prefiere que la reserva vuelva a verse en el cuerpo, la via correcta es **redactarla como prosa** en el `.md` (por ejemplo «segun fuentes secundarias concordantes»), no reactivar la impresion del marcador: el marcador es una nota de trabajo, no texto de informe. Los cuatro de la Introduccion (14-17) se editan directamente en el `.tex`, que ahi **si** es la fuente: la regla de no editar a mano solo alcanza a los `.tex` generados de las Secciones 3 y 4.
+
+**A-10b.** ✅ **Cerrado el 13/09/2026.** Los cuatro integrantes aportaron sus codigos y sus apellidos completos, y ya figuran en la portada: Aguilar Contreras, Angel (22200133); Rivadeneyra Huaman, Stephano Williams (22101822); Ortega Olazabal, Jose (25200719); Moreno Ugarte, Fabian (25200717). Se mantiene el orden historico de la portada, no el alfabetico. Cerro los cinco marcadores 7-11 de la lista anterior. Texto original del punto: La portada pide los integrantes como «Apellidos, Nombres
 (codigo)». No consta en el repositorio **ningun codigo de alumno**, y de
 Aguilar, Rivadeneyra y Ortega solo consta el apellido paterno. Los cuatro
 codigos y los tres apellidos maternos hay que pedirselos a los propios
