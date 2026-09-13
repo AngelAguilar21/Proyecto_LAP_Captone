@@ -44,7 +44,7 @@ export interface SessionState {
   sourceChecks?: Record<string,{source:string|number;valid:boolean;width:number;height:number;fps:number;checkedAt:number}>;
 }
 export const STATUS: Record<string, string> = { idle: 'Sin sesión', starting: 'Conectando', running: 'Procesamiento activo', paused: 'Pausado', stopping: 'Finalizando', stopped: 'Sesión finalizada', ended: 'Grabación finalizada', error: 'Error', live: 'Fuente válida', ready: 'Preparada' };
-export const COLORS = ['#19a5ff', '#4bd4aa', '#b59aff', '#ffbb55', '#ef7aa0', '#53c9e8'];
+export const COLORS = ['#19a5ff', '#6c7fe0', '#b59aff', '#ffbb55', '#ef7aa0', '#53c9e8'];
 export const EMPTY_STATE: SessionState = { status: 'idle', t: 0, people: [], cameras: [], events: [], analytics: { clusters: [], zones: [], heat: [], mappedCount: 0 } };
 export const isActive = (s: string) => ['starting', 'running', 'paused', 'stopping'].includes(s);
 export const isStream = (source: string | number) => typeof source === 'number' || /^(rtsp|https?|rtmp):\/\//i.test(source);

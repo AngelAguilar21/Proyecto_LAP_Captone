@@ -12,7 +12,7 @@ interface Props {
   areaDraft?: Point[]; onAreaDraft?: (p:Point[])=>void; areaEditing?: boolean; template?: boolean;
   onCalibrationPoint?: (point: Point) => void;
 }
-const kinds: Record<string, string> = { roi: '#0789e9', queue: '#e2a037', restricted: '#d65d63', room: '#839cac', wall: '#c1ced6', door: '#6fc8ab', corridor: '#5c8096', commercial: '#29b48c' };
+const kinds: Record<string, string> = { roi: '#0789e9', queue: '#e2a037', restricted: '#d65d63', room: '#839cac', wall: '#c1ced6', door: '#a67c52', corridor: '#5c8096', commercial: '#8a5fd1' };
 
 export default function MapCanvas({ config, state, connected, editable, compact, selectedCamera, onCamera, selectedPerson, onPerson, onChange, tool = 'select', onTool, onCalibrationPoint, areaDraft=[], onAreaDraft, areaEditing=false, template=false }: Props) {
   const svg = useRef<SVGSVGElement>(null);
@@ -179,8 +179,8 @@ export default function MapCanvas({ config, state, connected, editable, compact,
       {draft.length > 0 && <g><polyline points={draft.map(p=>p.join(',')).join(' ')} fill="#ffb34022" stroke="#ffce81" strokeWidth={scale*2}/>{draft.map((p,i)=><circle key={i} cx={p[0]} cy={p[1]} r={scale*4} fill="#ffce81"/>)}</g>}
       {people.map(p => <g key={p.id} transform={`translate(${p.point![0]},${p.point![1]})`} className="map-person" onPointerUp={e => {e.stopPropagation(); onPerson?.(p);}}><circle r={scale*(selectedPerson===p.id ? 7.5 : 4.8)} fill={p.association==='uncertain' ? '#ffb340' : '#21a8ff'} stroke="#061c31" strokeWidth={scale*1.3}/>{layers.labels && <text x={scale*9} y={-scale*7} fontSize={scale*10} fill="#d4eeff">{p.id}{p.association==='uncertain' ? ' ?' : p.association==='estimated' ? ' ~' : ''}</text>}{layers.prediction && p.velocity && <path d={`M0,0 L${p.velocity[0]*2},${p.velocity[1]*2}`} stroke="#ffc777" strokeDasharray={`${scale*4} ${scale*3}`} strokeWidth={scale*1.4}/>}</g>)}
     </g>
-      {bounded&&<polygon points={config.workArea!.map(p=>p.join(',')).join(' ')} fill="none" stroke="#51cdb5" strokeWidth={scale*2}/>}
-      {areaEditing&&areaDraft.length>0&&<g><polygon points={areaDraft.map(p=>p.join(',')).join(' ')} fill="#29c49b20" stroke="#51cdb5" strokeWidth={scale*2}/>{areaDraft.map((p,i)=><g key={i} onPointerDown={e=>beginDrag(e,'work',i)}><circle cx={p[0]} cy={p[1]} r={scale*7} fill="#51cdb5"/><text x={p[0]+scale*10} y={p[1]} fill="#ddf9f4" fontSize={scale*12}>{i+1}</text></g>)}</g>}
+      {bounded&&<polygon points={config.workArea!.map(p=>p.join(',')).join(' ')} fill="none" stroke="#c9790a" strokeWidth={scale*2}/>}
+      {areaEditing&&areaDraft.length>0&&<g><polygon points={areaDraft.map(p=>p.join(',')).join(' ')} fill="#c9790a20" stroke="#c9790a" strokeWidth={scale*2}/>{areaDraft.map((p,i)=><g key={i} onPointerDown={e=>beginDrag(e,'work',i)}><circle cx={p[0]} cy={p[1]} r={scale*7} fill="#c9790a"/><text x={p[0]+scale*10} y={p[1]} fill="#ffffff" fontSize={scale*12}>{i+1}</text></g>)}</g>}
     </svg>{showLayers && <div className="layer-menu"><strong>Capas del plano</strong>{Object.entries({ cameras: 'Cámaras', coverage: 'Alcance orientativo', labels: 'Etiquetas e IDs', trajectories: 'Trayectorias recientes', heat: 'Calor de ocupación', prediction: 'Dirección estimada', zones: 'Zonas dibujadas' }).map(([key,label])=><label key={key}><input type="checkbox" checked={layers[key as keyof typeof layers]} onChange={()=>setLayers({...layers,[key]:!layers[key as keyof typeof layers]})}/>{label}</label>)}</div>}
       {!config.mapConfigured && !config.background && !config.zones.length && state.mode !== 'demo' && <div className="map-empty"><Icon name="map" size={30}/><strong>Plano no configurado</strong><span>Importa tu plano o define un espacio en blanco.<br/>Después coloca y calibra tus cámaras.</span></div>}
       <div className="scale-indicator"><span>{(config.width/5).toFixed(1)} {config.unit==='meters' ? 'm' : 'unidades relativas'}</span><i/></div>
