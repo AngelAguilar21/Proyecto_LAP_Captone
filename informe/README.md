@@ -365,13 +365,19 @@ primaria** la Ley 29733 (arts. 2, 5-8, 11, 13-15, 18-25, 28 y 30) y el D.S.
 incisos constitucionales están contrastados contra reproducción íntegra de
 fuente secundaria. Trazabilidad completa en `NOTAS_FUENTES.md` §2.7.
 
-Quedan **seis `[VERIFICAR]`** en el cuerpo, todos en la Sección 3; la Sección 4
-no tiene ninguno. Aparte de esos seis, la **portada** lleva otros dos, por el
-ciclo académico y la fecha de entrega (A-10): no son normativos y se cierran con
-el sílabo del curso. Corrige lo que este README decía antes —«siete, todos sobre el
-articulado del D.S. 016-2024-JUS»—: son seis (el séptimo era el ejemplo del
-comentario de cabecera del `.md`) y **solo dos** versan sobre el articulado del
-D.S. 016-2024-JUS. Los otros cuatro son sobre las fechas y la disposición
+Quedan **17 `[VERIFICAR]`** en total, según el recuento del log de compilación
+(13/09/2026): **7 en la portada**, **4 en la Introducción** y **6 en la
+Sección 3**; la Sección 4 no tiene ninguno. Los 7 de la portada son el apellido
+materno de tres integrantes, los cuatro códigos de alumno, y el ciclo académico
+y la fecha de entrega (A-10): ninguno es normativo. Los 4 de la Introducción
+son datos del terminal que dependen de LAP (C-07, C-08, aforo y zonas/cámaras).
+Esto corrige la cuenta anterior de este README, «seis en el cuerpo y dos en la
+portada», que no incluía la Introducción ni los huecos de los integrantes.
+
+De los 6 de la Sección 3, corrige a su vez lo que este README decía antes
+—«siete, todos sobre el articulado del D.S. 016-2024-JUS»—: son seis (el séptimo
+era el ejemplo del comentario de cabecera del `.md`) y **solo dos** versan sobre
+el articulado del D.S. 016-2024-JUS. Los otros cuatro son sobre las fechas y la disposición
 derogatoria del propio D.S., la vigencia de la Directiva 01-2020-JUS/DGTAIPD, la
 denominación del D.L. 1218 y la Ley 30120, y el texto literal del RNF-01.
 
