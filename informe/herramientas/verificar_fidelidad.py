@@ -18,6 +18,11 @@ def norm_tex(t):
     t = re.sub(RB + r'(?:sub)?section\{', '', t)
     t = re.sub(RB + r'label\{[^}]*\}', '', t)
     t = re.sub(RB + r'cite\{([^}]*)\}', lambda m: m.group(1).replace(',', ' '), t)
+    # \verificar{x} proviene de [VERIFICAR: x] en el .md. Se restituye la
+    # palabra VERIFICAR para que la comparacion siga casando palabra por
+    # palabra; si solo se borrara la macro, el .tex perderia ese token y la
+    # verificacion daria una diferencia falsa en cada marcador.
+    t = re.sub(RB + r'verificar\{', ' VERIFICAR ', t)
     t = re.sub(RB + r'(?:textbf|emph|textit|texttt)\{', '', t)
     t = t.replace(B + 'allowbreak', ' ')
     for ch in '&%#$_':

@@ -86,7 +86,24 @@ Desde `informe/`:
 latexmk -pdf main.tex
 ```
 
-Estado esperado: **40 páginas, 0 errores**, ninguna cita ni referencia cruzada
-sin resolver. Quedan 2 avisos de `hyperref`, 1 caja `Overfull` y 3 avisos de
-Biber, todos cosméticos y conocidos. Si has tocado un `.md` de las Secciones 3
-o 4, **regenera su `.tex` antes de compilar**.
+Estado esperado: **39 páginas, 0 errores**, ninguna cita ni referencia cruzada
+sin resolver. Queda 1 caja `Overfull` y 3 avisos de Biber (`legacy month
+field`, en `main.blg`, no en `main.log`), todos cosméticos y conocidos. Si has
+tocado un `.md` de las Secciones 3 o 4, **regenera su `.tex` antes de
+compilar**.
+
+Cambió el 13/09/2026: eran 40 páginas mientras los marcadores `[VERIFICAR]` se
+imprimían; ahora no se imprimen y la Sección 3 ocupa una página menos. Los «2
+avisos de `hyperref`» que este archivo daba por esperados ya no aparecen, y se
+comprobó que tampoco aparecían en el estado anterior: el dato estaba obsoleto.
+
+### Marcadores `[VERIFICAR]`
+
+No se imprimen en el PDF, pero **siguen en el fuente**. `md2tex.py` los
+convierte en `\verificar{...}`, macro de `main.tex` que se traga su argumento;
+la portada usa `\verificarhueco{...}`, que compone una línea de relleno. Cada
+uno deja rastro en el log y al final se emite el recuento. La lista
+autoritativa, con archivo y línea, está en `PENDIENTES.md` §a.3.
+
+Esto **no** relaja la regla de `\pendiente{...}{...}`: esa macro sigue sin
+existir a propósito y su reaparición sigue rompiendo la compilación.

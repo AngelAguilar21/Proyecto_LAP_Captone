@@ -52,9 +52,13 @@ def convert_inline(t):
         slots.append(tex)
         return '\x00%d\x00' % (len(slots) - 1)
 
-    # 1. [VERIFICAR: ...] -> se preserva literal como marcador en cursiva
+    # 1. [VERIFICAR: ...] -> \verificar{...}
+    # La macro esta definida en main.tex y NO imprime nada en el PDF. El
+    # texto del marcador se conserva integro aqui y en el .md de origen; la
+    # lista autoritativa esta en PENDIENTES.md. Antes se emitia
+    # \textit{[VERIFICAR: ...]}, que si se imprimia.
     def verificar(m):
-        return stash(r'\textit{[VERIFICAR: ' + convert_inline(m.group(1)) + ']}')
+        return stash(r'\verificar{' + convert_inline(m.group(1)) + '}')
     t = re.sub(r'\[VERIFICAR:\s*(.+?)\]', verificar, t, flags=re.S)
 
     # 2. codigo `x` -> \texttt{x} (con _ partible para no desbordar la caja)

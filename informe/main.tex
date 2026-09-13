@@ -68,9 +68,16 @@
 %--------------------- Bibliografia ----------------------------------
 % csquotes DEBE cargarse antes que biblatex.
 \usepackage{csquotes}
+% Estilo IEEE numerico: llamadas [1], [4] numeradas por ORDEN DE APARICION.
+% sorting=none es lo que garantiza ese orden (no alfabetico); es ademas el
+% criterio propio de IEEE, de modo que la opcion es redundante pero se deja
+% explicita para que no se pierda si alguien cambia el estilo.
+% El estilo anterior era numeric-comp, que ya numeraba igual; lo que cambia
+% con ieee es el FORMATO de las entradas y que las citas multiples se
+% escriben [2], [3] en vez de [2, 3], como corresponde a IEEE.
 \usepackage[
   backend=biber,
-  style=numeric-comp,
+  style=ieee,
   sorting=none,
   maxbibnames=99,
   giveninits=true,
@@ -79,6 +86,11 @@
   url=false
 ]{biblatex}
 \addbibresource{referencias.bib}
+
+% biblatex-ieee agrupa los millares tambien en los rangos de paginas, lo que
+% imprime "pags. 29 363-29 373" en la entrada [3]. En paginacion el separador
+% de millares no corresponde, asi que se restaura el formato plano.
+\DeclareFieldFormat{pages}{\mkpageprefix[bookpagination]{#1}}
 
 %--------------------- Colores y macros propias ----------------------
 \definecolor{azulesan}{RGB}{0,51,102}
@@ -107,6 +119,37 @@
 % alguien vuelve a escribir \pendiente{...}{...} en una seccion, la
 % compilacion falla de inmediato. Esa es la salvaguarda que impide que un
 % marcador reaparezca en el PDF sin que nadie lo advierta.
+%
+% MARCADORES [VERIFICAR] -- MECANISMO (2026-09-13)
+% \pendiente y \verificar hacen cosas OPUESTAS y por eso conviven sin
+% contradecirse:
+%   \pendiente  no existe  -> si reaparece, la compilacion FALLA.
+%   \verificar  existe     -> el texto queda en el fuente y NO se imprime.
+% \verificar{texto} se traga su argumento: no produce ninguna salida en el
+% PDF. El texto sigue visible en el .tex y en el .md que lo genera, y la
+% lista autoritativa vive en PENDIENTES.md, seccion "Marcadores
+% [VERIFICAR] en el cuerpo".
+% Para que ocultarlos no equivalga a olvidarlos, cada uno deja rastro en el
+% log de compilacion y al final se emite un recuento. Deliberadamente NO se
+% vuelca el texto del marcador al log: varios contienen \emph y \texttt, y
+% expandirlos en un \typeout rompe la compilacion.
+\newcounter{verificarcount}
+\newcommand{\verificar}[1]{%
+  \stepcounter{verificarcount}%
+  \typeout{[VERIFICAR \theverificarcount] marcador oculto en pagina \thepage.}%
+  \ignorespaces}
+% Variante para los huecos de la PORTADA. Ahi un marcador invisible dejaria
+% "Codigo:" seguido de nada, que se lee como error de composicion en vez de
+% como dato faltante. Imprime una linea de relleno, que no afirma nada.
+\newcommand{\verificarhueco}[1]{%
+  \stepcounter{verificarcount}%
+  \typeout{[VERIFICAR \theverificarcount] hueco de portada en pagina \thepage.}%
+  \rule[-0.15em]{3.2cm}{0.4pt}\ignorespaces}
+\AtEndDocument{%
+  \typeout{^^J=====================================================^^J%
+    MARCADORES [VERIFICAR] EN EL CUERPO: \theverificarcount^^J%
+    No se imprimen en el PDF. Detalle en PENDIENTES.md.^^J%
+    =====================================================^^J}}
 
 %--------------------- Hiperenlaces (siempre al final) ---------------
 \usepackage{hyperref}
@@ -122,11 +165,29 @@
   pdfsubject={Capstone I -- Ingenieria de Inteligencia Artificial}
 }
 
+% Encabezado corrido: "Informe Final" a la izquierda, "Capstone Project" a
+% la derecha, con filete horizontal debajo. El numero de pagina estaba antes
+% en el encabezado derecho, que ahora ocupa "Capstone Project"; se baja al
+% pie centrado para no perderlo (el indice remite a el).
+% La portada va dentro de titlepage, que fuerza \thispagestyle{empty}: el
+% encabezado aparece en todas las paginas salvo la caratula, que es lo
+% habitual y lo que evita que el filete cruce el logo.
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\small\textit{Capstone I -- Aglomeraciones LAP}}
-\fancyhead[R]{\small\thepage}
+\fancyhead[L]{\small Informe Final}
+\fancyhead[R]{\small Capstone Project}
+\fancyfoot[C]{\small\thepage}
 \renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+% article aplica el estilo "plain" a algunas paginas sueltas; se redefine
+% para que tambien lleven el encabezado y no queden sin el.
+\fancypagestyle{plain}{%
+  \fancyhf{}%
+  \fancyhead[L]{\small Informe Final}%
+  \fancyhead[R]{\small Capstone Project}%
+  \fancyfoot[C]{\small\thepage}%
+  \renewcommand{\headrulewidth}{0.4pt}%
+  \renewcommand{\footrulewidth}{0pt}}
 
 \onehalfspacing
 
@@ -135,55 +196,86 @@
 %=====================================================================
 
 %--------------------------- PORTADA ---------------------------------
+% LOGO DE ESAN
+% No hay ningun archivo de logo en el repositorio (2026-09-13). Se deja el
+% \includegraphics condicionado con \IfFileExists para que, en cuanto se
+% coloque el archivo, entre solo y sin tocar este .tex.
+% Formato preferible: PDF o PNG vectorial/alta resolucion, en
+%   informe/imagenes/logo-esan.pdf   (o .png)
+% Mientras no exista, se compone un recuadro neutro del mismo tamano para
+% que la caratula no cambie de maquetacion al anadirlo.
 \begin{titlepage}
 \centering
-\vspace*{1.5cm}
+% La caratula no necesita interlineado 1,5: con el logo anadido, el
+% \onehalfspacing del documento la desbordaba a una segunda pagina.
+\singlespacing
+\vspace*{0.2cm}
+
+\IfFileExists{imagenes/logo-esan.pdf}{%
+  \includegraphics[height=2.2cm]{imagenes/logo-esan.pdf}%
+}{%
+  \IfFileExists{imagenes/logo-esan.png}{%
+    \includegraphics[height=2.2cm]{imagenes/logo-esan.png}%
+  }{%
+    \framebox[5.5cm][c]{\rule{0pt}{2.2cm}\small\itshape Logo ESAN}%
+  }%
+}
+
+\vspace{0.5cm}
 
 {\scshape\large Universidad ESAN\par}
 {\scshape Facultad de Ingeniería\par}
 {\scshape Carrera de Ingeniería de Inteligencia Artificial\par}
 
-\vspace{2.5cm}
+\vspace{0.5cm}
 
 {\color{azulesan}\rule{\linewidth}{1.2pt}}
-\vspace{0.8cm}
-
-{\huge\bfseries Estimación de aglomeraciones de personas\par}
-\vspace{0.3cm}
-{\huge\bfseries mediante visión computacional en el\par}
-\vspace{0.3cm}
-{\huge\bfseries Aeropuerto Internacional Jorge Chávez\par}
-
-\vspace{0.8cm}
-{\Large Informe de Capstone I\par}
 \vspace{0.4cm}
+
+{\LARGE\bfseries Estimación de aglomeraciones de personas\par}
+\vspace{0.2cm}
+{\LARGE\bfseries mediante visión computacional en el\par}
+\vspace{0.2cm}
+{\LARGE\bfseries Aeropuerto Internacional Jorge Chávez\par}
+
+\vspace{0.4cm}
+{\Large Informe Final -- Capstone Project\par}
+\vspace{0.3cm}
 {\large Cliente: Lima Airport Partners (LAP)\par}
 
-\vspace{0.8cm}
+\vspace{0.4cm}
 {\color{azulesan}\rule{\linewidth}{1.2pt}}
 
-\vspace{2cm}
+\vspace{0.5cm}
 
-{\large\bfseries Equipo de trabajo\par}
-\vspace{0.6cm}
+{\large\bfseries Integrantes\par}
+\vspace{0.4cm}
 
-\begin{tabular}{@{}ll@{}}
-Angel Aguilar & Liderazgo e integración \\[0.25cm]
-Stephano Rivadeneyra & Ciencia de datos \\[0.25cm]
-José Ortega & Ingeniería de datos \\[0.25cm]
-Fabián Moreno Ugarte & Validación ética/legal y documentación \\
+% Formato "Apellidos, Nombres (codigo)".
+% Los codigos no constan en el repositorio: van con \verificarhueco, que
+% imprime una linea de relleno en vez del texto del marcador.
+% Solo de Moreno Ugarte constan los dos apellidos; de los otros tres el
+% repositorio unicamente registra el apellido paterno.
+\verificar{apellido materno de Aguilar, Rivadeneyra y Ortega: el
+repositorio solo registra el apellido paterno.}%
+\begin{tabular}{@{}l@{\hspace{0.6em}}l@{}}
+Aguilar, Angel           & (\verificarhueco{código de Aguilar})      \\[0.2cm]
+Rivadeneyra, Stephano    & (\verificarhueco{código de Rivadeneyra})  \\[0.2cm]
+Ortega, José             & (\verificarhueco{código de Ortega})       \\[0.2cm]
+Moreno Ugarte, Fabián    & (\verificarhueco{código de Moreno})       \\
 \end{tabular}
 
 \vfill
 
-% Ciclo academico y fecha de entrega: pendiente A-10 en PENDIENTES.md. Los dos
-% valores deben salir del silabo del curso, no de una estimacion. Van con
-% marcador [VERIFICAR] a proposito: es preferible que el hueco se vea a que la
-% portada afirme un ciclo o una fecha que nadie ha confirmado.
-{\large Ciclo académico: \textit{[VERIFICAR: ciclo según sílabo]}\par}
+{\large Universidad ESAN\par}
 \vspace{0.3cm}
-{\large Fecha de entrega: \textit{[VERIFICAR: fecha según sílabo]}\par}
-\vspace{0.6cm}
+
+% Ciclo academico y fecha de entrega: pendiente A-10 en PENDIENTES.md. Los dos
+% valores deben salir del silabo del curso, no de una estimacion.
+{\large Ciclo académico: \verificarhueco{ciclo según sílabo}\par}
+\vspace{0.25cm}
+{\large Fecha: \verificarhueco{fecha de entrega según sílabo}\par}
+\vspace{0.45cm}
 
 {\large Lima, Perú\par}
 

@@ -51,7 +51,7 @@ ante el equipo y ante el cliente, y eso todavía no ha ocurrido.
 | A-07 | ¿M-02 en versión estricta, o versión atenuada con M-04? | `marco_etico_legal.tex`, privacidad desde el diseño | **Abierto.** La estricta es más defendible jurídicamente; la atenuada es la única que permite mejorar el modelo con datos del terminal. |
 | A-08 | ¿La EIPD se compromete como entregable formal del Capstone, o se entrega su estructura y contenido sustantivo? | `marco_etico_legal.tex`, EIPD | **Abierto.** Lo que no admite ambigüedad es que se diga cuál de las dos se ofrece. |
 | A-09 | Si algún conjunto de datos restringe el uso comercial: ¿se excluye, o se usa solo en fase académica documentándolo? | `marco_etico_legal.tex`, licencias | **Abierto.** Depende del resultado de B-06. |
-| A-10 | Ciclo académico y fecha de entrega que deben figurar en la portada. | `main.tex`, portada | **Abierto.** La portada ya lleva ambas líneas, cada una con marcador `[VERIFICAR]` en lugar de valor: se ve el hueco, que es preferible a afirmar un ciclo o una fecha sin confirmar. **Falta confirmar los dos datos contra el sílabo del curso** —no contra una estimación ni contra lo que figure en otro documento del equipo— y sustituir los dos marcadores. Es de este frente y se cierra en cuanto se tenga el sílabo delante. Se rectifica lo que decía este punto antes: la portada ya no está «sin línea de fecha». |
+| A-10 | Ciclo académico y fecha de entrega que deben figurar en la portada. | `main.tex`, portada | **Abierto.** La portada ya lleva ambas líneas, cada una con marcador `[VERIFICAR]` en lugar de valor. Desde el 13/09/2026 el marcador **ya no se imprime**: en su lugar se compone una linea de relleno (`\verificarhueco`, ver a.3), de modo que se sigue viendo el hueco sin que el PDF muestre texto de trabajo. **Falta confirmar los dos datos contra el sílabo del curso** —no contra una estimación ni contra lo que figure en otro documento del equipo— y sustituir los dos marcadores. Es de este frente y se cierra en cuanto se tenga el sílabo delante. Se rectifica lo que decía este punto antes: la portada ya no está «sin línea de fecha». |
 | A-11 | Cursar la solicitud formal a LAP de acceso a material del terminal. | `marco_etico_legal.tex`, auditoría | **Abierto.** Sin ese acceso, dos hallazgos de la auditoría no cierran. Ver C-14. |
 
 ### a.2 Verificaciones documentales
@@ -80,6 +80,69 @@ está en `NOTAS_FUENTES.md`.
 | A-26 | Rangos de sanción de la Ley 29733 en UIT y valor de la UIT del ejercicio. El informe no consigna ninguna cifra. | Impacto económico |
 | A-27 | Normativa peruana de accesibilidad aplicable a señalización en establecimientos de uso público. | Anexo A, criterios de colocación |
 | A-28 | Contrastar los campos del cartel, uno por uno, contra la Directiva y el D.S. 016-2024-JUS: que no falte ningún elemento exigido ni sobre alguno. | Anexo A |
+
+---
+
+### a.3 Marcadores `[VERIFICAR]` en el cuerpo
+
+**Cambio de mecanismo (13/09/2026).** Antes, `md2tex.py` convertia
+`[VERIFICAR: ...]` en `\textit{[VERIFICAR: ...]}` y el marcador **se
+imprimia en el PDF**. Ahora lo convierte en `\verificar{...}`, macro
+definida en `main.tex` que **no produce ninguna salida**. El texto sigue
+integro en el `.md` de origen y en el `.tex` generado; lo que desaparece es
+su impresion.
+
+Conviene no confundir esta macro con la retirada `\pendiente{}{}`, que hace
+lo contrario y **debe seguir sin existir**: si alguien la escribe, la
+compilacion falla, y esa salvaguarda se mantiene intacta.
+
+Para que ocultar no equivalga a olvidar, cada marcador deja rastro en el log
+de compilacion y al final se emite el recuento:
+
+```
+[VERIFICAR 1] marcador oculto en pagina 11.
+...
+MARCADORES [VERIFICAR] EN EL CUERPO: 13
+```
+
+En la portada se usa la variante `\verificarhueco{...}`, que tampoco imprime
+el texto pero compone una linea de relleno: un hueco invisible dejaria
+«Ciclo academico:» seguido de nada, que se lee como error de composicion en
+vez de como dato faltante.
+
+**Los 13 marcadores vigentes.** Esta es la lista autoritativa; el `.md` es la
+fuente de los seis del cuerpo, de modo que **se corrigen en el `.md` y se
+reconvierte**, nunca en el `.tex`.
+
+| # | Fuente (se edita aqui) | `.tex` generado | Qué falta verificar | Ficha |
+|---|---|---|---|---|
+| 1 | `secciones/03_marco_normativo.md:27` | `03_marco_normativo.tex:50` | Las tres fechas del D.S. 016-2024-JUS y la disposicion derogatoria, contra *El Peruano* | A-13 |
+| 2 | `secciones/03_marco_normativo.md:29` | `03_marco_normativo.tex:62` | Descartar derogacion parcial de la Directiva 01-2020-JUS/DGTAIPD | A-19 |
+| 3 | `secciones/03_marco_normativo.md:31` | `03_marco_normativo.tex:78` | Denominacion oficial y fecha de publicacion del D.L. 1218 y de la Ley 30120 | A-20 |
+| 4 | `secciones/03_marco_normativo.md:73` | `03_marco_normativo.tex:285` | Articulo del D.S. 016-2024-JUS que consagra privacidad por diseno y por defecto | A-25 |
+| 5 | `secciones/03_marco_normativo.md:107` | `03_marco_normativo.tex:451` | Articulo del alcance extraterritorial y sus criterios de conexion | A-18 |
+| 6 | `secciones/03_marco_normativo.md:125` | `03_marco_normativo.tex:553` | Texto literal del RNF-01 y documento en que consta | — |
+| 7 | `main.tex:259` | — | Apellido materno de Aguilar, Rivadeneyra y Ortega | A-10b |
+| 8 | `main.tex:262` | — | Codigo de Aguilar | A-10b |
+| 9 | `main.tex:263` | — | Codigo de Rivadeneyra | A-10b |
+| 10 | `main.tex:264` | — | Codigo de Ortega | A-10b |
+| 11 | `main.tex:265` | — | Codigo de Moreno Ugarte | A-10b |
+| 12 | `main.tex:275` | — | Ciclo academico segun silabo | A-10 |
+| 13 | `main.tex:277` | — | Fecha de entrega segun silabo | A-10 |
+
+La Seccion 4 no tiene ninguno.
+
+**A-10b (nuevo).** La portada pide los integrantes como «Apellidos, Nombres
+(codigo)». No consta en el repositorio **ningun codigo de alumno**, y de
+Aguilar, Rivadeneyra y Ortega solo consta el apellido paterno. Los cuatro
+codigos y los tres apellidos maternos hay que pedirselos a los propios
+integrantes. Es de este frente recogerlos y sustituirlos; nadie mas los tiene.
+
+**A-29 (nuevo).** No hay **logo de ESAN** en el repositorio. `main.tex` lo
+carga con `\IfFileExists` desde `informe/imagenes/logo-esan.pdf` (o `.png`) y,
+mientras no exista, compone un recuadro con la leyenda «Logo ESAN» del mismo
+tamano, de modo que anadir el archivo no altera la maquetacion ni exige tocar
+el `.tex`. Preferible PDF vectorial; si es PNG, a 300 ppp o mas.
 
 ---
 
