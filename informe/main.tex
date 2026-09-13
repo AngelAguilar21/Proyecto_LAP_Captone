@@ -133,18 +133,23 @@
 % log de compilacion y al final se emite un recuento. Deliberadamente NO se
 % vuelca el texto del marcador al log: varios contienen \emph y \texttt, y
 % expandirlos en un \typeout rompe la compilacion.
+% OJO CON LOS ESPACIOS. Estas macros NO deben terminar en \ignorespaces.
+% Un marcador se escribe pegado al punto de la frase anterior
+%     ...no lo evalua.\verificar{...} Si puede enunciarse...
+% y \ignorespaces se comia el espacio SIGUIENTE, de modo que el PDF salia
+% con "evalua.Si puede" sin separacion. Sin \ignorespaces no hay riesgo de
+% espacio doble: TeX colapsa los espacios consecutivos en uno solo.
 \newcounter{verificarcount}
 \newcommand{\verificar}[1]{%
   \stepcounter{verificarcount}%
-  \typeout{[VERIFICAR \theverificarcount] marcador oculto en pagina \thepage.}%
-  \ignorespaces}
+  \typeout{[VERIFICAR \theverificarcount] marcador oculto en pagina \thepage.}}
 % Variante para los huecos de la PORTADA. Ahi un marcador invisible dejaria
 % "Codigo:" seguido de nada, que se lee como error de composicion en vez de
 % como dato faltante. Imprime una linea de relleno, que no afirma nada.
 \newcommand{\verificarhueco}[1]{%
   \stepcounter{verificarcount}%
   \typeout{[VERIFICAR \theverificarcount] hueco de portada en pagina \thepage.}%
-  \rule[-0.15em]{3.2cm}{0.4pt}\ignorespaces}
+  \rule[-0.15em]{3.2cm}{0.4pt}}
 \AtEndDocument{%
   \typeout{^^J=====================================================^^J%
     MARCADORES [VERIFICAR] EN EL CUERPO: \theverificarcount^^J%

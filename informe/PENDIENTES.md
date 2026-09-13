@@ -102,15 +102,17 @@ de compilacion y al final se emite el recuento:
 ```
 [VERIFICAR 1] marcador oculto en pagina 11.
 ...
-MARCADORES [VERIFICAR] EN EL CUERPO: 13
+MARCADORES [VERIFICAR] EN EL CUERPO: 17
 ```
+
+Las macros **no** terminan en `\ignorespaces`. Terminaban, y se comian el espacio *posterior* al marcador: como los marcadores se escriben pegados al punto de la frase anterior, el PDF salia con «evalua.Si puede» sin separacion. Corregido el 13/09/2026; afectaba tambien a los seis marcadores de la Seccion 3. TeX colapsa los espacios consecutivos, asi que quitarlo no introduce espacios dobles.
 
 En la portada se usa la variante `\verificarhueco{...}`, que tampoco imprime
 el texto pero compone una linea de relleno: un hueco invisible dejaria
 «Ciclo academico:» seguido de nada, que se lee como error de composicion en
 vez de como dato faltante.
 
-**Los 13 marcadores vigentes.** Esta es la lista autoritativa; el `.md` es la
+**Los 17 marcadores vigentes.** Esta es la lista autoritativa; el `.md` es la
 fuente de los seis del cuerpo, de modo que **se corrigen en el `.md` y se
 reconvierte**, nunca en el `.tex`.
 
@@ -130,7 +132,12 @@ reconvierte**, nunca en el `.tex`.
 | 12 | `main.tex:275` | — | Ciclo academico segun silabo | A-10 |
 | 13 | `main.tex:277` | — | Fecha de entrega segun silabo | A-10 |
 
-La Seccion 4 no tiene ninguno.
+| 14 | `secciones/introduccion.tex:61` | — | Como se decide hoy la dotacion de personal y la apertura de mostradores | C-08 |
+| 15 | `secciones/introduccion.tex:106` | — | Incidentes de aglomeracion, tiempos de cola y quejas documentados por LAP | C-07 |
+| 16 | `secciones/introduccion.tex:112` | — | Aforo declarado del terminal y superficie por zona | C-07 |
+| 17 | `secciones/introduccion.tex:216` | — | Numero de zonas a cubrir y de camaras disponibles por zona | C-09 |
+
+La Seccion 4 no tiene ninguno. Los cuatro de la Introduccion (14-17) se editan directamente en el `.tex`, que ahi **si** es la fuente: la regla de no editar a mano solo alcanza a los `.tex` generados de las Secciones 3 y 4.
 
 **A-10b (nuevo).** La portada pide los integrantes como «Apellidos, Nombres
 (codigo)». No consta en el repositorio **ningun codigo de alumno**, y de
@@ -252,6 +259,7 @@ redactada** (Introducción) y **tres son esqueletos** (Metodología, Resultados,
 Conclusiones), que es lo que ya venía registrado en **B-08**. La que más
 arrastra al resto es Metodología: de sus dos decisiones abiertas depende que la
 auditoría de la Sección 3.9 pueda pasar de condicional a conclusión.
+| E-13 | **`secciones/introduccion.tex` la reescribio este frente, y `CLAUDE.md` la lista como seccion de otro integrante** («no se edita su contenido»). El encargo viene del frente de Liderazgo e Integracion: abrir por el problema **operativo** del terminal (aforo, aglomeraciones, tiempos de cola) en vez de por el marco normativo. | 🟡 **Abierto: falta que lo revise su responsable original.** Se reescribieron 1.1 Contexto y 1.2 Objetivos, y se anadio a 1.3 una precision sobre numero de zonas y camaras. La estructura y los `label` se conservan intactos (`sec:introduccion`, `sec:contexto`, `sec:objetivos`, `sec:alcance`), y las nueve referencias cruzadas que la seccion emite siguen resolviendo. No se uso **ninguna** cifra del terminal porque **no existe ninguna en el repositorio**: lo que falta quedo en cuatro `\verificar{...}` (C-07, C-08, aforo/superficie, numero de zonas y camaras). Este punto se cierra cuando el responsable de la seccion revise el texto o confirme el traspaso. |
 
 ---
 
