@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "src"))
 from live_core import IdentityStore, Occupancy, calibration, project, validate_config
 from live_metrics import SessionMetrics
+from spatial_scope import accepts
 
 CONFIG_PATH = ROOT / "config" / "live.local.json"
 
@@ -46,6 +47,13 @@ class Engine:
                 self.config = validate_config({**self.config, **json.loads(self.config_path.read_text(encoding="utf-8"))})
             except (ValueError, OSError) as exc:
                 self.config_error = str(exc)
+        if self.config.get("background") and "planLines" not in self.config:
+            try:
+                import base64
+                from plan_import import plan_lines_from_bytes
+                self.config["planLines"] = plan_lines_from_bytes(base64.b64decode(self.config["background"].split(",",1)[1]),self.config["width"])["planLines"]
+            except (ValueError, KeyError):
+                self.config["planLines"] = []
         self.lock = threading.RLock()
         self.stop_event = threading.Event()
         self.pause_event = threading.Event()
@@ -113,6 +121,20 @@ class Engine:
             camera_id = request.get("camera")
             if camera_id and camera_id not in {c["id"] for c in self.config["cameras"]}:
                 raise ValueError("Cámara desconocida.")
+            selected = [c for c in self.config["cameras"] if c.get("active",True) and (not camera_id or c["id"]==camera_id)]
+            if not selected:
+                raise ValueError("Activa al menos una cámara.")
+            if request.get("requireUnified") and mode != "demo":
+                if len(selected)>1 and not self.config["clocksVerified"]:
+                    raise ValueError("Verifica el tiempo común y los desfases antes del conteo multicámara.")
+                if any(len(c.get("pairs",[]))<4 for c in selected):
+                    raise ValueError("Calibra todas las cámaras antes del conteo en el plano.")
+                import cv2
+                import numpy as np
+                if any(cv2.contourArea(cv2.convexHull(np.asarray(c["pairs"],dtype=np.float32)[:,:2].copy()))<.005 for c in selected):
+                    raise ValueError("Calibración insuficiente: distribuye las referencias por el suelo, no sobre una sola línea.")
+                if any(not c.get("detectionZone") and not c.get("restrictCoverage") for c in selected):
+                    raise ValueError("Delimita el área útil de cada cámara para excluir reflejos y áreas externas.")
             self.stop_event.clear()
             self.pause_event.clear()
             self.frames = {}
@@ -166,7 +188,7 @@ class Engine:
             else:
                 detector = cv2.HOGDescriptor()
                 detector.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
-            cams = [c for c in config["cameras"] if not request.get("camera") or c["id"] == request["camera"]]
+            cams = [c for c in config["cameras"] if c.get("active",True) and (not request.get("camera") or c["id"] == request["camera"])]
             statuses = {}
             for c in cams:
                 if self.stop_event.is_set():
@@ -199,6 +221,8 @@ class Engine:
                 c.update(cap=cap, fps=fps, stream=stream, frameIndex=-1, tracker=ByteTrackPuntos(umbral_alto=.35 if mode=="yolo" else .6,max_frames_perdido=15), h=calibration(c.get("pairs", [])))
                 statuses[c["id"]] = {"id": c["id"], "status": "ready"}
             active = [c for c in cams if "cap" in c]
+            if len(active)!=len(cams) and request.get("requireUnified"):
+                raise ValueError("Falta una cámara: no se publica un conteo multicámara parcial.")
             if not active:
                 with self.lock:
                     self.state["cameras"] = list(statuses.values())
@@ -233,6 +257,9 @@ class Engine:
                     if not ok:
                         statuses[c["id"]] = {"id": c["id"], "status": "error" if c["stream"] else "ended", "error": "Fuente sin imagen" if c["stream"] else None}
                         active.remove(c)
+                        if not c["stream"] or request.get("requireUnified"):
+                            active.clear()
+                            break
                         continue
                     height, width = frame.shape[:2]
                     raw_frames[c["id"]] = frame
@@ -258,16 +285,15 @@ class Engine:
                                 x, y, w, h = rects[idx] / scale
                                 boxes.append([x, y, x + w, y + h])
                                 detections.append(SimpleNamespace(x=x + w / 2, y=y + h, confianza=.9))
-                    zone = c.get("detectionZone")
-                    if zone and detections:
-                        # Restricts detection to the area the operator marked as useful for this
-                        # camera (e.g. excludes mirrors, reflections, or neighboring areas the
-                        # camera happens to see but that are not part of the assigned coverage).
-                        zone_px = np.array([[u * width, v * height] for u, v in zone], dtype=np.float32)
-                        keep = [i for i, d in enumerate(detections) if cv2.pointPolygonTest(zone_px, (d.x, d.y), False) >= 0]
-                        detections = [detections[i] for i in keep]
-                        if boxes:
-                            boxes = [boxes[i] for i in keep]
+                    keep = []
+                    for i,d in enumerate(detections):
+                        ground = project(c['h'],d.x/width,d.y/height) if c['h'] is not None and mode!='p2pnet' else None
+                        if accepts(c,config,d.x/width,d.y/height,ground):
+                            keep.append(i)
+                    excluded = len(detections)-len(keep)
+                    detections = [detections[i] for i in keep]
+                    if boxes:
+                        boxes = [boxes[i] for i in keep]
                     tracks, _, _ = c["tracker"].actualizar(detections, t)
                     for tr in tracks:
                         px, py = tr.posicion
@@ -281,15 +307,19 @@ class Engine:
                                 hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
                                 color = cv2.calcHist([hsv], [0, 1], None, [16, 8], [0, 180, 0, 256])
                                 cv2.normalize(color, color, alpha=1, norm_type=cv2.NORM_L1)
+                        if not accepts(c,config,px/width,py/height,project(c["h"],px/width,py/height) if c["h"] is not None and mode!="p2pnet" else None):
+                            continue
                         point = None
                         if c["h"] is not None and mode != "p2pnet":
                             point = project(c["h"], px / width, py / height)
                             if point and not (0 <= point[0] <= config["width"] and 0 <= point[1] <= config["height"]):
                                 point = None
                         observations.append({"camera": c["id"], "local": tr.id, "point": point, "pixel": [float(px), float(py)], "box": box, "color": color, "score": tr.score})
-                    statuses[c["id"]] = {"id": c["id"], "status": "live", "width": width, "height": height, "fps":c["fps"], "calibrated": c["h"] is not None and mode != "p2pnet", "count": len(tracks), "timestamp": t}
+                    statuses[c["id"]] = {"id": c["id"], "status": "live", "width": width, "height": height, "fps":c["fps"], "calibrated": c["h"] is not None and mode != "p2pnet", "count": sum(o["camera"]==c["id"] for o in observations), "excluded":excluded, "timestamp": t, "sourceTime":c["frameIndex"]/c["fps"] if not c["stream"] else None}
                     with self.lock:
                         self.source_checks[c["id"]] = {"source":c["source"],"valid":True,"width":width,"height":height,"fps":c["fps"],"checkedAt":time.time()}
+                if not active or self.stop_event.is_set():
+                    break
                 people = identities.update(observations, t)
                 encoded = {}
                 for cid, frame in raw_frames.items():
@@ -309,12 +339,14 @@ class Engine:
                         encoded[cid] = jpg.tobytes()
                         with self.lock:
                             self.preview_frames[cid] = encoded[cid]
+                sample_times = [c["frameIndex"]/c["fps"]-c.get("offset",0) for c in active if not c["stream"]]
+                skew = max(sample_times)-min(sample_times) if len(sample_times)>1 else 0.
                 elapsed = time.monotonic() - start
                 with self.lock:
                     self.frames.update(encoded)
                     analytics = occupancy.update(people,t)
                     self.state.update(status="paused" if self.pause_event.is_set() else "running", people=people, cameras=list(statuses.values()), events=list(identities.events), t=t,
-                                      analytics=analytics, totals=metrics.update(people,analytics,t), series=list(metrics.series), processingMs=round(elapsed * 1000), updatedAt=time.time())
+                                      analytics=analytics, synchronization={"mode":"live" if active[0]["stream"] else "recordings", "contentVerified":config["clocksVerified"], "sampleSkewSeconds":round(skew,5), "commonTime":t}, totals=metrics.update(people,analytics,t), series=list(metrics.series), processingMs=round(elapsed * 1000), updatedAt=time.time())
                 timeline += .2
                 self.stop_event.wait(max(0., .2 - elapsed))
         except Exception as exc:
@@ -493,6 +525,21 @@ class Handler(BaseHTTPRequestHandler):
             data = json.loads(self.rfile.read(size))
             if not isinstance(data, dict):
                 raise ValueError("Solicitud inválida.")
+            if self.path == "/api/calibration-check":
+                import numpy as np
+                import cv2
+                pairs = data.get("pairs",[])
+                if not isinstance(pairs,list) or len(pairs)<4 or len(pairs)>30 or any(not isinstance(p,list) or len(p)!=4 for p in pairs):
+                    raise ValueError("Se necesitan entre 4 y 30 pares de referencias.")
+                points=np.asarray(pairs,dtype=float)
+                if not np.isfinite(points).all() or (points[:,:2]<0).any() or (points[:,:2]>1).any():
+                    raise ValueError("Referencias inválidas.")
+                h=calibration(pairs)
+                predicted=cv2.perspectiveTransform(points[:,:2].reshape(-1,1,2),h).reshape(-1,2)
+                spread=float(cv2.contourArea(cv2.convexHull(points[:,:2].astype(np.float32))))
+                if spread<.005:
+                    raise ValueError("Referencias casi alineadas: distribuye los nodos por todo el suelo visible.")
+                return self.send_data(200,{"rmse":float(np.sqrt(np.mean(np.sum((predicted-points[:,2:])**2,axis=1)))),"spread":spread})
             if self.path == "/api/config":
                 engine.configure(data)
             elif self.path == "/api/start":

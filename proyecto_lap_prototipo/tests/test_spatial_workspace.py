@@ -1,0 +1,111 @@
+import copy
+import io
+import sys
+import tempfile
+import time
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+import cv2
+import numpy as np
+
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+from live_server import Engine, default_config
+from live_core import IdentityStore, validate_config, Occupancy
+from spatial_scope import accepts, coverage_contains
+from plan_import import plan_lines_from_bytes
+
+
+class SpatialWorkspaceTests(unittest.TestCase):
+    def test_mirrors_and_outside_floor_are_rejected(self):
+        c={'detectionZone':[[0,0],[.5,0],[.5,1],[0,1]]}
+        cfg={'workArea':[[0,0],[5,0],[5,5],[0,5]]}
+        self.assertTrue(accepts(c,cfg,.25,.5,(2,2)))
+        self.assertFalse(accepts(c,cfg,.8,.5,(2,2)))
+        self.assertFalse(accepts(c,cfg,.25,.5,(8,2)))
+        self.assertFalse(accepts(c,cfg,.25,.5,None))
+
+    def test_rotated_coverage_and_free_shape(self):
+        c={'x':0,'y':0,'heading':90,'range':4,'coverageShape':'rectangle','coverageWidth':2}
+        self.assertTrue(coverage_contains(c,(.8,3)))
+        self.assertFalse(coverage_contains(c,(3,.8)))
+        c.update(coverageShape='cone',fov=60)
+        self.assertTrue(coverage_contains(c,(0,3)))
+        self.assertFalse(coverage_contains(c,(3,0)))
+        c.update(coverageShape='free',coveragePolygon=[[0,0],[1,0],[0,1]])
+        self.assertTrue(coverage_contains(c,(.2,.2)))
+        self.assertFalse(coverage_contains(c,(.9,.9)))
+
+    def test_invalid_work_area_and_vectors_rejected(self):
+        cfg=default_config()
+        cfg['workArea']=[[0,0],[1,1],[0,1],[1,0]]
+        with self.assertRaises(ValueError):validate_config(cfg)
+        cfg.pop('workArea')
+        cfg['planLines']=[[0,0,float('nan'),1]]
+        with self.assertRaises(ValueError):validate_config(cfg)
+
+    def test_line_extraction_returns_real_vector_coordinates(self):
+        from PIL import Image,ImageDraw
+        image=Image.new('RGB',(400,300),'white')
+        ImageDraw.Draw(image).rectangle((30,40,360,260),outline='black',width=4)
+        data=io.BytesIO();image.save(data,format='PNG')
+        result=plan_lines_from_bytes(data.getvalue(),12)
+        self.assertGreater(len(result['planLines']),3)
+        self.assertTrue(all(0<=v<=1 for line in result['planLines'] for v in line))
+
+    def test_diverging_people_release_old_shared_identity(self):
+        cfg=default_config();cfg['clocksVerified']=True
+        store=IdentityStore(cfg)
+        obs=lambda cam,x:{'camera':cam,'local':1,'point':(x,1),'color':None}
+        rows=store.update([obs('A',1),obs('B',1.05)],0)
+        self.assertEqual(rows[0]['id'],rows[1]['id'])
+        rows=store.update([obs('A',1),obs('B',8)],.2)
+        self.assertNotEqual(rows[0]['id'],rows[1]['id'])
+        self.assertEqual(Occupancy(cfg).update(rows,.2)['mappedCount'],2)
+
+    def test_unified_start_rejects_missing_camera_masks(self):
+        with tempfile.TemporaryDirectory() as d:
+            engine=Engine(Path(d)/'config.json')
+            cfg=default_config();cfg['clocksVerified']=True
+            for c in cfg['cameras']:c['pairs']=[[0,0,0,0],[1,0,12,0],[1,1,12,8],[0,1,0,8]]
+            engine.configure(cfg)
+            with self.assertRaisesRegex(ValueError,'Delimita'):
+                engine.start({'detector':'hog','requireUnified':True})
+
+    def test_live_pipeline_filters_before_creating_ids_and_stops_together(self):
+        # Synthetic detector outputs deliberately include a reflection outside the mask.
+        with tempfile.TemporaryDirectory() as d:
+            path=Path(d)/'source.avi'
+            writer=cv2.VideoWriter(str(path),cv2.VideoWriter_fourcc(*'MJPG'),10,(320,240))
+            self.assertTrue(writer.isOpened())
+            for _ in range(16):writer.write(np.zeros((240,320,3),dtype=np.uint8))
+            writer.release()
+            engine=Engine(Path(d)/'config.json');cfg=default_config();cfg['clocksVerified']=True
+            for c in cfg['cameras']:
+                c['source']=str(path);c['pairs']=[[0,0,0,0],[1,0,12,0],[1,1,12,8],[0,1,0,8]]
+                c['detectionZone']=[[0,0],[.5,0],[.5,1],[0,1]]
+            cfg['cameras'][1]['offset']=.4
+            engine.configure(cfg)
+            rows=[];last=0
+            with patch('cv2.HOGDescriptor') as hog:
+                hog.return_value.detectMultiScale.return_value=(np.array([[50,30,40,140],[250,30,40,140]]),np.array([.9,.9]))
+                engine.start({'detector':'hog','requireUnified':True})
+                try:
+                    deadline=time.monotonic()+20
+                    while time.monotonic()<deadline:
+                        s=engine.snapshot()
+                        if s['status']=='error':self.fail(s['error'])
+                        if s['status']=='ended':break
+                        rows+=s.get('people',[]);last=max(last,s['t'])
+                        time.sleep(.02)
+                finally:
+                    engine.stop();engine.worker.join(10)
+            self.assertTrue(rows)
+            self.assertTrue(all(p['pixel'][0]<160 for p in rows))
+            self.assertTrue(all(p['point'][0]<6 for p in rows))
+            self.assertLess(last,1.4)
+            self.assertFalse(engine.worker.is_alive())
+
+
+if __name__=='__main__':unittest.main()

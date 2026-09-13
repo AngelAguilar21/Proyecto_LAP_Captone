@@ -1,28 +1,52 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Camera, Config, Point, SessionState } from './types';
-import { isActive, isStream, labelAssociation, STATUS } from './types';
+import { COLORS, isActive, isStream, labelAssociation, STATUS } from './types';
 import type { Session } from './useSession';
 import Icon from './Icon';
 
-export function CameraVideo({ camera, state, connected, onPoint, mode, pending, zonePoints }: { camera?: Camera; state: SessionState; connected: boolean; onPoint?: (p: Point) => void; mode?: 'calibration' | 'zone'; pending?: Point | null; zonePoints?: Point[] }) {
+export function CameraVideo({ camera, state, connected, onPoint, mode, pending, zonePoints, pairPoints }: { camera?: Camera; state: SessionState; connected: boolean; onPoint?: (p: Point) => void; mode?: 'calibration' | 'zone'; pending?: Point | null; zonePoints?: Point[]; pairPoints?: Point[] }) {
   const [tick, setTick] = useState(0);
   const [failed, setFailed] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState<{ w: number; h: number; x: number; y: number } | null>(null);
   const status = state.cameras.find(c => c.id === camera?.id);
   useEffect(()=>{ setFailed(false); setTick(Date.now()); },[camera?.id,state.session]);
   useEffect(()=>{if(state.status!=='running'||mode||!connected)return; const id=setInterval(()=>{setTick(Date.now());setFailed(false);},800);return()=>clearInterval(id);},[state.status,mode,connected]);
   const available = state.mode !== 'demo' && status && ['live','paused','stopped','ended'].includes(status.status);
   const current = connected && state.status==='running' && status?.status==='live';
-  const aspect = status?.width && status?.height ? `${status.width} / ${status.height}` : undefined;
+  const ratio = status?.width && status?.height ? status.width / status.height : null;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const recompute = () => {
+      const cw = el.clientWidth, ch = el.clientHeight;
+      if (!cw || !ch) return;
+      const ar = ratio ?? cw / ch;
+      let w = cw, h = cw / ar;
+      if (h > ch) { h = ch; w = ch * ar; }
+      setBox({ w, h, x: (cw - w) / 2, y: (ch - h) / 2 });
+    };
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    ro.observe(el);
+    document.addEventListener('fullscreenchange', recompute);
+    return () => { ro.disconnect(); document.removeEventListener('fullscreenchange', recompute); };
+  }, [ratio]);
+  const frameStyle = box ? { left: box.x, top: box.y, width: box.w, height: box.h } : { inset: 0 };
   const drawnZone = zonePoints && zonePoints.length > 0 ? zonePoints : (mode !== 'zone' ? camera?.detectionZone : undefined);
   return <div className="camera-video" ref={ref}>
-    {available && !failed ? <img src={`/api/frame?camera=${encodeURIComponent(camera?.id||'')}&v=${tick}`} alt={`Video anonimizado ${camera?.name||camera?.id}`} onError={()=>setFailed(true)} style={aspect?{aspectRatio:aspect}:undefined} className={mode?'calibration-cursor':''} onClick={e=>{if(!mode||!onPoint)return;const r=e.currentTarget.getBoundingClientRect();onPoint([(e.clientX-r.left)/r.width,(e.clientY-r.top)/r.height]);}}/> : <div className="video-empty"><Icon name="camera" size={38}/><strong>{!camera?'Añade una cámara':state.mode==='demo'?'Simulación de nodos':status?.status==='error'?'Cámara sin señal':state.status==='starting'?'Conectando con la fuente':'Vista de cámara'}</strong><span>{status?.error || (state.mode==='demo'?'No contiene grabación de personas. Prueba una fuente para ver video.':'Al iniciar una prueba verás el video procesado y los IDs temporales.')}</span></div>}
+    <div className="video-frame" style={frameStyle}>
+      {available && !failed ? <img src={`/api/frame?camera=${encodeURIComponent(camera?.id||'')}&v=${tick}`} alt={`Video anonimizado ${camera?.name||camera?.id}`} onError={()=>setFailed(true)} className={mode?'calibration-cursor':''} onClick={e=>{if(!mode||!onPoint)return;const r=e.currentTarget.getBoundingClientRect();if(!r.width||!r.height)return;const clamp=(v:number)=>Math.min(1,Math.max(0,v));onPoint([clamp((e.clientX-r.left)/r.width),clamp((e.clientY-r.top)/r.height)]);}}/> : <div className="video-empty"><Icon name="camera" size={38}/><strong>{!camera?'Añade una cámara':state.mode==='demo'?'Simulación de nodos':status?.status==='error'?'Cámara sin señal':state.status==='starting'?'Conectando con la fuente':'Vista de cámara'}</strong><span>{status?.error || (state.mode==='demo'?'No contiene grabación de personas. Prueba una fuente para ver video.':'Al iniciar una prueba verás el video procesado y los IDs temporales.')}</span></div>}
+      {pending && mode==='calibration' && <span className="calibration-marker" style={{left:`${pending[0]*100}%`,top:`${pending[1]*100}%`}}/>}
+      {drawnZone && drawnZone.length>0 && <svg className="zone-overlay" viewBox="0 0 100 100" preserveAspectRatio="none">
+        {drawnZone.length>1 && <polygon points={drawnZone.map(p=>`${p[0]*100},${p[1]*100}`).join(' ')}/>}
+        {drawnZone.map((p,i)=><circle key={i} cx={p[0]*100} cy={p[1]*100} r="0.9"/>)}
+      </svg>}
+      {pairPoints && pairPoints.length>0 && <svg className="pair-overlay" viewBox="0 0 100 100" preserveAspectRatio="none">
+        {pairPoints.map((p,i)=><circle key={i} cx={p[0]*100} cy={p[1]*100} r="1.3" fill={COLORS[i%COLORS.length]}/>)}
+      </svg>}
+    </div>
     <div className="video-top"><span>{camera?.id||'SIN CÁMARA'}{camera?.location?` · ${camera.location}`:''}</span><span className={`pill ${current?'good':'muted'}`}>{current?'● Procesando':state.status==='paused'?'Ⅱ Pausado':available?'Imagen retenida':'Sin señal'}</span></div>
-    {pending && mode==='calibration' && <span className="calibration-marker" style={{left:`${pending[0]*100}%`,top:`${pending[1]*100}%`}}/>}
-    {drawnZone && drawnZone.length>0 && <svg className="zone-overlay" viewBox="0 0 100 100" preserveAspectRatio="none">
-      {drawnZone.length>1 && <polygon points={drawnZone.map(p=>`${p[0]*100},${p[1]*100}`).join(' ')}/>}
-      {drawnZone.map((p,i)=><circle key={i} cx={p[0]*100} cy={p[1]*100} r="0.9"/>)}
-    </svg>}
     <div className="video-bottom"><span><Icon name="shield" size={13}/> Solo operador · servidor local</span><span>{status?.width?`${status.width} × ${status.height}`:'—'} · {status?.fps?`${status.fps.toFixed(1)} FPS fuente`:'FPS no disponible'}</span><button title="Pantalla completa" onClick={()=>void ref.current?.requestFullscreen().catch(()=>{})}><Icon name="expand" size={15}/></button></div>
   </div>;
 }
@@ -35,9 +59,10 @@ export function CameraEditor({ config, camera, onChange, session }: { config: Co
   return <div className="camera-editor"><div className="form-grid"><label>Nombre<input disabled={disabled} value={camera.name||camera.id} maxLength={80} onChange={e=>update({name:e.target.value})}/></label><label>Ubicación<input disabled={disabled} value={camera.location||''} placeholder="Terminal A / Piso 1" onChange={e=>update({location:e.target.value})}/></label><label>Tipo<select disabled={disabled} value={camera.type||'tilted'} onChange={e=>update({type:e.target.value as Camera['type']})}><option value="fixed">Fija</option><option value="overhead">Cenital</option><option value="tilted">Inclinada</option></select></label><label>Fuente<select disabled={disabled} value={typeof camera.source==='number'?'usb':isStream(camera.source)?'network':'file'} onChange={e=>update({source:e.target.value==='usb'?0:e.target.value==='network'?'rtsp://':'',pairs:[]})}><option value="file">Video grabado</option><option value="usb">Cámara USB</option><option value="network">RTSP / Cámara IP</option></select></label></div>
     <label>{typeof camera.source==='number'?'Índice USB (0 = primera cámara)':'Ruta del video o URL de cámara'}<div className="input-action"><input disabled={disabled} value={camera.source} placeholder="Selecciona un archivo o escribe una ruta local" onChange={e=>update({source:typeof camera.source==='number'?Number(e.target.value):e.target.value,pairs:[]})}/>{!isStream(camera.source)&&<button disabled={disabled||session.busy} title="Subir video" onClick={()=>fileRef.current?.click()}><Icon name="upload" size={16}/></button>}</div></label>
     <input ref={fileRef} hidden type="file" accept="video/*,.mp4,.avi,.mov,.mkv" onChange={e=>{const file=e.target.files?.[0];e.target.value='';if(file)void session.action(async()=>{const result=await session.post(`upload?name=${encodeURIComponent(file.name)}`,file,true);update({source:result.path,pairs:[]});session.setNotice('Video cargado. Guarda la cámara para iniciar la prueba.');});}}/>
-    <div className="form-grid"><label>Desfase al inicio (segundos)<input disabled={disabled||isStream(camera.source)} type="number" min="0" step="0.1" value={camera.offset} onChange={e=>update({offset:+e.target.value})}/></label><label>Forma del alcance<select disabled={disabled} value={camera.coverageShape??'cone'} onChange={e=>update({coverageShape:e.target.value as Camera['coverageShape']})}><option value="cone">Cono (campo de visión)</option><option value="rectangle">Rectángulo (pasillo/corredor)</option></select></label><label>Dirección de visión (°)<input disabled={disabled} type="number" min="0" max="360" value={Math.round(camera.heading??90)} onChange={e=>update({heading:+e.target.value})}/></label>{camera.coverageShape==='rectangle'?<label>Ancho del rectángulo ({config.unit==='meters'?'m':'u'})<input disabled={disabled} type="number" min="0.2" step="0.1" value={camera.coverageWidth??2} onChange={e=>update({coverageWidth:+e.target.value})}/></label>:<label>Ángulo de visión (°)<input disabled={disabled} type="number" min="5" max="170" value={camera.fov??60} onChange={e=>update({fov:+e.target.value})}/></label>}<label>Alcance orientativo ({config.unit==='meters'?'m':'u'})<input disabled={disabled} type="number" min="0.1" step="0.5" value={Number((camera.range??3).toFixed(2))} onChange={e=>update({range:+e.target.value})}/></label><label>Altura ({config.unit==='meters'?'m':'u'})<input disabled={disabled} type="number" min="0" step="0.1" value={camera.height??3} onChange={e=>update({height:+e.target.value})}/></label><label>Inclinación (°)<input disabled={disabled} type="number" min="0" max="90" value={camera.tilt??45} onChange={e=>update({tilt:+e.target.value})}/></label></div>
+    <div className="form-grid"><label>Desfase al inicio (segundos)<input disabled={disabled||isStream(camera.source)} type="number" min="0" step="0.1" value={camera.offset} onChange={e=>update({offset:+e.target.value})}/></label><label>Forma del alcance<select value={camera.coverageShape??'cone'} onChange={e=>update({coverageShape:e.target.value as Camera['coverageShape']})}><option value="cone">Cono (campo de visión)</option><option value="rectangle">Rectángulo (pasillo/corredor)</option><option value="free">Libre (dibujar en el plano)</option></select></label>{camera.coverageShape!=='free'&&<label>Dirección de visión (°)<input type="number" min="0" max="360" value={Math.round(camera.heading??90)} onChange={e=>update({heading:+e.target.value})}/></label>}{camera.coverageShape==='rectangle'?<label>Ancho del rectángulo ({config.unit==='meters'?'m':'u'})<input type="number" min="0.2" step="0.1" value={camera.coverageWidth??2} onChange={e=>update({coverageWidth:+e.target.value})}/></label>:camera.coverageShape!=='free'&&<label>Ángulo de visión (°)<input type="number" min="5" max="170" value={camera.fov??60} onChange={e=>update({fov:+e.target.value})}/></label>}{camera.coverageShape!=='free'&&<label>Alcance orientativo ({config.unit==='meters'?'m':'u'})<input type="number" min="0.1" step="0.5" value={Number((camera.range??3).toFixed(2))} onChange={e=>update({range:+e.target.value})}/></label>}<label>Altura ({config.unit==='meters'?'m':'u'})<input disabled={disabled} type="number" min="0" step="0.1" value={camera.height??3} onChange={e=>update({height:+e.target.value})}/></label><label>Inclinación (°)<input disabled={disabled} type="number" min="0" max="90" value={camera.tilt??45} onChange={e=>update({tilt:+e.target.value})}/></label></div>
+    {camera.coverageShape==='free'&&<p className="subtle">Ve al paso "Plano", selecciona esta cámara y usa el botón "Forma libre" de la barra de herramientas para dibujar su contorno punto por punto.</p>}
     <fieldset disabled={disabled}><legend>Cámaras vecinas · direcciones permitidas</legend>{config.cameras.filter(c=>c.id!==camera.id).map(c=><label className="check" key={c.id}><input type="checkbox" checked={camera.links.includes(c.id)} onChange={e=>update({links:e.target.checked?[...camera.links,c.id]:camera.links.filter(id=>id!==c.id)})}/>{c.id} · {c.name||'Cámara'}</label>)}{config.cameras.length<2&&<p className="subtle">Agrega otra cámara para definir transiciones.</p>}</fieldset>
-    <p className="subtle">La cobertura dibujada es orientativa. Selecciona esta cámara en el plano y arrastra el punto ámbar al final de su alcance para reorientarlo o alargarlo directamente. Para ubicar personas necesitas calibrar puntos del suelo. El índice USB pertenece al equipo que ejecuta el servidor.</p>
+    <p className="subtle">La cobertura dibujada es orientativa: puedes ajustar su forma y orientación aunque haya una sesión activa, porque no cambia qué detecta la cámara (eso lo controla la zona de detección del video). Para ubicar personas necesitas calibrar puntos del suelo. El índice USB pertenece al equipo que ejecuta el servidor.</p>
   </div>;
 }
 

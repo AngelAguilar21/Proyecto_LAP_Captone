@@ -3,6 +3,7 @@
 Coordinates are always in a shared, user-defined plane. Association confidence is
 a heuristic, not a calibrated probability. No biometric models are used here.
 """
+from spatial_scope import validate_polygon
 import math
 from collections import deque
 
@@ -29,6 +30,11 @@ def validate_config(c):
         raise ValueError("El mínimo de personas debe ser entero.")
     if not isinstance(c.get("clocksVerified"), bool):
         raise ValueError("Indicar si los relojes están verificados.")
+    if c.get("workArea"):
+        validate_polygon(c["workArea"], c["width"], c["height"], "Área de trabajo")
+    lines=c.get("planLines",[])
+    if not isinstance(lines,list) or len(lines)>6000 or any(not isinstance(line,list) or len(line)!=4 or any(not finite(x,0,1) for x in line) for line in lines):
+        raise ValueError("Líneas del plano inválidas.")
     cameras = c.get("cameras")
     if not isinstance(cameras, list) or not 0 <= len(cameras) <= 32:
         raise ValueError("Configura como máximo 32 cámaras.")
@@ -56,6 +62,15 @@ def validate_config(c):
         for field in ("name", "location"):
             if field in cam and (not isinstance(cam[field], str) or len(cam[field]) > 160):
                 raise ValueError(f"{cid}: {field} inválido.")
+        for field in ("active", "restrictCoverage"):
+            if field in cam and not isinstance(cam[field],bool):
+                raise ValueError(f"{field}: debe ser booleano.")
+        if cam.get("coveragePolygon"):
+            validate_polygon(cam["coveragePolygon"],c["width"],c["height"],"Cobertura")
+        if cam.get("coverageShape", "cone") not in ("cone","rectangle","free"):
+            raise ValueError("Forma de cobertura inválida.")
+        if "coverageWidth" in cam and not finite(cam["coverageWidth"],.01,10000):
+            raise ValueError("Ancho de cobertura inválido.")
         pairs = cam.get("pairs", [])
         if not isinstance(pairs, list) or len(pairs) > 30:
             raise ValueError("Usa como máximo 30 correspondencias de calibración.")
@@ -68,6 +83,7 @@ def validate_config(c):
             calibration(pairs)
         zone = cam.get("detectionZone")
         if zone is not None:
+            validate_polygon(zone,1,1,f"{cid}: zona de detección")
             if not isinstance(zone, list) or not 3 <= len(zone) <= 50:
                 raise ValueError(f"{cid}: la zona de detección necesita entre 3 y 50 puntos.")
             for v in zone:
@@ -148,6 +164,16 @@ class IdentityStore:
     def update(self, observations, t):
         cfg = self.config
         claimed = set()
+        grouped = {}
+        for o in observations:
+            gid = self.local.get((o["camera"],o["local"]))
+            if gid is not None and o.get("point") is not None:
+                grouped.setdefault(gid,[]).append(o)
+        for group in grouped.values():
+            anchor=group[0]
+            for o in group[1:]:
+                if o["camera"]!=anchor["camera"] and math.dist(o["point"],anchor["point"])>cfg["matchDistance"]:
+                    self.local.pop((o["camera"],o["local"]),None)
         observed_keys = {(o["camera"], o["local"]) for o in observations}
         mapped = {self.local[k] for k in observed_keys if k in self.local}
         output = []

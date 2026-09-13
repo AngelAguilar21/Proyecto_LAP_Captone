@@ -2,9 +2,10 @@ export type Point = [number, number];
 export type SourceMode = 'recordings' | 'live' | 'demo';
 export type View = 'overview' | 'setup' | 'map' | 'cameras' | 'lab' | 'dashboard' | 'zones' | 'rules' | 'reports' | 'audit';
 export interface Camera {
+  color?: string; active?: boolean; restrictCoverage?: boolean;
   id: string; name?: string; location?: string; type?: 'fixed' | 'overhead' | 'tilted';
   source: string | number; x: number; y: number; offset: number; links: string[]; pairs: number[][];
-  heading?: number; fov?: number; range?: number; height?: number; tilt?: number; coverageShape?: 'cone' | 'rectangle'; coverageWidth?: number; detectionZone?: Point[];
+  heading?: number; fov?: number; range?: number; height?: number; tilt?: number; coverageShape?: 'cone' | 'rectangle' | 'free'; coverageWidth?: number; coveragePolygon?: Point[]; detectionZone?: Point[];
 }
 export interface Zone {
   id?: string; name: string; points: Point[]; kind?: 'roi' | 'queue' | 'restricted' | 'room' | 'wall' | 'door' | 'corridor' | 'commercial';
@@ -12,6 +13,7 @@ export interface Zone {
   rule?: { enabled: boolean; minPeople: number; dwell: number };
 }
 export interface Config {
+  workArea?: Point[]; planLines?: number[][];
   width: number; height: number; unit: 'relative' | 'meters'; background: string; radius: number;
   minPeople: number; dwell: number; handoffSeconds: number; matchDistance: number; clocksVerified: boolean;
   cameras: Camera[]; zones: Zone[]; airport?: string; floor?: string; sourceMode?: SourceMode;

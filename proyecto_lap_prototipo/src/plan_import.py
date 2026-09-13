@@ -112,7 +112,7 @@ def dxf_geometry(data, target_width):
     if not 1<=height<=10000:
         raise ValueError("La proporción del plano CAD excede el tamaño permitido.")
     from PIL import Image,ImageDraw
-    image=Image.new("RGB",(1600,max(1,round(1600*dy/dx))),"#dbe1e4")
+    image=Image.new("RGB",(1600,max(1,round(1600*dy/dx))),"#000000")
     if image.height>5000:
         raise ValueError("El plano CAD es demasiado alto; exporta una región del dibujo.")
     draw=ImageDraw.Draw(image)
@@ -120,7 +120,7 @@ def dxf_geometry(data, target_width):
     for vertices,closed,layer in shapes:
         points=[[(x-min(xs))*scale,(max(ys)-y)*scale] for x,y in vertices]
         pixels=[(x/target_width*image.width,y/height*image.height) for x,y in points]
-        draw.line(pixels+([pixels[0]] if closed else []),fill="#42566b",width=2)
+        draw.line(pixels+([pixels[0]] if closed else []),fill="#ffffff",width=2)
         if closed and len(points)>=3 and len(zones)<80:
             label=layer.lower()
             category=next((value for words,value in [(('wall','muro'),'wall'),(('door','puerta'),'door'),(('restricted','restring'),'restricted'),(('commercial','comerc'),'commercial'),(('corridor','pasillo'),'corridor')] if any(word in label for word in words)),"room")
@@ -182,14 +182,16 @@ def raster_to_lines(image, target_width):
     canvas_h = max(1, round(canvas_w * image.height / image.width))
     if canvas_h > 5000:
         raise ValueError("La proporción del plano excede el tamaño permitido.")
-    canvas = PILImage.new("RGB", (canvas_w, canvas_h), "#dbe1e4")
+    canvas = PILImage.new("RGB", (canvas_w, canvas_h), "#000000")
     draw = ImageDraw.Draw(canvas)
     scale_x, scale_y = canvas_w / image.width, canvas_h / image.height
     found = 0
+    vectors = []
     if segments is not None:
         for line in segments[:6000]:
             x1, y1, x2, y2 = line[0]
-            draw.line([(x1 * scale_x, y1 * scale_y), (x2 * scale_x, y2 * scale_y)], fill="#42566b", width=2)
+            draw.line([(x1 * scale_x, y1 * scale_y), (x2 * scale_x, y2 * scale_y)], fill="#ffffff", width=2)
+            vectors.append([float(x1)/image.width,float(y1)/image.height,float(x2)/image.width,float(y2)/image.height])
             found += 1
     output = io.BytesIO()
     canvas.save(output, format="JPEG", quality=88)
@@ -197,7 +199,7 @@ def raster_to_lines(image, target_width):
     if not found:
         warnings.append("No se detectaron bordes claros en la imagen; el plano quedo en blanco. Prueba con mas contraste o recorta una zona con lineas mas definidas.")
     return {"background": "data:image/jpeg;base64," + base64.b64encode(output.getvalue()).decode(),
-            "width": target_width, "height": round(height, 5), "zones": [], "warnings": warnings}
+            "width": target_width, "height": round(height, 5), "zones": [], "planLines": vectors, "warnings": warnings}
 
 
 def plan_lines_from_bytes(data, target_width):
