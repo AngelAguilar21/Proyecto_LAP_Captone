@@ -54,7 +54,7 @@ Hay, por tanto, **dos clases de sección** y conviene no confundirlas:
 > modelo NeuroSegment: 1 Resumen Ejecutivo, 2 Introducción, 3 Planteamiento del
 > Problema y Análisis del Contexto, 4 Marco Teórico, 5 Especificación de
 > Requerimientos, 6 Diseño del Sistema, 7 Planificación y Gestión, 8 Desarrollo
-> y Entrenamiento del Modelo, 9 Resultados, 10 Conclusiones, 11 Referencias y
+> y Entrenamiento del Modelo, 9 Resultados, 10 Conclusiones, 11 Referencias Bibliográficas y
 > 12 Anexos. La Sección 3 se compone de `planteamiento_problema.tex` (3.1, 3.2 y
 > 3.3.1), `03_marco_normativo` (3.3.2 Restricciones Éticas y 3.3.3 Restricciones
 > Legales) y `03_analisis_impacto` (3.4). El marco normativo completo está en el
@@ -383,7 +383,7 @@ Cuatro criterios se aplicaron de forma consistente y conviene mantenerlos:
 **Compilación.** Verificada el 14/09/2026 desde limpio (`latexmk -C` y después
 `latexmk -pdf main.tex`), tras los cambios de formato pedidos por el frente de
 Liderazgo e Integración y la reestructuración al índice del modelo del curso:
-**0 errores, 46 páginas**, `main.pdf` de unos 540 KB,
+**0 errores, 41 páginas**, `main.pdf` de unos 530 KB,
 **ninguna cita sin resolver y ninguna referencia cruzada sin resolver**.
 
 La salida **no está libre de avisos**, y conviene no decir que lo está. Quedan
@@ -403,8 +403,13 @@ Qué cambió respecto del estado del 13/09/2026 (40 páginas, 646.341 bytes):
   la retirada de la nota de la página iii lo acortan. El saldo son 44 páginas,
   de las cuales 12 son el Anexo B.
 - La reestructuración al índice del modelo del curso (cinco secciones nuevas en
-  esqueleto, cada una en su página, y el Anexo C con el análisis de impacto
-  completo) lleva el total a 46.
+  esqueleto y el Anexo C con el análisis de impacto completo) llevó el total a
+  46. Bajó a 41 al quitar el salto de página forzado entre las Secciones 1 a 11
+  (dejaba páginas casi vacías tras cada esqueleto; solo los Anexos abren página
+  nueva), y la tabla de la síntesis del Marco Teórico pasó a `longtable` para
+  poder partirse entre páginas.
+- `\verificar` abre con `\unskip`: un marcador escrito entre dos espacios
+  imprimía un espacio doble en el PDF.
 - La caja `Overfull \hbox` que causaba `Directiva 01-2020-JUS/DGTAIPD` en la
   Sección 3 ya no aparece en el log.
 

@@ -323,12 +323,23 @@ Vista desde el análisis de cumplimiento, la progresión tiene una lectura
 distinta y en parte inversa. Cada paso hacia adelante en capacidad
 técnica es también un paso hacia un perfil de riesgo distinto:
 
-\begin{center}
-\small
-\begin{tabularx}{\linewidth}{@{}L{2.5cm}L{3.0cm}Y@{}}
+% 14/09/2026: longtable en lugar de tabularx dentro de center. Sin salto de
+% pagina antes del Marco Teorico la tabla no cabia al pie de la pagina y
+% dejaba un tercio en blanco; longtable puede partirse entre filas y repite
+% la cabecera. Mismas columnas y mismo texto.
+{\small
+\setlength{\LTleft}{0pt}\setlength{\LTright}{0pt}
+\begin{longtable}{@{}L{2.5cm}L{3.0cm}L{\dimexpr\linewidth-5.5cm-4\tabcolsep\relax}@{}}
 \toprule
 \textbf{Trabajo} & \textbf{Avance técnico} & \textbf{Desplazamiento del riesgo} \\
 \midrule
+\endfirsthead
+\toprule
+\textbf{Trabajo} & \textbf{Avance técnico} & \textbf{Desplazamiento del riesgo} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
 CSRNet \cite{Li_2018_CVPR} &
 Mapa de densidad sin representación individual &
 Perfil de riesgo más bajo: la salida es agregada por construcción. El
@@ -345,9 +356,8 @@ Desempeño competitivo con 5\,\% de etiquetas &
 Reduce el riesgo del proceso de anotación (menos imágenes reales
 expuestas a personas), pero introduce dependencia de pseudo-etiquetas
 cuya calidad no es auditable caso por caso. \\
-\bottomrule
-\end{tabularx}
-\end{center}
+\end{longtable}
+}
 
 De esta lectura conjunta se desprenden tres criterios que el análisis de cumplimiento traslada al desarrollo
 del sistema:

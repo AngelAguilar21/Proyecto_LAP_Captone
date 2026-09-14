@@ -45,7 +45,7 @@ leyendo el código y que más fácilmente se hace mal:
   14/09/2026: 1 Resumen Ejecutivo, 2 Introducción, 3 Planteamiento del
   Problema y Análisis del Contexto, 4 Marco Teórico, 5 Especificación de
   Requerimientos, 6 Diseño del Sistema, 7 Planificación y Gestión, 8 Desarrollo
-  y Entrenamiento del Modelo, 9 Resultados, 10 Conclusiones, 11 Referencias y
+  y Entrenamiento del Modelo, 9 Resultados, 10 Conclusiones, 11 Referencias Bibliográficas y
   12 Anexos (A cartel, B marco normativo, C análisis de impacto). La Sección 3
   sale de tres archivos, en este orden: `planteamiento_problema.tex` (3.1, 3.2,
   3.3.1), `03_marco_normativo` (3.3.2 y 3.3.3) y `03_analisis_impacto` (3.4).
@@ -165,7 +165,7 @@ latexmk -pdf main.tex
 
 En Windows, **correr `latexmk` desde Git Bash, no desde PowerShell**: ahí MiKTeX no encuentra `perl` y latexmk falla sin compilar nada.
 
-Estado esperado: **46 páginas, 0 errores**, ninguna cita ni referencia cruzada
+Estado esperado: **41 páginas, 0 errores**, ninguna cita ni referencia cruzada
 sin resolver, índice en una sola página. Queda 1 aviso de `hyperref` (destino
 duplicado `page.1`) y 3 avisos de Biber (`legacy month field`, en `main.blg`,
 no en `main.log`), todos cosméticos y conocidos. El log termina con
@@ -186,6 +186,13 @@ archivos, códigos) y describir en palabras el requisito RNF-01.
 Pasó a 46 el mismo día con la reestructuración al índice del modelo del curso
 (cinco secciones nuevas en esqueleto, Anexo C con el análisis de impacto
 completo). El índice, con solo los títulos de primer nivel, cabe en una página.
+Bajó a 41 el mismo día al corregir tres fallas de maquetación: (1) sin
+`\clearpage` entre las Secciones 1 a 11, que dejaba páginas casi vacías tras
+cada esqueleto (solo los Anexos abren página nueva; no reintroducirlo);
+(2) `\verificar` abre con `\unskip`, porque un marcador entre dos espacios
+imprimía un espacio doble («oficial.  Para»); (3) la tabla de la síntesis del
+Marco Teórico (4.4) pasó a `longtable` para poder partirse y no dejar un tercio
+de página en blanco.
 
 ### Marcadores `[VERIFICAR]`
 

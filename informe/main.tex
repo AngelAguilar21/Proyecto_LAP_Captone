@@ -143,10 +143,18 @@
 % Un marcador se escribe pegado al punto de la frase anterior
 %     ...no lo evalua.\verificar{...} Si puede enunciarse...
 % y \ignorespaces se comia el espacio SIGUIENTE, de modo que el PDF salia
-% con "evalua.Si puede" sin separacion. Sin \ignorespaces no hay riesgo de
-% espacio doble: TeX colapsa los espacios consecutivos en uno solo.
+% con "evalua.Si puede" sin separacion.
+% ESPACIO DOBLE (corregido 2026-09-14). TeX NO colapsa dos espacios si hay
+% una macro entre ellos. md2tex.py deja el marcador tras un salto de linea
+%     ...la fuente oficial.
+%     \verificar{...} Para videovigilancia...
+% y el PDF salia con dos espacios ("oficial.  Para"). Por eso la macro abre
+% con \unskip: quita el espacio ANTERIOR si lo hay y conserva el siguiente.
+% Cuando el marcador va pegado al punto no hay espacio anterior y \unskip
+% no hace nada.
 \newcounter{verificarcount}
 \newcommand{\verificar}[1]{%
+  \ifhmode\unskip\fi
   \stepcounter{verificarcount}%
   \typeout{[VERIFICAR \theverificarcount] marcador oculto en pagina \thepage.}}
 % Variante para los campos de la PORTADA (2026-09-13).
@@ -319,7 +327,7 @@ Moreno Ugarte, Fabián                 & \campoportada{código de Moreno}{\hspac
 %   2 Introduccion                 8 Desarrollo y Entrenamiento del Modelo
 %   3 Planteamiento del Problema   9 Resultados y Analisis Comparativo
 %   4 Marco Teorico               10 Conclusiones y Recomendaciones
-%   5 Especificacion de Req.      11 Referencias
+%   5 Especificacion de Req.      11 Referencias Bibliograficas
 %   6 Diseno del Sistema          12 Anexos (A, B, C)
 % La Seccion 3 se compone de tres archivos, en este orden:
 %   planteamiento_problema.tex  3.1, 3.2 y 3.3.1   (escrito a mano)
@@ -327,32 +335,25 @@ Moreno Ugarte, Fabián                 & \campoportada{código de Moreno}{\hspac
 %   03_analisis_impacto.tex     3.4                (GENERADO desde su .md)
 % Los .tex generados no se editan a mano: se cambia el .md y se reconvierte
 % con herramientas/md2tex.py.
+% Sin \clearpage entre las Secciones 1 a 11 (2026-09-14): con varias
+% secciones en esqueleto, el salto forzado dejaba paginas casi vacias.
+% Cada seccion empieza a continuacion de la anterior; solo los Anexos
+% abren pagina nueva.
 \input{secciones/resumen_ejecutivo}
-\clearpage
 \input{secciones/introduccion}
-\clearpage
 \input{secciones/planteamiento_problema}
 \input{secciones/03_marco_normativo}
 \input{secciones/03_analisis_impacto}
-\clearpage
 \input{secciones/antecedentes}
-\clearpage
 \input{secciones/requerimientos}
-\clearpage
 \input{secciones/diseno_sistema}
-\clearpage
 \input{secciones/planificacion}
-\clearpage
 \input{secciones/desarrollo_modelo}
-\clearpage
 \input{secciones/resultados}
-\clearpage
 \input{secciones/conclusiones}
-\clearpage
-
 %------------------------ BIBLIOGRAFIA -------------------------------
 % Seccion numerada (11) como en el modelo del curso.
-\section{Referencias}
+\section{Referencias Bibliográficas}
 \label{sec:referencias}
 \printbibliography[heading=none]
 
