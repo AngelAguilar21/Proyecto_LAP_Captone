@@ -154,36 +154,35 @@ transmite fuera del perímetro o se conserva para reentrenamiento, el
 análisis de riesgo cambia aunque el modelo desplegado nunca ejecute
 reconocimiento facial.
 
-Debe registrarse aquí una discrepancia terminológica detectada en el
-material del equipo, que no es menor porque la ley trata ambos supuestos
-como figuras jurídicas distintas. El material describe como «personas
-anonimizadas» el resultado de un procesamiento que asigna a cada persona
-un identificador persistente con el que se reconstruyen trayectorias. El
-artículo 2 numeral 12 define la anonimización como el «tratamiento de
-datos personales que impide la identificación o que no hace
-identificable al titular de estos», y añade que «el procedimiento es
-irreversible»; el numeral 13 define la disociación en términos casi
-idénticos pero cierra con la nota opuesta: «el procedimiento es
-reversible». Un identificador persistente que permite reagrupar las
-apariciones de un mismo individuo no impide la identificación de forma
-irreversible: es, en la terminología de la ley, una disociación, la
-figura que el régimen europeo denomina seudonimización. La distinción
-tiene consecuencias directas, porque el dato disociado sigue siendo dato
-personal sujeto al régimen general, mientras que el anonimizado sale de
-él.
+Debe registrarse aquí una discrepancia terminológica detectada en la
+documentación del propio proyecto, que no es menor porque la ley trata
+ambos supuestos como figuras jurídicas distintas. Su presentación
+preliminar describe como «personas anonimizadas» el resultado de un
+procesamiento que asigna a cada persona un identificador persistente con
+el que se reconstruyen trayectorias. El artículo 2 numeral 12 define la
+anonimización como el «tratamiento de datos personales que impide la
+identificación o que no hace identificable al titular de estos», y añade
+que «el procedimiento es irreversible»; el numeral 13 define la
+disociación en términos casi idénticos pero cierra con la nota opuesta:
+«el procedimiento es reversible». Un identificador persistente que
+permite reagrupar las apariciones de un mismo individuo no impide la
+identificación de forma irreversible: es, en la terminología de la ley,
+una disociación, la figura que el régimen europeo denomina
+seudonimización. La distinción tiene consecuencias directas, porque el
+dato disociado sigue siendo dato personal sujeto al régimen general,
+mientras que el anonimizado sale de él.
 
-La discrepancia no se limita al material de presentación. El módulo de
-persistencia del prototipo incorporado al repositorio describe lo que
-almacena como «solo posiciones, zonas, timestamps y el id temporal no
-reversible», y su esquema define ese identificador como clave primaria
-de una tabla de personas a la que se enlaza el historial completo de
-posiciones. Un identificador así permite reagrupar las apariciones de
-una misma persona y reconstruir su recorrido: el procedimiento es
-reversible, y por tanto disociación en el sentido del numeral 13 y no
-anonimización en el del numeral 12. Este informe no corrige la
-terminología del equipo por su cuenta; deja registrada la discrepancia,
-ahora en sus dos soportes (la presentación y el código), y la eleva como
-punto abierto.
+La discrepancia no se limita a esa presentación. La documentación del
+módulo de almacenamiento del prototipo describe lo que este guarda como
+«solo posiciones, zonas, timestamps y el id temporal no reversible», y
+su esquema define ese identificador como clave primaria de una tabla de
+personas a la que se enlaza el historial completo de posiciones. Un
+identificador así permite reagrupar las apariciones de una misma persona
+y reconstruir su recorrido: el procedimiento es reversible, y por tanto
+disociación en el sentido del numeral 13 y no anonimización en el del
+numeral 12. Este informe no corrige la terminología del equipo por su
+cuenta; deja registrada la discrepancia, ahora en sus dos soportes (la
+presentación preliminar y el prototipo), y la eleva como punto abierto.
 
 % ---- B.3 ----
 \subsection{Base de legitimación y finalidad declarada}
@@ -284,9 +283,9 @@ encadenen, es decir, de una garantía de política y no de arquitectura.
 El criterio resultante es que, a igualdad de utilidad operativa, la
 opción menos granular es la que supera el examen de necesidad, y
 cualquier granularidad adicional debe justificarse por una utilidad que
-la agregación no alcance. La elección del frente técnico no consta por
-escrito al cerrar esta versión, y de ella depende que este apartado pase
-de criterio a conclusión.
+la agregación no alcance. La elección del equipo no consta por escrito
+al cerrar esta versión, y de ella depende que este apartado pase de
+criterio a conclusión.
 
 % ---- B.5 ----
 \subsection{Privacidad desde el diseño y por defecto}
@@ -309,7 +308,7 @@ acreditación}: enuncia el principio y deja al responsable la elección de
 los medios con que lo demuestra. Las medidas que se proponen a
 continuación no pueden, por tanto, contrastarse contra una lista
 reglamentaria, porque no existe; se formulan como propuesta de este
-frente y su suficiencia es, en último término, apreciación del área
+informe y su suficiencia es, en último término, apreciación del área
 legal de LAP.
 
 La diferencia entre una y otra lectura no es retórica: si se tratara de
@@ -349,7 +348,7 @@ exige la brecha de dominio documentada en \cite{Lin_2025_CVPR}.
 
 Estas diez medidas son requisitos, no una descripción del sistema
 actual. Al cerrar esta versión, \textbf{M-03 no se cumple en el
-prototipo incorporado al repositorio}, que persiste coordenadas
+prototipo desarrollado por el equipo}, que persiste coordenadas
 individuales asociadas a un identificador por persona; el contraste se
 desarrolla en B.9. M-02, en cambio, sí se respeta. Conviene mantener la
 distinción entre lo exigido y lo implementado, porque una lista de
@@ -389,8 +388,8 @@ seguridad ciudadana fija un piso de cuarenta y cinco. Ambos son
 compatibles solo dentro de una ventana estrecha, y lo son únicamente
 porque recaen sobre finalidades distintas.
 
-La consecuencia de diseño es la que este frente ya venía recomendando y
-que ahora queda respaldada con plazos concretos: tratar el sistema de
+La consecuencia de diseño es la que este análisis ya venía recomendando
+y que ahora queda respaldada con plazos concretos: tratar el sistema de
 estimación de aglomeraciones como un subsistema separado del CCTV de
 seguridad, con su propia finalidad, su propia base de legitimación y su
 propio plazo de retención. Mezclarlos haría que el subsistema de conteo
@@ -483,9 +482,9 @@ antemano si alguna etapa del procesamiento llegara a ejecutarse fuera
 del país; cuál de ellos resulta aplicable a un encargado contratado por
 LAP es calificación que corresponde a su área legal.
 
-De aquí se derivan tres consecuencias sobre decisiones que el frente
-técnico probablemente ya está tomando. Si el entrenamiento o la
-inferencia se ejecutan en nube alojada fuera del Perú, existe un flujo
+De aquí se derivan tres consecuencias sobre decisiones de diseño que
+probablemente ya se están tomando. Si el entrenamiento o la inferencia
+se ejecutan en nube alojada fuera del Perú, existe un flujo
 transfronterizo que debe analizarse. El uso de un modelo preentrenado
 descargado del exterior no constituye por sí mismo transferencia de
 datos personales, porque no se exportan datos; enviar fotogramas del
@@ -499,7 +498,7 @@ de material del terminal constituiría una transferencia internacional
 con todas sus consecuencias.
 
 La decisión entre inferencia \emph{on-premise} e inferencia en nube
-externa es, a juicio de este frente, la de mayor impacto legal del
+externa es, a juicio de este informe, la de mayor impacto legal del
 proyecto, porque determina si existe o no transferencia internacional.
 Al cerrar esta versión no consta por escrito, y la medida M-01 la
 anticipa en el sentido más protector sin que ello equivalga a que esté
@@ -512,10 +511,10 @@ Esta subsección contrasta las decisiones técnicas del equipo contra los
 requisitos anteriores. La auditoría se formula de manera condicional
 sobre los enfoques revisados en la Sección 2 porque la elección de
 arquitectura no consta todavía en la documentación del proyecto, pero
-conviene precisar que \textbf{sí consta en código}: el frente técnico
-incorporó al repositorio un prototipo de detección, seguimiento y fusión
-entre cámaras, y lo que ese prototipo implementa se examina al final de
-este apartado. La pregunta que decide el régimen aplicable no es si hay
+conviene precisar que \textbf{sí consta en código}: el equipo ha
+desarrollado un prototipo de detección, seguimiento y fusión entre
+cámaras, y lo que ese prototipo implementa se examina al final de este
+apartado. La pregunta que decide el régimen aplicable no es si hay
 cámaras, sino si en algún punto del procesamiento se extrae de la imagen
 una característica que por sí sola permita identificar a una persona, en
 el sentido del artículo 2 numeral 5.
@@ -557,38 +556,40 @@ corresponde al área legal de LAP.
 
 Conviene ahora contrastar ese análisis con lo que el prototipo del
 equipo implementa realmente, porque el resultado corrige en un punto
-importante lo que este frente había anticipado y agrava en otro.
+importante lo que este análisis había anticipado y agrava en otro.
 
 \textbf{Sobre la reidentificación por apariencia, la preocupación no se
-confirma.} El material de presentación del equipo contemplaba
+confirma.} La presentación preliminar del proyecto contemplaba
 reidentificación mediante \emph{embeddings} de apariencia, lo que habría
-chocado frontalmente con el requisito no funcional RNF-01, que prohíbe
-derivar rasgos que permitan la identificación indirecta de las personas.
-El texto literal de ese requisito, y el documento en que consta, no
-figuran en el repositorio al cerrar esta versión, de modo que su
-formulación se recoge aquí según lo reportado por este frente y no según
+chocado frontalmente con uno de los requisitos no funcionales que el
+proyecto se fijó, es decir, de las condiciones que el sistema debe
+cumplir con independencia de su funcionalidad: el que prohíbe derivar de
+la imagen rasgos que permitan identificar a una persona, ni siquiera de
+forma indirecta (identificado en el proyecto como RNF-01). El texto
+literal de ese requisito, y el documento en que consta, no figuran en la
+documentación disponible al cerrar esta versión, de modo que su
+formulación se recoge aquí según lo reportado por el equipo y no según
 su fuente, y la conformidad con él que se afirma a continuación queda
-sujeta a ese contraste. El prototipo no hace eso. La fusión entre
-cámaras se resuelve como asociación espacio-temporal sobre un plano
-común compartido (dos cámaras que observan la misma explanada desde
-ángulos distintos), y esa capa es la obligatoria. Solo ante ambigüedad
-entre varios candidatos próximos interviene un descriptor de desempate
-compuesto por un histograma de color del torso y la proporción
-alto/ancho de la caja, que el propio código documenta como no biométrico
-y que, según su diseño, nunca se emplea como identificador único; ese
-descriptor tampoco se persiste, pues vive únicamente en memoria mientras
-la persona está activa. Un histograma de color de la ropa no es un rasgo
-del cuerpo y cambia cuando la persona se cambia de abrigo: no constituye
-dato biométrico en el sentido del artículo 2 numeral 5, y es
-sustancialmente menos identificante que un \emph{embedding} de
-reidentificación. La decisión de diseño va, por tanto, en la dirección
-que el RNF-01 exige, y así debe reconocerse. Queda por confirmar que el
-criterio se sostenga si más adelante se busca mayor exactitud en la
-fusión, porque es precisamente ahí donde reaparece la tentación del
-\emph{embedding}. \verificar{texto literal del RNF-01 y documento en que
-consta. No figura en el repositorio al cerrar esta versión, de modo que
-su formulación se recoge según lo reportado por este frente y no según
-su fuente.}
+sujeta a ese contraste. El prototipo no recurre a esa reidentificación.
+La fusión entre cámaras se resuelve como asociación espacio-temporal
+sobre un plano común compartido (dos cámaras que observan la misma
+explanada desde ángulos distintos), y esa capa es la obligatoria. Solo
+ante ambigüedad entre varios candidatos próximos interviene un
+descriptor de desempate compuesto por un histograma de color del torso y
+la proporción alto/ancho de la caja, que no es biométrico y que, por
+diseño, nunca se emplea como identificador único; ese descriptor tampoco
+se persiste, pues vive únicamente en memoria mientras la persona está
+activa. Un histograma de color de la ropa no es un rasgo del cuerpo y
+cambia cuando la persona se cambia de abrigo: no constituye dato
+biométrico en el sentido del artículo 2 numeral 5, y es sustancialmente
+menos identificante que un \emph{embedding} de reidentificación. La
+decisión de diseño va, por tanto, en la dirección que ese requisito
+exige, y así debe reconocerse. Queda por confirmar que el criterio se
+sostenga si más adelante se busca mayor exactitud en la fusión, porque
+es precisamente ahí donde reaparece la tentación del \emph{embedding}.
+\verificar{texto literal del RNF-01 y documento en que consta. No figura
+en el repositorio al cerrar esta versión, de modo que su formulación se
+recoge según lo reportado por este frente y no según su fuente.}
 
 \textbf{Sobre lo que se persiste, en cambio, aparece un hallazgo no
 conforme que no estaba previsto.} El esquema de base de datos del
@@ -606,13 +607,13 @@ en B.4: una trayectoria individual persistida excede lo que la finalidad
 de estimar aglomeraciones requiere conforme al artículo 7, y su licitud
 ya no puede apoyarse en que la salida sea agregada, porque no lo es.
 
-Conviene señalar además que el comentario del propio módulo de
-persistencia describe lo almacenado como «el id temporal no reversible».
-Esa calificación reproduce en el código la discrepancia terminológica
-registrada en B.2: un identificador que es clave primaria de un
-historial completo de posiciones permite reagrupar y reconstruir el
-recorrido de una persona, de modo que el procedimiento es reversible en
-el sentido del artículo 2 numeral 13 y constituye disociación, no
+Conviene señalar además que la documentación del módulo de
+almacenamiento describe lo almacenado como «el id temporal no
+reversible». Esa calificación reproduce en el prototipo la discrepancia
+terminológica registrada en B.2: un identificador que es clave primaria
+de un historial completo de posiciones permite reagrupar y reconstruir
+el recorrido de una persona, de modo que el procedimiento es reversible
+en el sentido del artículo 2 numeral 13 y constituye disociación, no
 anonimización. La corrección no es cosmética, porque de ella depende si
 el dato sale o no del régimen general de la ley: no sale.
 

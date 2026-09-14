@@ -126,7 +126,7 @@ es lo que se hizo con los cuatro codigos de alumno.
 |---|---|---|---|---|
 | 1 | `secciones/03_marco_normativo.md:41` y `secciones/anexo_b_marco_normativo.md:37` | `03_marco_normativo.tex:49`, `anexo_b_marco_normativo.tex:56` | Solo la fecha de entrada en vigor del D.S. 016-2024-JUS (30/03/2025). Expedicion, publicacion y disposicion derogatoria confirmadas contra la separata de *El Peruano* | A-13 |
 | 2 | `secciones/03_marco_normativo.md:43` y `secciones/anexo_b_marco_normativo.md:41` | `03_marco_normativo.tex:69`, `anexo_b_marco_normativo.tex:93` | Denominacion oficial y fecha de publicacion del D.L. 1218 y de la Ley 30120 | A-20 |
-| 3 | `secciones/03_marco_normativo.md:71` y `secciones/anexo_b_marco_normativo.md:135` | `03_marco_normativo.tex:215`, `anexo_b_marco_normativo.tex:588` | Texto literal del RNF-01 y documento en que consta | D-04 |
+| 3 | `secciones/03_marco_normativo.md:71` y `secciones/anexo_b_marco_normativo.md:135` | `03_marco_normativo.tex:219`, `anexo_b_marco_normativo.tex:590` | Texto literal del RNF-01 y documento en que consta | D-04 |
 | 4 | `main.tex:288` | — | Ciclo academico segun silabo | A-10 |
 | 5 | `main.tex:289` | — | Fecha de entrega segun silabo | A-10 |
 | 6 | `secciones/introduccion.tex:61` | — | Como se decide hoy la dotacion de personal y la apertura de mostradores | C-08 |

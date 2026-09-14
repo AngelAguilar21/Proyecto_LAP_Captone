@@ -97,13 +97,14 @@ no significa que no lo sea la entrada, de modo que almacenar o
 transmitir fotogramas cambia el análisis aunque el modelo nunca ejecute
 reconocimiento facial.
 
-El material de presentación del equipo habla de «personas anonimizadas»,
-y el código del prototipo describe su identificador por persona como «no
-reversible». Un identificador persistente que permite reagrupar las
-apariciones de una persona no es anonimización, cuyo procedimiento es
-irreversible (numeral 12), sino disociación, cuyo procedimiento es
-reversible (numeral 13). La diferencia no es cosmética: el dato
-disociado sigue sujeto al régimen general de la ley.
+La presentación preliminar del proyecto habla de «personas
+anonimizadas», y la documentación del prototipo califica su
+identificador por persona de «no reversible». Un identificador
+persistente que permite reagrupar las apariciones de una persona no es
+anonimización, cuyo procedimiento es irreversible (numeral 12), sino
+disociación, cuyo procedimiento es reversible (numeral 13). La
+diferencia no es cosmética: el dato disociado sigue sujeto al régimen
+general de la ley.
 
 El consentimiento «previo, informado, expreso e inequívoco» del artículo
 13.5 es inalcanzable en un terminal, porque no puede negarse sin
@@ -116,9 +117,9 @@ Qué base invoca LAP es información que solo el cliente puede aportar. La
 finalidad, en cambio, no deja margen: los artículos 6 y 28 numeral 4
 impiden extender el tratamiento a otra finalidad distinta de la
 declarada. Medir la permanencia de personas en zonas comerciales, que el
-material del equipo menciona como aplicación posible, no es una variante
-de estimar aglomeraciones sino una finalidad distinta, con su propia
-base de legitimación y su propio deber de información.
+propio proyecto llegó a contemplar como aplicación posible, no es una
+variante de estimar aglomeraciones sino una finalidad distinta, con su
+propia base de legitimación y su propio deber de información.
 
 El artículo 7 exige que el tratamiento sea «adecuado, relevante y no
 excesivo» para su finalidad. La estimación automática de densidad es
@@ -132,7 +133,7 @@ normativa: a igualdad de utilidad operativa, el mapa de densidad de
 CSRNet \cite{Li_2018_CVPR} o la agregación por zona superan el examen de
 necesidad mejor que la localización individual por puntos, cuya licitud
 depende de que las coordenadas no se persistan ni se encadenen. La
-elección del frente técnico no consta todavía por escrito.
+elección del equipo no consta todavía por escrito.
 
 % ---- 3.3 ----
 \subsection{Privacidad desde el diseño y requisitos del sistema}
@@ -182,7 +183,7 @@ hay flujo transfronterizo sujeto al artículo 15, y el Artículo VI del
 Título Preliminar del reglamento extiende el régimen peruano a ciertos
 tratamientos realizados en el exterior. Por eso la elección entre
 inferencia \emph{on-premise} y en nube externa es, a juicio de este
-frente, la de mayor impacto legal del proyecto; M-01 la anticipa en el
+informe, la de mayor impacto legal del proyecto; M-01 la anticipa en el
 sentido más protector, pero la decisión no consta por escrito.
 
 % ---- 3.4 ----
@@ -202,24 +203,27 @@ es dato sensible como si no lo es, el sistema reconstruye trayectorias
 individuales y excede lo que la finalidad requiere conforme al artículo
 7.
 
-Contrastado con el prototipo que el frente técnico incorporó al
-repositorio, el resultado es mixto. \textbf{La reidentificación por
-apariencia no se confirma.} La fusión entre cámaras se resuelve por
-asociación espacio-temporal sobre un plano común, y solo ante ambigüedad
-interviene un descriptor de desempate (histograma de color del torso y
-proporción de la caja) que no es biométrico y no se persiste. La
-decisión va en la dirección que exige el requisito no funcional RNF-01,
-que prohíbe derivar rasgos que permitan la identificación indirecta; su
-texto literal y el documento en que consta no figuran en el repositorio,
-de modo que se recoge según lo reportado por este frente y esa
-conformidad queda sujeta a contrastarlo con su fuente. \verificar{texto
-literal del RNF-01 y documento en que consta. No figura en el
-repositorio al cerrar esta versión, de modo que su formulación se recoge
-según lo reportado por este frente y no según su fuente.} \textbf{Lo que
-se persiste, en cambio, no es conforme.} El esquema de base de datos
-guarda, por cada detección, un identificador de persona, la cámara, las
-coordenadas, el instante y la zona: trayectorias individuales escritas
-en disco, que incumplen M-03.
+Contrastado con el prototipo que el equipo ha desarrollado, el resultado
+es mixto. \textbf{La reidentificación por apariencia no se confirma.} La
+fusión entre cámaras se resuelve por asociación espacio-temporal sobre
+un plano común, y solo ante ambigüedad interviene un descriptor de
+desempate (histograma de color del torso y proporción de la caja) que no
+es biométrico y no se persiste. La decisión va en la dirección que exige
+uno de los requisitos no funcionales que el proyecto se fijó, es decir,
+de las condiciones que el sistema debe cumplir con independencia de su
+funcionalidad: el que prohíbe derivar de la imagen rasgos que permitan
+identificar a una persona, ni siquiera de forma indirecta (identificado
+en el proyecto como RNF-01). Su texto literal y el documento en que
+consta no figuran en la documentación disponible al cerrar esta versión,
+de modo que se recoge según lo reportado por el equipo y esa conformidad
+queda sujeta a contrastarlo con su fuente. \verificar{texto literal del
+RNF-01 y documento en que consta. No figura en el repositorio al cerrar
+esta versión, de modo que su formulación se recoge según lo reportado
+por este frente y no según su fuente.} \textbf{Lo que se persiste, en
+cambio, no es conforme.} El esquema de base de datos guarda, por cada
+detección, un identificador de persona, la cámara, las coordenadas, el
+instante y la zona: trayectorias individuales escritas en disco, que
+incumplen M-03.
 
 Del contraste resultan cuatro hallazgos no conformes. El primero es la
 ausencia de la Evaluación de Impacto en Protección de Datos, exigible

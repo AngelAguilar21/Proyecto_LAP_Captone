@@ -103,6 +103,19 @@ códigos de seguimiento (A-10, C-07, D-11...). Lo que falta se dice en prosa:
 qué dato falta y de quién depende. Dentro de `\verificar{...}` sí pueden ir,
 porque no se imprime.
 
+**Tampoco lleva vocabulario de reparto interno ni recados a compañeros**
+(14/09/2026). Nada de «este frente», «frente técnico» o «frente ético-legal»:
+se escribe «el equipo», «este informe», «el análisis de cumplimiento», «el
+desarrollo del sistema» o en impersonal. Las recomendaciones se redactan como
+recomendaciones del informe, no como encargos a una persona. No se alude a
+fuentes que el lector no tiene («el código documenta», «el material de
+presentación del equipo») sin atribuirlas de forma comprensible, y un código de
+requisito (RNF-01) se describe en palabras la primera vez. Se mantienen, en
+cambio, «al cerrar esta versión», «no consta por escrito» y «queda abierto»,
+que marcan qué está acreditado. Excepción conocida: las secciones en esqueleto
+(Metodología, Resultados, Conclusiones) aún dicen «el frente ético-legal la
+audita» y no se tocan hasta que sus responsables las redacten.
+
 ## Compilar
 
 Desde `informe/`:
@@ -113,7 +126,7 @@ latexmk -pdf main.tex
 
 En Windows, **correr `latexmk` desde Git Bash, no desde PowerShell**: ahí MiKTeX no encuentra `perl` y latexmk falla sin compilar nada.
 
-Estado esperado: **43 páginas, 0 errores**, ninguna cita ni referencia cruzada
+Estado esperado: **44 páginas, 0 errores**, ninguna cita ni referencia cruzada
 sin resolver. Queda 1 aviso de `hyperref` (destino duplicado `page.1`) y 3
 avisos de Biber (`legacy month field`, en `main.blg`, no en `main.log`), todos
 cosméticos y conocidos. El log termina con `MARCADORES [VERIFICAR] EN EL
@@ -129,6 +142,8 @@ logo de la carátula (`3686fbe`) no cambió el recuento.
 Pasó a 43 el 14/09/2026 con el formato de Liderazgo (12 pt y sangría alargan;
 la Sección 3 comprimida y la nota de la página iii retirada acortan; el Anexo B
 ocupa 12). Con ese cambio desapareció también la caja `Overfull`.
+Pasó a 44 el mismo día al retirar del cuerpo el vocabulario interno (frentes,
+archivos, códigos) y describir en palabras el requisito RNF-01.
 
 ### Marcadores `[VERIFICAR]`
 

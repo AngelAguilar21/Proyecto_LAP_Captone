@@ -369,7 +369,7 @@ Cuatro criterios se aplicaron de forma consistente y conviene mantenerlos:
 
 **Compilación.** Verificada el 14/09/2026 desde limpio (`latexmk -C` y después
 `latexmk -pdf main.tex`), tras los cambios de formato pedidos por el frente de
-Liderazgo e Integración: **0 errores, 43 páginas**, `main.pdf` de unos 533 KB,
+Liderazgo e Integración: **0 errores, 44 páginas**, `main.pdf` de unos 530 KB,
 **ninguna cita sin resolver y ninguna referencia cruzada sin resolver**.
 
 La salida **no está libre de avisos**, y conviene no decir que lo está. Quedan
@@ -386,7 +386,7 @@ dos cosas, las dos cosméticas y ninguna impide generar el PDF:
 Qué cambió respecto del estado del 13/09/2026 (40 páginas, 646.341 bytes):
 
 - El paso a 12 pt con sangría alarga el texto; la compresión de la Sección 3 y
-  la retirada de la nota de la página iii lo acortan. El saldo son 43 páginas,
+  la retirada de la nota de la página iii lo acortan. El saldo son 44 páginas,
   de las cuales 12 son el Anexo B.
 - La caja `Overfull \hbox` que causaba `Directiva 01-2020-JUS/DGTAIPD` en la
   Sección 3 ya no aparece en el log.
