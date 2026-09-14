@@ -7,7 +7,7 @@ RB = re.escape(B)  # un backslash literal, listo para usar en regex
 
 def norm_md(t):
     t = re.sub(r'^<!--.*?-->\s*', '', t, flags=re.S)
-    t = re.sub(r'^#+\s*\d+(\.\d+)?\.?\s*', '', t, flags=re.M)
+    t = re.sub(r'^#+\s*(?:\d+|[A-Z])(\.\d+)?\.?\s*', '', t, flags=re.M)
     t = t.replace('**', '').replace('*', '').replace('`', '')
     t = re.sub(r'\[([A-Z][A-Za-z]+_\d{4}_[A-Z]+(?:\s*;\s*[A-Z][A-Za-z]+_\d{4}_[A-Z]+)*)\]',
                lambda m: ' '.join(k.strip() for k in m.group(1).split(';')), t)

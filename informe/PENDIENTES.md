@@ -4,7 +4,14 @@ Registro de los puntos abiertos del informe.
 
 **Responsable del archivo:** Fabián Moreno Ugarte — Validación ética/legal y documentación
 **Proyecto:** Capstone I, Universidad ESAN — Estimación de aglomeraciones, Aeropuerto Jorge Chávez (cliente: LAP)
-**Última actualización:** 12 de septiembre de 2026 (cierres de documentación: portada, `secciones/_archivo/`)
+**Última actualización:** 14 de septiembre de 2026 (formato pedido por Liderazgo: Sección 3 comprimida y Anexo B)
+
+> **Numeración de la Sección 3 desde el 14/09/2026.** La Sección 3 del PDF se
+> comprimió a cuatro subapartados y su desarrollo completo pasó, sin recortes,
+> al **Anexo B** (`secciones/anexo_b_marco_normativo.md`). Los «§3.1» a «§3.9»
+> que este archivo cita en entradas anteriores a esa fecha corresponden hoy a
+> **B.1 a B.9**. En el cuerpo: 3.1 resume B.1; 3.2 resume B.2 a B.4; 3.3 resume
+> B.5 a B.8; 3.4 resume B.9.
 
 ---
 
@@ -113,28 +120,23 @@ esta vacio**; si falta, no sale nada: ni etiqueta colgando ni linea de relleno.
 Para cerrar el marcador basta con escribir el dato en el tercer argumento, que
 es lo que se hizo con los cuatro codigos de alumno.
 
-**Los 9 marcadores vigentes.** Esta es la lista autoritativa; el `.md` es la
-fuente de los seis del cuerpo, de modo que **se corrigen en el `.md` y se
-reconvierte**, nunca en el `.tex`.
+**Los 12 marcadores vigentes (14/09/2026).** Esta es la lista autoritativa. Los de la Seccion 3 y del Anexo B **se corrigen en el `.md` y se reconvierte**, nunca en el `.tex`. Pasaron de 9 a 12 porque la Seccion 3 se comprimio y su desarrollo completo se traslado al Anexo B: cada una de las tres reservas normativas se afirma ahora en los dos sitios y lleva marcador en ambos. **Al cerrar una, hay que cerrarla en los dos `.md`.**
 
 | # | Fuente (se edita aqui) | `.tex` generado | Qué falta verificar | Ficha |
 |---|---|---|---|---|
-| 1 | `secciones/03_marco_normativo.md:27` | `03_marco_normativo.tex:53` | **Reducido el 13/09/2026:** queda solo la fecha de entrada en vigor (30/03/2025). Expedicion, publicacion y disposicion derogatoria confirmadas contra la separata de *El Peruano* | A-13 |
-| 2 | `secciones/03_marco_normativo.md:31` | `03_marco_normativo.tex:84` | Denominacion oficial y fecha de publicacion del D.L. 1218 y de la Ley 30120 | A-20 |
-| 3 | `secciones/03_marco_normativo.md:125` | `03_marco_normativo.tex:577` | Texto literal del RNF-01 y documento en que consta | — |
-| 4 | `main.tex:291` | — | Ciclo academico segun silabo | A-10 |
-| 5 | `main.tex:292` | — | Fecha de entrega segun silabo | A-10 |
-
+| 1 | `secciones/03_marco_normativo.md:41` y `secciones/anexo_b_marco_normativo.md:37` | `03_marco_normativo.tex:49`, `anexo_b_marco_normativo.tex:56` | Solo la fecha de entrada en vigor del D.S. 016-2024-JUS (30/03/2025). Expedicion, publicacion y disposicion derogatoria confirmadas contra la separata de *El Peruano* | A-13 |
+| 2 | `secciones/03_marco_normativo.md:43` y `secciones/anexo_b_marco_normativo.md:41` | `03_marco_normativo.tex:69`, `anexo_b_marco_normativo.tex:93` | Denominacion oficial y fecha de publicacion del D.L. 1218 y de la Ley 30120 | A-20 |
+| 3 | `secciones/03_marco_normativo.md:71` y `secciones/anexo_b_marco_normativo.md:135` | `03_marco_normativo.tex:215`, `anexo_b_marco_normativo.tex:588` | Texto literal del RNF-01 y documento en que consta | D-04 |
+| 4 | `main.tex:288` | — | Ciclo academico segun silabo | A-10 |
+| 5 | `main.tex:289` | — | Fecha de entrega segun silabo | A-10 |
 | 6 | `secciones/introduccion.tex:61` | — | Como se decide hoy la dotacion de personal y la apertura de mostradores | C-08 |
 | 7 | `secciones/introduccion.tex:106` | — | Incidentes de aglomeracion, tiempos de cola y quejas documentados por LAP | C-07 |
 | 8 | `secciones/introduccion.tex:112` | — | Aforo declarado del terminal y superficie por zona | C-07 |
 | 9 | `secciones/introduccion.tex:216` | — | Numero de zonas a cubrir y de camaras disponibles por zona | C-09 |
 
-La Seccion 4 no tiene ninguno.
+Los marcadores 1 a 3 cuentan dos veces en el log (uno por la Seccion 3 y otro por el Anexo B), de ahi el total de 12. La Seccion 4 no tiene ninguno.
 
-**Advertencia sobre los marcadores de la Seccion 3 (1-3).** El 13/09/2026 se cerraron tres reservas (derogatoria de la Directiva, alcance extraterritorial y Articulo IX) y una cuarta se redujo a la fecha de entrada en vigor. De las seis originales quedan tres. Ocultarlos tuvo un efecto que conviene tener presente: en cuatro de los seis (1, 2, 3 y 6) la prosa visible **afirma el dato en indicativo** y la reserva ya no se ve. Un lector del PDF lee «publicado el 30 de noviembre de 2024 y en vigor desde el 30 de marzo de 2025» sin saber que las tres fechas se contrastaron contra fuentes secundarias y no contra *El Peruano*, y lee el RNF-01 como requisito establecido sin saber que su texto literal no consta en ningun documento del repositorio. En los otros dos (4 y 5) la prosa simplemente no cita el articulo, de modo que ahi no hay afirmacion que matizar.
-
-Por eso la nota de la pagina iii del informe **advierte expresamente** de que seis afirmaciones normativas de la Seccion 3 llevan una reserva de verificacion que no se imprime y remite a este apartado. Si el equipo prefiere que la reserva vuelva a verse en el cuerpo, la via correcta es **redactarla como prosa** en el `.md` (por ejemplo «segun fuentes secundarias concordantes»), no reactivar la impresion del marcador: el marcador es una nota de trabajo, no texto de informe. Los cuatro de la Introduccion (14-17) se editan directamente en el `.tex`, que ahi **si** es la fuente: la regla de no editar a mano solo alcanza a los `.tex` generados de las Secciones 3 y 4.
+**Las reservas 1-3 ya se leen en el PDF (14/09/2026).** Hasta el 13/09/2026, ocultar los marcadores tenia un efecto que este apartado advertia: la prosa visible afirmaba el dato en indicativo y la reserva no se veia, y la nota de la pagina iii del informe suplia esa carencia remitiendo aqui. Por pedido del frente de Liderazgo e Integracion, esa nota se elimino y las tres reservas se **redactaron como prosa** dentro del parrafo que afirma cada dato, en la Seccion 3 y en el Anexo B, que es la via que este mismo apartado recomendaba. La fecha de entrada en vigor pasa ademas a condicional («se habria producido»). El marcador `[VERIFICAR]` se mantiene junto a cada reserva como nota de trabajo y para el recuento del log; la prosa no lo sustituye. Los cuatro de la Introduccion (6-9) se editan directamente en el `.tex`, que ahi **si** es la fuente.
 
 **A-10b.** ✅ **Cerrado el 13/09/2026.** Los cuatro integrantes aportaron sus codigos y sus apellidos completos, y ya figuran en la portada: Aguilar Contreras, Angel (22200133); Rivadeneyra Huaman, Stephano Williams (22101822); Ortega Olazabal, Jose (25200719); Moreno Ugarte, Fabian (25200717). Se mantiene el orden historico de la portada, no el alfabetico. Cerro los cinco marcadores 7-11 de la lista anterior. Texto original del punto: La portada pide los integrantes como «Apellidos, Nombres
 (codigo)». No consta en el repositorio **ningun codigo de alumno**, y de

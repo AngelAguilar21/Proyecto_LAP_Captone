@@ -2,21 +2,23 @@
 % ANEXO A -- MODELO DE CARTEL INFORMATIVO
 % Responsable: Fabian Moreno Ugarte
 %
-% El cartel se maqueta con \fbox + \parbox + tabular, sin tcolorbox ni
+% El cartel se maqueta con \fbox + minipage + tabular, sin tcolorbox ni
 % mdframed, para que compile en cualquier distribucion sin instalar
-% paquetes adicionales.
+% paquetes adicionales. Desde 2026-09-14 va en negro, como todo el
+% informe: el marco se conserva porque representa el borde fisico del
+% cartel, no es un recuadro de aviso.
 % =====================================================================
 \section{Modelo de cartel informativo de videovigilancia}
 \label{anx:cartel}
 
 \subsection{Propósito y estatus de este modelo}
 
-La Sección~\ref{sec:directiva} estableció que el tratamiento de datos
+La Sección~\ref{sec:privacidad-diseno} estableció que el tratamiento de datos
 personales mediante videovigilancia exige informar previamente a los
 titulares mediante carteles visibles. Este anexo propone un modelo
 concreto para el sistema del proyecto.
 
-\cajaaviso{Estatus de este modelo}{Se trata de una \textbf{propuesta de
+Se trata de una \textbf{propuesta de
 trabajo}, no de un formato aprobado. Está construido sobre los elementos
 informativos que la Directiva 01-2020-JUS/DGTAIPD exige, pero su
 redacción final debe ser revisada por el área legal de LAP antes de su
@@ -26,7 +28,7 @@ Esa revisión tiene un contenido preciso: contrastar los campos del modelo
 uno por uno contra el texto de la Directiva y contra el D.S.
 016-2024-JUS, para confirmar que no falta ningún elemento informativo
 exigido ni sobra alguno que la norma no requiera. Este informe propone el
-conjunto de campos, no acredita que sea el exigible.}
+conjunto de campos, no acredita que sea el exigible.
 
 \subsection{Elementos que el modelo incorpora}
 
@@ -69,30 +71,32 @@ uno genérico de CCTV. \\
 
 En el modelo que sigue, los textos en \emph{cursiva} señalan los campos
 que este informe no puede completar porque corresponden a datos que solo
-LAP posee --- su identificación registral, la base de legitimación que
+LAP posee: su identificación registral, la base de legitimación que
 decida invocar, sus canales de atención y el plazo de conservación que
 fije. El resto del contenido es propuesta de este frente.
 
 \vspace{0.5em}
 \noindent
-\fcolorbox{azulesan}{white}{%
+\fbox{%
 \begin{minipage}{\dimexpr\linewidth-2\fboxsep-2\fboxrule\relax}
+% Interlineado sencillo dentro del cartel: con el 1,5 del documento a
+% 12 pt los filetes quedaban separados del texto por huecos muy grandes.
+\setstretch{1}
 \vspace{0.6em}
 \begin{center}
-{\Large\bfseries\color{azulesan} ZONA VIDEOVIGILADA}\\[0.25em]
-{\large\bfseries\color{azulesan} SISTEMA DE ESTIMACIÓN DE AFORO}\\[0.2em]
+{\Large\bfseries ZONA VIDEOVIGILADA}\\[0.25em]
+{\large\bfseries SISTEMA DE ESTIMACIÓN DE AFORO}\\[0.2em]
 {\small\itshape Este sistema NO identifica personas}
 \end{center}
-\vspace{0.4em}
-{\color{azulesan}\rule{\linewidth}{0.8pt}}
-\vspace{0.5em}
+\noindent\rule{\linewidth}{0.8pt}
+\vspace{0.2em}
 
 \small
 \setlength{\extrarowheight}{3pt}
 \begin{tabularx}{\linewidth}{@{}L{3.1cm}Y@{}}
 \textbf{Responsable} &
-Lima Airport Partners S.R.L. --- \emph{razón social registral completa,
-RUC y domicilio fiscal, a completar por LAP.} \\
+Lima Airport Partners S.R.L. (\emph{razón social registral completa,
+RUC y domicilio fiscal, a completar por LAP}). \\
 
 \textbf{Finalidad} &
 Estimar el número de personas presentes por zona, con el fin de prevenir
@@ -105,7 +109,7 @@ exacto, a completar por su área legal.} \\
 \textbf{Conservación} &
 Las imágenes no se almacenan. El sistema conserva únicamente conteos
 agregados por zona, durante el plazo fijado en su política de retención
---- \emph{plazo a definir con LAP (medida M-05).} \\
+(\emph{plazo a definir con LAP, medida M-05}). \\
 
 \textbf{Destinatarios} &
 Personal autorizado de LAP. Las imágenes del sistema de seguridad podrán
@@ -115,16 +119,16 @@ ley. \\
 \textbf{Sus derechos} &
 Puede ejercer sus derechos de acceso, rectificación, cancelación y
 oposición escribiendo al canal de atención de LAP o acudiendo a su
-oficina de atención al usuario --- \emph{dirección de correo y ubicación
-de la oficina, a completar por LAP.} \\
+oficina de atención al usuario (\emph{dirección de correo y ubicación
+de la oficina, a completar por LAP}). \\
 
 \textbf{Más información} &
 \emph{Dirección web de la política de privacidad de LAP, a completar.} \\
 \end{tabularx}
 
-\vspace{0.6em}
-{\color{azulesan}\rule{\linewidth}{0.8pt}}
 \vspace{0.4em}
+\noindent\rule{\linewidth}{0.8pt}
+\vspace{0.2em}
 
 {\footnotesize\bfseries Este sistema no realiza reconocimiento facial, no
 identifica a personas concretas, no realiza seguimiento individual de
@@ -170,15 +174,15 @@ trayectorias y no adopta decisiones automatizadas sobre los pasajeros.}
 \subsection{Observación final sobre este anexo}
 
 Este cartel es el punto donde el análisis normativo de este informe se
-vuelve visible para el pasajero. Todo lo demás --- la arquitectura, las
-medidas de privacidad desde el diseño, la auditoría --- ocurre en
+vuelve visible para el pasajero. Todo lo demás (la arquitectura, las
+medidas de privacidad desde el diseño, la auditoría) ocurre en
 documentos que el titular de los datos nunca verá. La frase
 \enquote{este sistema no identifica personas} solo es defendible si las
 medidas M-02, M-03 y M-04 de la Sección~\ref{sec:privacidad-diseno}
 están efectivamente implementadas.
 
-\cajaaviso{Advertencia}{Colocar un cartel que declare más de lo que el
+Colocar un cartel que declare más de lo que el
 sistema cumple es peor que no colocarlo: convierte una deficiencia
 técnica en una declaración inexacta hacia el titular. La redacción final
 del cartel debe fijarse \emph{después} de que la arquitectura esté
-congelada, y debe revisarse si la arquitectura cambia.}
+congelada, y debe revisarse si la arquitectura cambia.

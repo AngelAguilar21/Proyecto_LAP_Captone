@@ -25,14 +25,14 @@ riesgos para los derechos de los titulares y proponer medidas de
 mitigación.
 
 Esa correspondencia no es una analogía metodológica. Como se expuso en
-la Sección 3.9, el D.S. 016-2024-JUS exige una evaluación de impacto
+la Sección 3.4, el D.S. 016-2024-JUS exige una evaluación de impacto
 antes de iniciar tratamientos de alto riesgo, y la videovigilancia
 masiva figura expresamente entre los supuestos que la activan. El
 sistema parte de la captación masiva y continua de imágenes de personas
-en las zonas comunes de un terminal aeroportuario, de modo que —con
-independencia de que el modelo produzca conteos agregados y no
-identifique a nadie— el supuesto se activa. Esta sección es, por tanto,
-el insumo sustantivo de un documento que el proyecto está obligado a
+en las zonas comunes de un terminal aeroportuario, de modo que el
+supuesto se activa con independencia de que el modelo produzca conteos
+agregados y no identifique a nadie. Esta sección es, por tanto, el
+insumo sustantivo de un documento que el proyecto está obligado a
 producir, y no un ejercicio analítico de acompañamiento.
 
 Conviene anticipar una tentación previsible y descartarla expresamente:
@@ -43,17 +43,17 @@ esa dirección, por dos razones. La primera es que el supuesto que se
 activa es el de captación masiva, y esa captación existe con
 independencia de lo que el modelo haga después. La segunda es que la
 evaluación de impacto es precisamente el documento en el que las
-decisiones de diseño de este informe —minimización, no persistencia,
-salida agregada, procesamiento local— se registran como medidas de
+decisiones de diseño de este informe (minimización, no persistencia,
+salida agregada, procesamiento local) se registran como medidas de
 mitigación y quedan acreditadas ante la autoridad. Renunciar a ella
 sería renunciar al lugar donde el trabajo de cumplimiento se vuelve
 exigible y demostrable.
 
 Un criterio gobierna la redacción de todo lo que sigue: se prefiere
 declarar un impacto como no cuantificado antes que estimarlo sin base.
-Varias magnitudes que naturalmente irían aquí —número de pasajeros
+Varias magnitudes que naturalmente irían aquí (número de pasajeros
 afectados, costo evitado, consumo energético, tasa de error por grupo
-demográfico— dependen de información operativa que solo LAP posee o de
+demográfico) dependen de información operativa que solo LAP posee o de
 mediciones que el equipo aún no ha realizado. Donde ocurre, se indica
 expresamente en lugar de rellenarse con una cifra plausible.
 
@@ -98,8 +98,8 @@ inducir desempeño desigual son identificables aunque no estén
 cuantificados. La estatura es el primero: un contador entrenado sobre
 anotaciones de cabezas puede subcontar sistemáticamente a niños, sobre
 todo en escenas densas donde quedan ocluidos por adultos. La vestimenta
-y los cubrimientos de cabeza —sombreros, gorras, capuchas, prendas
-religiosas— alteran la apariencia de la región de la cabeza, que es
+y los cubrimientos de cabeza (sombreros, gorras, capuchas, prendas
+religiosas) alteran la apariencia de la región de la cabeza, que es
 precisamente la señal que estos métodos explotan. El equipaje voluminoso
 y las sillas de ruedas presentan siluetas distintas de las típicas en
 los conjuntos de origen. Y la composición demográfica de esos conjuntos,
@@ -121,8 +121,8 @@ entrena y se lo mide. En la misma línea, los autores de CSRNet
 anotación con un núcleo gaussiano geométricamente adaptativo, lo que
 incorpora un supuesto sobre la relación entre distancia a la cámara y
 tamaño aparente de la cabeza; cuando ese supuesto no se cumple
-—perspectivas oblicuas, techos altos, cámaras de gran angular, todas
-ellas habituales en un terminal— la referencia misma queda sesgada. Los
+(perspectivas oblicuas, techos altos, cámaras de gran angular, todas
+ellas habituales en un terminal), la referencia misma queda sesgada. Los
 propios autores reconocen además que sobre UCSD, un conjunto de escenas
 relativamente dispersas, superan a la mayoría de métodos previos excepto
 a MCNN en MAE, y que la baja resolución de esos cuadros les obligó a
@@ -137,14 +137,14 @@ individuales: no deniega embarques ni señala sospechosos, de modo que un
 error de conteo no perjudica directamente a la persona mal contada. Sin
 embargo, si el subconteo se concentra en un grupo, las zonas del
 terminal donde ese grupo se concentra reciben sistemáticamente menos
-recursos —menos personal, menos apertura de mostradores—. El daño no es
+recursos: menos personal y menos apertura de mostradores. El daño no es
 individual sino distributivo, y es real aunque sea indirecto. De ahí se
 sigue una recomendación concreta al frente técnico: que la campaña de
 validación en sitio incluya una evaluación de desempeño desagregada, al
 menos por franja de estatura y por presencia de equipaje voluminoso. La
 recomendación es condicional en sentido estricto, porque sin acceso a
 material del terminal no es realizable, y esa dependencia refuerza la
-solicitud de acceso planteada en la Sección 3.9.
+solicitud de acceso planteada en la Sección 3.4.
 
 % ---- 4.3 ----
 \subsection{Sesgo de automatización y factor humano}
@@ -159,16 +159,17 @@ El fenómeno no depende de que el modelo funcione mal: depende de que
 funcione bien durante el tiempo suficiente para que nadie lo cuestione.
 
 Este riesgo tiene un anclaje normativo directo. Como se expuso en la
-Sección 3.7, el artículo 23 de la Ley 29733 reconoce el derecho al
+Sección 3.3, el artículo 23 de la Ley 29733 reconoce el derecho al
 tratamiento objetivo, esto es, a no verse sometido a una decisión con
 efectos jurídicos o significativos sustentada únicamente en un
-tratamiento automatizado. La medida M-10 —el sistema emite alertas, no
-ejecuta acciones automáticas sobre personas— responde a esa exigencia y
-mantiene al sistema fuera del supuesto del artículo 23. Pero M-10 es
-insuficiente por sí sola, porque describe la arquitectura y no la
-práctica: un operador que aprueba mecánicamente cuanto el tablero
-propone reintroduce de hecho la decisión automatizada que la medida
-pretendía evitar, aunque formalmente medie una acción humana.
+tratamiento automatizado. La medida M-10, conforme a la cual el sistema
+emite alertas y no ejecuta acciones automáticas sobre personas, responde
+a esa exigencia y mantiene al sistema fuera del supuesto del artículo
+23. Pero M-10 es insuficiente por sí sola, porque describe la
+arquitectura y no la práctica: un operador que aprueba mecánicamente
+cuanto el tablero propone reintroduce de hecho la decisión automatizada
+que la medida pretendía evitar, aunque formalmente medie una acción
+humana.
 
 De ahí que la capacitación del personal deba tratarse como medida de
 mitigación y no como accesorio de implantación. Los operadores necesitan
@@ -190,7 +191,7 @@ referencias validadas del proyecto son los artículos técnicos de
 antecedentes y no se ha incorporado literatura sobre efectos
 conductuales de la videovigilancia. Formulado en condicional: si ese
 efecto existe en la magnitud que la discusión pública le atribuye, en un
-aeropuerto —donde la vigilancia ya está normalizada— el efecto marginal
+aeropuerto, donde la vigilancia ya está normalizada, el efecto marginal
 de añadir un sistema de conteo sería previsiblemente pequeño, aunque no
 nulo, y la normalización misma formaría parte del fenómeno. Sostener el
 punto con firmeza exigiría respaldo bibliográfico que este informe
@@ -230,8 +231,8 @@ total del ciclo, y el ahorro agregado depende del número de iteraciones
 y de qué fracción del tiempo por iteración representaba esa operación.
 Lo que sí puede afirmarse sin exceder el dato es que la elección de la
 función de pérdida no es ambientalmente neutra, y que en un
-entrenamiento con adaptación de dominio en sitio —que es el que la
-brecha documentada obliga a contemplar— una diferencia de ese orden en
+entrenamiento con adaptación de dominio en sitio, que es el que la
+brecha documentada obliga a contemplar, una diferencia de ese orden en
 un componente ejecutado en cada iteración es un factor a considerar
 junto con la exactitud.
 
@@ -250,8 +251,8 @@ transmisión asociado.
 
 Este es el resultado analítico más útil de la subsección y conviene
 presentarlo como tal ante el cliente: las decisiones que reducen la
-exposición de datos personales —muestrear menos, procesar localmente, no
-persistir imágenes, agregar la salida— son exactamente las mismas que
+exposición de datos personales (muestrear menos, procesar localmente, no
+persistir imágenes, agregar la salida) son exactamente las mismas que
 reducen el consumo de cómputo, de transmisión y de almacenamiento. Ambos
 principios apuntan en la misma dirección, lo que refuerza el argumento
 de privacidad con una justificación adicional que no depende del
@@ -308,7 +309,7 @@ La segunda es que el riesgo dominante es de gobernanza y no de
 tecnología. El deslizamiento de finalidad y el uso no declarado no se
 previenen con mejor ingeniería, sino con documentación, compromisos
 contractuales y auditoría. Esto significa que el entregable de este
-frente —la documentación de cumplimiento— no es accesorio al proyecto
+frente, la documentación de cumplimiento, no es accesorio al proyecto
 técnico: es la mitigación principal del riesgo principal, y así debería
 exponerse ante el cliente.
 
@@ -318,9 +319,9 @@ declararlo antes que por estimar sin base.
 
 El riesgo de deslizamiento de finalidad merece un desarrollo propio,
 porque es el principal y no proviene de un defecto técnico sino del
-éxito del sistema. Una vez desplegada la infraestructura —cámaras
+éxito del sistema. Una vez desplegada la infraestructura (cámaras
 calibradas, canal de video, capacidad de inferencia, tablero de
-visualización— el costo marginal de añadir capacidades es bajo:
+visualización), el costo marginal de añadir capacidades es bajo:
 incorporar reidentificación para medir tiempos de permanencia, o
 reconocimiento facial para detectar personas de interés, es una decisión
 de configuración y de presupuesto, no un rediseño. La barrera que impide
@@ -347,8 +348,8 @@ acceso a material del terminal: la validación de exactitud en el dominio
 de destino y la evaluación de sesgo demográfico. Los segundos son
 decisiones del equipo que siguen abiertas y de las que depende buena
 parte de este análisis: la arquitectura definitiva y la granularidad de
-salida, la localización del procesamiento —\emph{on-premise} o nube
-externa—, el plazo concreto de retención y el registro de horas de GPU.
+salida, la localización del procesamiento (\emph{on-premise} o nube
+externa), el plazo concreto de retención y el registro de horas de GPU.
 Los terceros son discrepancias entre documentos del propio proyecto, que
 este informe deja registradas y expresamente no resuelve por su cuenta.
 Son tres, y no todas tienen el mismo signo. El uso del término «personas
@@ -357,7 +358,7 @@ disociación aparece tanto en el material de presentación como en el
 comentario del módulo de persistencia del prototipo, y está tratado en
 la Sección 3.2. La medición de permanencia en zona comercial como
 finalidad distinta de la estimación de aglomeraciones, que exigiría base
-de legitimación propia, se trata en la Sección 3.3; el esquema de datos
+de legitimación propia, se trata en la Sección 3.2; el esquema de datos
 del prototipo, que registra zona y marcas de primera y última detección
 por persona, la hace técnicamente posible hoy. En cambio, la
 preocupación sobre reidentificación mediante \emph{embeddings} de
@@ -365,7 +366,7 @@ apariencia \textbf{no se confirmó}: el prototipo resuelve la fusión
 entre cámaras por asociación espacio-temporal y reserva un descriptor de
 color no biométrico como mero desempate, de modo que la decisión de
 diseño va en la dirección que el RNF-01 exige, según se detalla en la
-Sección 3.9.
+Sección 3.4.
 
 A esas discrepancias se añade un riesgo residual de distinta clase,
 porque no es una divergencia documental sino un incumplimiento
@@ -374,6 +375,8 @@ actual}, que persiste coordenadas individuales enlazadas a un
 identificador por persona en lugar de agregar por zona. Es el único
 hallazgo de todo este análisis que el equipo puede cerrar por sí solo,
 de inmediato y sin depender de LAP ni de acceso a datos del terminal, y
-por eso debería encabezar la lista de acciones. Su registro y
-seguimiento está en \texttt{PENDIENTES.md}, y el estado de cumplimiento
-de cada requisito, en \texttt{CHECKLIST\_\allowbreak CUMPLIMIENTO.md}.
+por eso debería encabezar la lista de acciones. Su cierre depende
+únicamente del frente técnico, que puede agregar por zona antes de
+escribir o fijar una retención muy corta sobre la tabla de posiciones;
+mientras no lo haga, el cumplimiento de M-03 no puede afirmarse ante el
+cliente.

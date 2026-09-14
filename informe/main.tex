@@ -12,22 +12,33 @@
 %
 %  Los archivos .tex estan codificados en UTF-8 sin BOM.
 %=====================================================================
-\documentclass[11pt,a4paper]{article}
+\documentclass[12pt,a4paper]{article}
 
 %--------------------- Codificacion e idioma -------------------------
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
-\usepackage{lmodern}
+% Times New Roman a 12 pt en todo el documento (2026-09-14, pedido del
+% frente de Liderazgo e Integracion). newtxtext da el texto en Times y
+% newtxmath las formulas a juego; ambos vienen en MiKTeX y TeX Live.
+\usepackage{newtxtext}
+\usepackage{newtxmath}
 % es-tabla     -> "Tabla" en lugar de "Cuadro"
 % es-noquoting -> evita que babel-spanish capture el caracter " , que
 %                 entra en conflicto con csquotes/biblatex
 \usepackage[spanish,es-tabla,es-noquoting,es-lcroman]{babel}
 
 %--------------------- Geometria y estilo ----------------------------
-\usepackage[a4paper,left=3cm,right=2.5cm,top=3cm,bottom=2.5cm]{geometry}
+% headheight=15pt: a 12 pt el encabezado de fancyhdr no cabe en los 12 pt
+% que reserva la clase y avisa en cada pagina.
+\usepackage[a4paper,left=3cm,right=2.5cm,top=3cm,bottom=2.5cm,headheight=15pt]{geometry}
 \usepackage{fancyhdr}
 \usepackage{setspace}
-\usepackage{parskip}
+% Parrafos con sangria de primera linea de 1,25 cm y sin espacio entre
+% ellos (2026-09-14). Sustituye a parskip, que hacia lo contrario.
+% indentfirst sangra tambien el primer parrafo tras un titulo.
+\usepackage{indentfirst}
+\setlength{\parindent}{1.25cm}
+\setlength{\parskip}{0pt}
 
 %--------------------- Tablas, listas, graficos ----------------------
 \usepackage{graphicx}
@@ -92,23 +103,18 @@
 % de millares no corresponde, asi que se restaura el formato plano.
 \DeclareFieldFormat{pages}{\mkpageprefix[bookpagination]{#1}}
 
-%--------------------- Colores y macros propias ----------------------
-\definecolor{azulesan}{RGB}{0,51,102}
-\definecolor{grisclaro}{RGB}{242,242,242}
-
-% Caja de aviso reutilizable, construida solo con \fcolorbox + minipage
-% para no depender de tcolorbox ni mdframed.
-\newcommand{\cajaaviso}[2]{%
-  \par\vspace{0.6em}\noindent
-  \fcolorbox{azulesan}{grisclaro}{%
-    \begin{minipage}{\dimexpr\linewidth-2\fboxsep-2\fboxrule\relax}
-      \vspace{0.3em}
-      \textbf{\color{azulesan}#1}\par\vspace{0.35em}
-      \small #2
-      \vspace{0.3em}
-    \end{minipage}%
-  }\par\vspace{0.6em}
-}
+%--------------------- Macros propias --------------------------------
+% El documento va entero en negro (2026-09-14): sin colores en titulos,
+% tablas ni enlaces. Por eso ya no se definen azulesan ni grisclaro.
+%
+% \cajaaviso{titulo}{texto}
+% Fue un recuadro sombreado con titulo en color. Desde 2026-09-14 el
+% informe no lleva recuadros: el texto sale como un parrafo corrido mas,
+% sin fondo, sin marco y sin el titulo, que solo tenia sentido como
+% rotulo del recuadro. La macro se conserva porque la usan secciones de
+% otros integrantes (metodologia, resultados, conclusiones), que asi
+% cambian de aspecto sin tocar su contenido.
+\newcommand{\cajaaviso}[2]{\par #2\par}
 
 % NOTA SOBRE LOS MARCADORES RETIRADOS
 % Este documento tuvo una macro \pendiente{tipo}{texto} que imprimia en
@@ -169,14 +175,11 @@
 \usepackage{hyperref}
 \hypersetup{
   unicode=true,
-  colorlinks=true,
-  linkcolor=azulesan,
-  citecolor=azulesan,
-  urlcolor=azulesan,
+  hidelinks,
   pdftitle={Estimacion de aglomeraciones mediante vision computacional
             en el Aeropuerto Internacional Jorge Chavez},
-  pdfauthor={Equipo Capstone I -- Universidad ESAN},
-  pdfsubject={Capstone I -- Ingenieria de Inteligencia Artificial}
+  pdfauthor={Equipo Capstone I, Universidad ESAN},
+  pdfsubject={Capstone I, Ingenieria de Inteligencia Artificial}
 }
 
 % Encabezado corrido: "Informe Final" a la izquierda, "Capstone Project" a
@@ -240,10 +243,7 @@
 {\scshape Facultad de Ingeniería\par}
 {\scshape Carrera de Ingeniería de Inteligencia Artificial\par}
 
-\vspace{0.5cm}
-
-{\color{azulesan}\rule{\linewidth}{1.2pt}}
-\vspace{0.4cm}
+\vspace{0.9cm}
 
 {\LARGE\bfseries Estimación de aglomeraciones de personas\par}
 \vspace{0.2cm}
@@ -252,14 +252,11 @@
 {\LARGE\bfseries Aeropuerto Internacional Jorge Chávez\par}
 
 \vspace{0.4cm}
-{\Large Informe Final -- Capstone Project\par}
+{\Large Informe Final del Capstone Project\par}
 \vspace{0.3cm}
 {\large Cliente: Lima Airport Partners (LAP)\par}
 
-\vspace{0.4cm}
-{\color{azulesan}\rule{\linewidth}{1.2pt}}
-
-\vspace{0.5cm}
+\vspace{0.9cm}
 
 {\large\bfseries Integrantes\par}
 \vspace{0.4cm}
@@ -297,71 +294,15 @@ Moreno Ugarte, Fabián                 & \campoportada{código de Moreno}{\hspac
 
 %--------------------------- INDICE ----------------------------------
 \pagenumbering{roman}
-\tableofcontents
+% Interlineado sencillo solo en el indice: a 12 pt y 1,5 desbordaba una
+% linea a una segunda pagina.
+{\singlespacing\tableofcontents}
 \clearpage
 
-\phantomsection
-\addcontentsline{toc}{section}{Nota sobre el estado de este documento}
-\section*{Nota sobre el estado de este documento}
-
-Este informe se encuentra en elaboración. Las secciones de
-\emph{Antecedentes}, \emph{Marco ético y legal}, \emph{Análisis de
-impacto} y el \emph{Anexo A} corresponden al frente de validación
-ético-legal y documentación. Las secciones de \emph{Introducción},
-\emph{Metodología}, \emph{Resultados} y \emph{Conclusiones} están a cargo
-de otros integrantes del equipo y se incorporarán en la siguiente
-entrega; sus apartados figuran ya con la numeración reservada.
-
-Ni la portada ni el cuerpo del documento contienen huecos ni marcadores de
-relleno. En la portada, un campo que todavía no está confirmado se omite
-entero en lugar de dejarse en blanco: donde no figura el ciclo académico ni
-la fecha de entrega es porque ninguno de los dos consta aún en el sílabo
-consultado por el equipo. Los puntos que siguen abiertos se registran fuera
-de este texto, en el archivo \texttt{PENDIENTES.md} del repositorio,
-agrupados según quién puede resolverlos: decisiones del frente ético-legal,
-decisiones del equipo e información que solo puede proporcionar LAP.
-
-Conviene advertir de una consecuencia de ese criterio. Tres afirmaciones
-normativas de la Sección~\ref{sec:marco} llevan todavía asociada una reserva
-de verificación --- la fecha de entrada en vigor del D.S.\ 016-2024-JUS, la
-denominación oficial del D.L.\ 1218 y de la Ley 30120, y el texto literal
-del requisito interno RNF-01 --- que \emph{no se imprime} en el cuerpo para
-no interrumpir la lectura. Esas tres reservas, con su alcance exacto y el
-efecto que tendría un error en cada una, constan en
-\texttt{PENDIENTES.md}, apartado a.3. El lector que necesite apoyarse en
-alguno de esos tres datos debería consultarlas antes de hacerlo. El resto
-del articulado que la sección cita --- incluida la Disposición
-Complementaria Derogatoria Única del D.S.\ 016-2024-JUS, el Artículo VI de
-su Título Preliminar sobre alcance extraterritorial y su Artículo IX sobre
-transparencia y responsabilidad proactiva --- se contrastó contra la
-separata de \emph{El Peruano} del 30 de noviembre de 2024.
-
-Dos criterios de redacción se aplicaron de forma sistemática, y conviene
-enunciarlos porque explican el tono del documento:
-
-\begin{itemize}[leftmargin=1.4em,itemsep=0.25em]
-  \item \textbf{Ninguna cifra tomada de la literatura se reproduce si no
-        pudo contrastarse contra el texto en prosa del artículo de
-        origen.} Las cifras que solo constaban en tablas cuya conversión
-        a texto se degrada fueron retiradas, aunque resultaran
-        favorables al argumento.
-  \item \textbf{Ninguna afirmación normativa se enuncia en indicativo si
-        su respaldo documental exacto no ha sido verificado.} Donde la
-        verificación está pendiente, la afirmación se formula en
-        condicional o se remite expresamente a la validación del área
-        legal de LAP.
-\end{itemize}
-
-El detalle de la trazabilidad de cada afirmación normativa se encuentra
-en el archivo \texttt{NOTAS\_\allowbreak FUENTES.md} del repositorio, y el estado de
-cumplimiento en \texttt{CHECKLIST\_\allowbreak CUMPLIMIENTO.md}.
-
-\cajaaviso{Alcance de este documento}{Este informe es un trabajo
-académico de análisis de cumplimiento. No constituye asesoría legal ni un
-dictamen jurídico. Las zonas de interpretación normativa se presentan
-como riesgos a validar con el área legal de LAP y, de ser necesario, con
-la Autoridad Nacional de Protección de Datos Personales.}
-
+% La "Nota sobre el estado de este documento" que ocupaba la pagina iii
+% se retiro el 2026-09-14. Las tres reservas de verificacion que contenia
+% van ahora en prosa dentro del parrafo que afirma cada dato (Seccion 3 y
+% Anexo B). Los puntos abiertos siguen en PENDIENTES.md.
 \clearpage
 \pagenumbering{arabic}
 
@@ -401,6 +342,13 @@ la Autoridad Nacional de Protección de Datos Personales.}
 
 %--------------------------- ANEXOS ----------------------------------
 \appendix
+% En el indice los anexos figuran solo por su titulo, sin subapartados:
+% el Anexo B repite la estructura completa de la Seccion 3 y listarla
+% otra vez alargaria el indice, que es justo lo que se quiso acortar.
+\addtocontents{toc}{\protect\setcounter{tocdepth}{1}}
 \input{secciones/anexo_cartel}
+\clearpage
+% GENERADO desde secciones/anexo_b_marco_normativo.md (no editar aqui).
+\input{secciones/anexo_b_marco_normativo}
 
 \end{document}

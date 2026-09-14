@@ -38,7 +38,7 @@ El repositorio es el sitio donde se trabaja. No hay copia de referencia externa.
 
 | Qué | Se edita en | Se genera | Quién |
 |---|---|---|---|
-| **Secciones 3 y 4** | `secciones/03_marco_normativo.md` y `secciones/04_analisis_impacto.md` | el `.tex` del mismo nombre, con `herramientas/md2tex.py` | Frente ético-legal |
+| **Secciones 3 y 4 y Anexo B** | `secciones/03_marco_normativo.md`, `secciones/04_analisis_impacto.md` y `secciones/anexo_b_marco_normativo.md` | el `.tex` del mismo nombre, con `herramientas/md2tex.py` | Frente ético-legal |
 | Secciones 1, 2, 5, 6, 7 y Anexo A | `secciones/*.tex`, directamente | — | Sus responsables |
 | **Entregable** | no se edita: se compila | `main.pdf`, con `latexmk -pdf main.tex` | Frente ético-legal |
 
@@ -47,8 +47,16 @@ Hay, por tanto, **dos clases de sección** y conviene no confundirlas:
 - **Secciones escritas en `.tex`.** Se editan en el `.tex` y ya está. Son la
   Introducción, Antecedentes, Metodología, Resultados, Conclusiones y el
   Anexo A.
-- **Secciones 3 y 4, escritas en `.md`.** El `.md` es la **fuente**; el `.tex`
-  es **producto derivado** y se regenera. Nunca se edita a mano.
+- **Secciones 3 y 4 y Anexo B, escritos en `.md`.** El `.md` es la **fuente**;
+  el `.tex` es **producto derivado** y se regenera. Nunca se edita a mano.
+
+> **Sección 3 y Anexo B (14/09/2026).** Por pedido del frente de Liderazgo e
+> Integración, la Sección 3 del cuerpo se comprimió a su contenido esencial
+> (cuatro subapartados, 3.1 a 3.4) y el desarrollo completo pasó, sin
+> recortes, al **Anexo B** (nueve subapartados, B.1 a B.9). Los dos textos
+> afirman lo mismo con distinto detalle: **un dato que se corrija en uno se
+> corrige en el otro.** La correspondencia está en la cabecera de
+> `03_marco_normativo.md`.
 
 El motivo de la asimetría es que las Secciones 3 y 4 se habían pasado a Markdown
 durante el episodio de Overleaf. Al volver a LaTeX no se rehízo el trabajo a
@@ -56,32 +64,39 @@ mano: se automatizó la conversión, que es reproducible y verificable palabra p
 palabra. Unificar todo en un solo formato sigue abierto como **E-08** en
 `PENDIENTES.md`.
 
-### Cómo se regeneran las Secciones 3 y 4
+### Cómo se regeneran las Secciones 3 y 4 y el Anexo B
 
-Desde `informe/`, después de tocar cualquiera de los dos `.md`:
+Desde `informe/`, después de tocar cualquiera de los tres `.md`:
 
 ```bash
 py herramientas/md2tex.py secciones/03_marco_normativo.md secciones/03_marco_normativo.tex 3
 py herramientas/md2tex.py secciones/04_analisis_impacto.md  secciones/04_analisis_impacto.tex  4
+py herramientas/md2tex.py secciones/anexo_b_marco_normativo.md secciones/anexo_b_marco_normativo.tex B
 py herramientas/verificar_fidelidad.py secciones/03_marco_normativo.md secciones/03_marco_normativo.tex
 py herramientas/verificar_fidelidad.py secciones/04_analisis_impacto.md  secciones/04_analisis_impacto.tex
+py herramientas/verificar_fidelidad.py secciones/anexo_b_marco_normativo.md secciones/anexo_b_marco_normativo.tex
 latexmk -pdf main.tex
 ```
 
-- El tercer argumento de `md2tex.py` (`3` o `4`) selecciona la tabla de
-  `\label`. Esos `\label` reproducen los anclajes de la versión archivada para
-  que las referencias cruzadas del resto del informe sigan resolviendo.
+- El tercer argumento de `md2tex.py` (`3`, `4` o `B`) selecciona la tabla de
+  `\label`. Esos `\label` sostienen las referencias cruzadas del resto del
+  informe.
 - `md2tex.py` **no reescribe prosa**: solo traduce marcado. Una ejecución limpia
   no imprime ningún `AVISO`; si imprime alguno, hay una construcción Markdown no
   prevista que hay que revisar a mano.
 - `verificar_fidelidad.py` compara la prosa del `.md` con la del `.tex` palabra
-  por palabra. La única diferencia esperada es un `\allowbreak` tipográfico en la
-  Sección 4.
+  por palabra. La salida esperada es `IDENTICO` en los tres archivos.
+- **El texto del informe no cita archivos del repositorio** (`PENDIENTES.md`,
+  `CHECKLIST_CUMPLIMIENTO.md`, `NOTAS_FUENTES.md`, rutas) **ni códigos internos**
+  (A-10, C-07...). Lo que falta se escribe como reserva en prosa: qué dato falta
+  y de quién depende. Esos nombres solo pueden ir en comentarios o dentro de
+  `[VERIFICAR: ...]`, que no se imprime.
 
 ### Qué NO hacer
 
-- **No editar `secciones/03_marco_normativo.tex` ni
-  `secciones/04_analisis_impacto.tex`.** Son generados. Cualquier edición a mano
+- **No editar `secciones/03_marco_normativo.tex`,
+  `secciones/04_analisis_impacto.tex` ni `secciones/anexo_b_marco_normativo.tex`.**
+  Son generados. Cualquier edición a mano
   se pierde en la siguiente conversión, y sin dejar rastro. El cambio va al
   `.md`.
 - **No reintroducir `secciones/_archivo/`.** La carpeta (con
@@ -137,7 +152,7 @@ Proyecto_LAP_Captone/
     ├── imagenes/
     │   └── logo-esan.png           logo de la carátula
     ├── herramientas/
-    │   ├── md2tex.py               conversor .md -> .tex de las Secciones 3 y 4
+    │   ├── md2tex.py               conversor .md -> .tex de las Secciones 3 y 4 y el Anexo B
     │   └── verificar_fidelidad.py  comprueba la conversión palabra por palabra
     ├── papers/                     IGNORADO: PDFs fuente + citas_oficiales.txt
     ├── fichas_antecedentes/        fichas A2, B1-B3, C1-C4
@@ -151,7 +166,9 @@ Proyecto_LAP_Captone/
         ├── metodologia.tex         a cargo de otro integrante
         ├── resultados.tex          a cargo de otro integrante
         ├── conclusiones.tex        a cargo de otro integrante
-        └── anexo_cartel.tex        ← frente ético-legal (Anexo A)
+        ├── anexo_cartel.tex        ← frente ético-legal (Anexo A)
+        ├── anexo_b_marco_normativo.md  ← FUENTE del Anexo B (frente ético-legal)
+        └── anexo_b_marco_normativo.tex    GENERADO — no editar
 ```
 
 Todos los comandos de este README se ejecutan **desde `informe/`**, no desde la
@@ -262,10 +279,12 @@ Tres reglas que conviene leer antes de tocar nada:
 
 1. **La numeración de las Secciones 3 y 4 es vinculante.** El resto del
    informe las referencia **20 veces** con `\ref`, y **15** de esas referencias
-   apuntan a un subapartado concreto: 3.1, 3.5, 3.9 (la auditoría de dato
-   biométrico y las licencias), 4.3, 4.4 (la lectura ambiental del costo de
-   cómputo) y 4.5. **No renumerar** sin corregir las referencias que apuntan
-   ahí.
+   apuntan a un subapartado concreto: 3.1, 3.2 (proporcionalidad), 3.3
+   (privacidad desde el diseño), 3.4 (la auditoría de dato biométrico y las
+   licencias), 4.3, 4.4 (la lectura ambiental del costo de cómputo) y 4.5.
+   Además, la Sección 4 remite a 3.2, 3.3 y 3.4 **escribiendo el número a mano**
+   en su `.md`, y el Anexo B remite a sus propios B.2 a B.9 del mismo modo.
+   **No renumerar** sin corregir todo eso.
 2. **Nada de marcadores de relleno en el cuerpo.** Si algo falta o hay que
    decidirlo, va a `PENDIENTES.md`. Hay dos excepciones, ambas deliberadas y
    preferibles a inventar un dato:
@@ -290,9 +309,16 @@ del marco ético-legal se apoya en esas decisiones y cambia con ellas.
 ### Paquetes
 
 Todo el preámbulo usa paquetes de distribución estándar. **No se usan
-`tcolorbox` ni `mdframed`**: las cajas de aviso están construidas con
-`\fcolorbox` + `minipage`, para que el proyecto compile en cualquier
-distribución sin instalar nada.
+`tcolorbox` ni `mdframed`**.
+
+**Formato (14/09/2026, pedido del frente de Liderazgo e Integración).** Times
+New Roman a 12 pt (`newtxtext` + `newtxmath`); todo en negro (`hyperref` con
+`hidelinks`, sin colores en títulos, tablas ni cartel); sangría de primera línea
+de 1,25 cm en todos los párrafos (`indentfirst`) y sin espacio entre ellos (ya
+no se carga `parskip`); sin recuadros sombreados; tablas en blanco y negro con
+`booktabs`; carátula sin filetes decorativos; **ninguna raya (—) en el
+cuerpo**, sustituidas por comas, paréntesis o punto y seguido. Quien añada
+texto debe respetarlo: en particular, no reintroducir rayas ni colores.
 
 Bibliografía con `biblatex` + `biber`, estilo `ieee`, `sorting=none`
 (las referencias se numeran por orden de aparición).
@@ -301,7 +327,7 @@ Bibliografía con `biblatex` + `biber`, estilo `ieee`, `sorting=none`
 
 | Macro | Uso |
 |---|---|
-| `\cajaaviso{título}{texto}` | Caja destacada para advertencias y riesgos a validar |
+| `\cajaaviso{título}{texto}` | Desde el 14/09/2026 ya **no** es una caja: imprime `texto` como párrafo corrido y descarta `título`. Se conserva porque la usan Metodología, Resultados y Conclusiones; no usarla en texto nuevo |
 | `\verificar{texto}` | Marcador `[VERIFICAR]` oculto: no imprime nada y deja rastro en el log |
 | `\campoportada{marcador}{formato}{dato}` | Variante de portada: imprime el campo entero solo si `dato` no está vacío; si falta, no imprime nada |
 
@@ -341,54 +367,49 @@ Cuatro criterios se aplicaron de forma consistente y conviene mantenerlos:
 
 ## Estado
 
-**Compilación.** Verificada el 13/09/2026 desde limpio (`latexmk -C` y después
-`latexmk -pdf main.tex`): **0 errores, 40 páginas**, `main.pdf` de 646.341
-bytes, **ninguna cita sin resolver y ninguna referencia cruzada sin resolver**.
+**Compilación.** Verificada el 14/09/2026 desde limpio (`latexmk -C` y después
+`latexmk -pdf main.tex`), tras los cambios de formato pedidos por el frente de
+Liderazgo e Integración: **0 errores, 43 páginas**, `main.pdf` de unos 533 KB,
+**ninguna cita sin resolver y ninguna referencia cruzada sin resolver**.
 
 La salida **no está libre de avisos**, y conviene no decir que lo está. Quedan
-tres cosas, las tres cosméticas y ninguna impide generar el PDF:
+dos cosas, las dos cosméticas y ninguna impide generar el PDF:
 
 - **1 aviso de `hyperref`** (*destination with the same identifier
   (name{page.1}) has been already used, duplicate ignored*). Viene del cambio
   de numeración romana a árabe entre el material preliminar y el cuerpo, no de
   ninguna sección concreta.
-- **1 caja `Overfull \hbox`** (3,2 pt) en `secciones/03_marco_normativo.tex`,
-  por la cadena `Directiva 01-2020-JUS/DGTAIPD`, que no admite guionado.
 - **3 avisos de Biber** por entradas cuyo campo `month` es un nombre de mes en
   texto (`Li_2018_CVPR`, `Song_2021_ICCV`, `Lin_2025_CVPR`). Vienen del BibTeX
   oficial de la CVF, que se copia sin retocar por la regla 4.
 
-Dos correcciones sobre lo que este README afirmaba antes:
+Qué cambió respecto del estado del 13/09/2026 (40 páginas, 646.341 bytes):
 
-- Decía «43 páginas» y «532.770 bytes». Eran los del PDF anterior a la
-  consolidación; hoy son 40 páginas y 646.341 bytes. El salto de tamaño lo
-  explica el logo de la carátula (`3686fbe`): el PDF anterior, también de 40
-  páginas, pesaba 432.226 bytes.
-- Decía «8 en el estado previo, 6 ahora» avisos de `hyperref` y «5 cajas
-  overfull/underfull». Hoy son **1** y **1** respectivamente.
+- El paso a 12 pt con sangría alarga el texto; la compresión de la Sección 3 y
+  la retirada de la nota de la página iii lo acortan. El saldo son 43 páginas,
+  de las cuales 12 son el Anexo B.
+- La caja `Overfull \hbox` que causaba `Directiva 01-2020-JUS/DGTAIPD` en la
+  Sección 3 ya no aparece en el log.
 
-**Secciones 3 y 4.** Vigentes, con la numeración 3.1-3.9 / 4.1-4.5 que exigen
-las referencias cruzadas. La Sección 3 (5.461 palabras) cita contra **fuente
+**Secciones 3 y 4.** Vigentes, con la numeración 3.1-3.4 / 4.1-4.5 que exigen
+las referencias cruzadas. La Sección 3 del cuerpo (unas 2.000 palabras) resume
+el Anexo B (unas 5.900), que es donde se cita el articulado: contra **fuente
 primaria** la Ley 29733 (arts. 2, 5-8, 11, 13-15, 18-25, 28 y 30) y el D.S.
 007-2020-IN (arts. 3, 17.1 y 17.2); la Directiva 01-2020-JUS/DGTAIPD y los
 incisos constitucionales están contrastados contra reproducción íntegra de
-fuente secundaria. Trazabilidad completa en `NOTAS_FUENTES.md` §2.7.
+fuente secundaria. Trazabilidad completa en `NOTAS_FUENTES.md` §2.7, cuyos
+«§3.x» corresponden hoy a B.x.
 
-Quedan **17 `[VERIFICAR]`** en total, según el recuento del log de compilación
-(13/09/2026): **7 en la portada**, **4 en la Introducción** y **6 en la
-Sección 3**; la Sección 4 no tiene ninguno. Los 7 de la portada son el apellido
-materno de tres integrantes, los cuatro códigos de alumno, y el ciclo académico
-y la fecha de entrega (A-10): ninguno es normativo. Los 4 de la Introducción
-son datos del terminal que dependen de LAP (C-07, C-08, aforo y zonas/cámaras).
-Esto corrige la cuenta anterior de este README, «seis en el cuerpo y dos en la
-portada», que no incluía la Introducción ni los huecos de los integrantes.
-
-De los 6 de la Sección 3, corrige a su vez lo que este README decía antes
-—«siete, todos sobre el articulado del D.S. 016-2024-JUS»—: son seis (el séptimo
-era el ejemplo del comentario de cabecera del `.md`) y **solo dos** versan sobre
-el articulado del D.S. 016-2024-JUS. Los otros cuatro son sobre las fechas y la disposición
-derogatoria del propio D.S., la vigencia de la Directiva 01-2020-JUS/DGTAIPD, la
-denominación del D.L. 1218 y la Ley 30120, y el texto literal del RNF-01.
+Quedan **12 `[VERIFICAR]`** según el recuento del log de compilación
+(14/09/2026): **2 en la portada** (ciclo académico y fecha de entrega, A-10),
+**4 en la Introducción** (datos del terminal que dependen de LAP), **3 en la
+Sección 3** y **los mismos 3 en el Anexo B**. Los de la Sección 3 y el Anexo B
+son tres reservas, cada una marcada en los dos sitios porque en los dos se
+afirma el dato: la fecha de entrada en vigor del D.S. 016-2024-JUS, la
+denominación del D.L. 1218 y la Ley 30120, y el texto literal del RNF-01. Desde
+el 14/09/2026 esas tres reservas **se leen en el PDF**, redactadas en prosa en
+el párrafo que afirma cada dato; el marcador sigue oculto. La Sección 4 no tiene
+ninguno. Lista autoritativa en `PENDIENTES.md` §a.3.
 
 **Resto del informe.** Introducción, Antecedentes y Anexo A están redactados;
 Metodología, Resultados y Conclusiones siguen en **esqueleto** y son de otros

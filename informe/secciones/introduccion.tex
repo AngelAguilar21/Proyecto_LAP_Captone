@@ -33,9 +33,9 @@
 
 El Aeropuerto Internacional Jorge Chávez, operado por Lima Airport
 Partners (LAP), no distribuye a sus pasajeros de manera uniforme. En
-determinadas franjas horarias, y en puntos concretos del terminal ---
-filtros de seguridad, control migratorio, mostradores de
-\emph{check-in}, salas de embarque ---, se forman concentraciones muy
+determinadas franjas horarias, y en puntos concretos del terminal
+(filtros de seguridad, control migratorio, mostradores de
+\emph{check-in}, salas de embarque), se forman concentraciones muy
 superiores a las del resto del recinto en ese mismo momento.
 
 La aglomeración, por sí sola, no constituye el problema. Lo constituye
@@ -145,17 +145,18 @@ el marco normativo peruano de protección de datos personales.
         restricciones de privacidad del proyecto
         (Sección~\ref{sec:antecedentes}).
   \item Diseñar e implementar el componente de detección y estimación,
-        fijando la granularidad de salida --- superficie de densidad,
-        conteo agregado por zona o localización individual --- que
+        fijando la granularidad de salida (superficie de densidad,
+        conteo agregado por zona o localización individual) que
         resulte de aplicar el principio de proporcionalidad de la
         Sección~\ref{sec:directiva} y la síntesis de antecedentes de la
         Sección~\ref{sec:sintesis-antecedentes}. Esta decisión se
         documentará en la Sección de Metodología cuando el frente
-        técnico la cierre; hasta entonces queda registrada como abierta
-        en \texttt{PENDIENTES.md} (puntos B-01 y D-11).
+        técnico la cierre; al cerrar esta versión del informe sigue
+        abierta, y tanto la arquitectura como la granularidad de salida
+        dependen de que ese frente las fije por escrito.
   \item Producir las tres salidas operativas comprometidas en el
-        objetivo general --- ocupación por zona, evolución temporal y
-        alertas por umbral de permanencia --- y verificarlas sobre
+        objetivo general (ocupación por zona, evolución temporal y
+        alertas por umbral de permanencia) y verificarlas sobre
         material de prueba antes de proponer su despliegue.
   \item Determinar el marco de cumplimiento normativo aplicable al
         tratamiento de imágenes de un espacio de uso público bajo
@@ -164,14 +165,14 @@ el marco normativo peruano de protección de datos personales.
         exige (Secciones~\ref{sec:marco} y~\ref{sec:analisis}).
   \item Evaluar el desempeño del sistema mediante métricas cuantitativas
         y cualitativas, indicando en cada caso sobre qué conjunto de
-        datos fue medido cada resultado --- ninguna cifra obtenida sobre
+        datos fue medido cada resultado. Ninguna cifra obtenida sobre
         conjuntos públicos se presentará como desempeño esperable en el
         terminal sin la validación en sitio que la
         Sección~\ref{sec:ant-p2r} señala como condición previa.
   \item Identificar los requisitos de validación que quedan fuera del
-        alcance material de este Capstone --- en particular el acceso a
-        datos del propio terminal y la evaluación de sesgo demográfico
-        --- y dejarlos documentados como trabajo pendiente en lugar de
+        alcance material de este Capstone (en particular el acceso a
+        datos del propio terminal y la evaluación de sesgo demográfico)
+        y dejarlos documentados como trabajo pendiente en lugar de
         darlos por resueltos (Sección~\ref{sec:conclusiones}).
 \end{enumerate}
 
@@ -207,10 +208,9 @@ Sección de Metodología.
 \textbf{Zonas cubiertas.} Las zonas concretas del terminal sobre las que
 se entrena y evalúa el sistema dependen de qué cámaras y qué material
 audiovisual habilite LAP para el proyecto, dato que a la fecha de este
-informe no ha sido confirmado por el cliente (\texttt{PENDIENTES.md},
-punto C-09). Donde este informe menciona zonas a título de ejemplo ---
-filtros de seguridad, mostradores de \emph{check-in}, salas de embarque
---- lo hace como ilustración del tipo de espacio al que el sistema podría
+informe no ha sido confirmado y que solo LAP puede proporcionar. Donde este informe menciona zonas a título de ejemplo
+(filtros de seguridad, mostradores de \emph{check-in}, salas de embarque),
+lo hace como ilustración del tipo de espacio al que el sistema podría
 aplicarse, no como una cobertura ya acordada con el cliente. El número de
 zonas que finalmente se defina, y el número de cámaras que las
 cubra, tampoco están fijados.\verificar{número de zonas del terminal a

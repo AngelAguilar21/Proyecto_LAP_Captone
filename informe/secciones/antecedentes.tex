@@ -18,8 +18,8 @@
 El conteo de personas en escenas congestionadas es un problema con una
 línea de investigación propia dentro de la visión computacional. Esta
 sección revisa tres trabajos que marcan tres etapas sucesivas de esa
-línea --- la regresión de mapas de densidad, la detección puramente
-basada en puntos y el aprendizaje semi-supervisado sobre puntos --- y
+línea (la regresión de mapas de densidad, la detección puramente
+basada en puntos y el aprendizaje semi-supervisado sobre puntos) y
 discute, para cada uno, qué propone, por qué resulta pertinente para el
 caso del Aeropuerto Internacional Jorge Chávez y qué limitación
 reconocen sus propios autores.
@@ -30,15 +30,15 @@ un proveedor de tecnología reconoce por escrito sobre su propio método
 es el insumo más defendible para dimensionar el riesgo residual del
 sistema.
 
-\cajaaviso{Criterio aplicado a las cifras de esta sección}{Solo se
-reproducen aquí las cifras que constan en el texto en prosa de cada
-artículo --- resumen, introducción o discusión de resultados. Las que
+Solo se reproducen aquí las cifras que constan en el texto en prosa de
+cada artículo, es decir, en su resumen, introducción o discusión de
+resultados. Las que
 figuraban únicamente en las tablas de resultados se omiten: la conversión
 de esos cuadros a texto plano mezcla filas y columnas, y una cifra mal
 atribuida a un conjunto de datos sería precisamente el tipo de afirmación
 no verificable que este informe debe evitar. Donde la comparación importa,
 se citan las magnitudes relativas que los propios autores enuncian en
-prosa, que es la forma en que además presentan sus contribuciones.}
+prosa, que es la forma en que además presentan sus contribuciones.
 
 % ---------------------------------------------------------------------
 \subsection{CSRNet: redes convolucionales dilatadas para escenas altamente congestionadas}
@@ -124,8 +124,8 @@ paradigma; el trabajo siguiente lo convierte en su crítica central.
 Song et al.~\cite{Song_2021_ICCV} sostienen que localizar individuos
 responde mejor a las demandas prácticas del análisis de multitudes que
 simplemente contarlos, y que los métodos existentes basados en
-representaciones intermedias --- mapas de densidad o cajas delimitadoras
-pseudo-generadas --- son contraintuitivos y propensos a error. Su
+representaciones intermedias (mapas de densidad o cajas delimitadoras
+pseudo-generadas) son contraintuitivos y propensos a error. Su
 propuesta, P2PNet, predice directamente un conjunto de puntos con sus
 coordenadas y confianzas, sin pasar por ninguna representación
 intermedia. La pieza crítica del método es la asignación de objetivos de
@@ -169,14 +169,14 @@ tiempo, el sistema se acerca a un seguimiento de trayectorias, que es una
 finalidad distinta de la estimación de aglomeraciones y que requeriría su
 propia base de legitimación.
 
-\cajaaviso{Riesgo a validar con el cliente}{La diferencia entre
+Queda así un riesgo a validar con el cliente. La diferencia entre
 \emph{estimar una aglomeración} y \emph{seguir a una persona} no es una
 diferencia de algoritmo sino de política de persistencia. Con la misma
 salida de P2PNet, retener los puntos y asociarlos entre cuadros produce
 trayectorias individuales. Este límite debe fijarse por diseño y por
 contrato, no dejarse a la configuración: una vez que el sistema está en
 producción, permitir la persistencia es un cambio de parámetro, mientras
-que prohibirla requiere volver sobre el diseño.}
+que prohibirla requiere volver sobre el diseño.
 
 \subsubsection*{Limitación reconocida por los autores}
 
@@ -230,8 +230,8 @@ comparten la confianza del pseudo-punto correspondiente. Como efecto
 colateral, el algoritmo húngaro deja de ser necesario, lo que reduce el
 costo de cómputo de la pérdida.
 
-Los experimentos se realizan sobre cuatro conjuntos --- ShanghaiTech A y
-B, UCF-QNRF y JHU-Crowd++ --- bajo protocolos de 5\,\%, 10\,\% y 40\,\%
+Los experimentos se realizan sobre cuatro conjuntos (ShanghaiTech A y
+B, UCF-QNRF y JHU-Crowd++) bajo protocolos de 5\,\%, 10\,\% y 40\,\%
 de datos etiquetados. La afirmación central que los autores enuncian en
 prosa es que entrenar con el 5\,\% de los datos usando P2R supera al
 aprendizaje totalmente supervisado con el 10\,\%, y resulta equivalente a
@@ -275,8 +275,8 @@ escenas de un terminal aéreo peruano.
 Los autores documentan un caso de fallo atribuido al desenfoque producido
 por el movimiento de la multitud, y lo presentan como tal dentro de su
 comparación visual de predicciones. El método tiene, por tanto, un modo
-de fallo reconocido y ligado a una condición --- multitud en movimiento
---- que en un terminal aéreo es la norma y no la excepción. El artículo
+de fallo reconocido y ligado a una condición, la multitud en movimiento,
+que en un terminal aéreo es la norma y no la excepción. El artículo
 no cuantifica en prosa la magnitud del error en ese caso concreto, de
 modo que aquí se recoge la existencia del modo de fallo y no su tamaño.
 
@@ -289,7 +289,7 @@ no etiquetados del dominio de destino, los errores de estimación se
 reducen de forma significativa. El artículo enuncia esa diferencia en
 prosa sin consignarla numéricamente fuera de sus tablas.
 
-\cajaaviso{Consecuencia para el proyecto}{Que los propios autores
+Que los propios autores
 adviertan una brecha de dominio de esta naturaleza implica que las
 métricas publicadas sobre conjuntos públicos \textbf{no son
 extrapolables} al Aeropuerto Jorge Chávez. Presentar a LAP una cifra de
@@ -297,7 +297,7 @@ exactitud tomada de la literatura, sin validación en el terminal, sería
 una afirmación sin respaldo. El frente ético-legal recomienda, en
 consecuencia, que ninguna promesa cuantitativa de desempeño figure en un
 entregable al cliente antes de una validación en sitio, aun cuando eso
-implique presentar el proyecto sin cifras atractivas.}
+implique presentar el proyecto sin cifras atractivas.
 
 % ---------------------------------------------------------------------
 \subsection{Síntesis: cómo se articulan los tres trabajos}
@@ -374,6 +374,6 @@ Sección~\ref{sec:auditoria} se formula de manera condicional sobre los
 tres enfoques en lugar de sobre uno. Cuando esa elección quede
 documentada, corresponde cerrar esta síntesis indicando cuál de los tres
 se adopta y con qué granularidad de salida, porque de la granularidad
---- mapa de densidad, puntos individuales o agregación por zona ---
+(mapa de densidad, puntos individuales o agregación por zona)
 depende buena parte del examen de proporcionalidad de la
-Sección~\ref{sec:directiva}.
+Sección~\ref{sec:proporcionalidad}.
