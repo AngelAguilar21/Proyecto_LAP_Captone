@@ -102,7 +102,7 @@ de compilacion y al final se emite el recuento:
 ```
 [VERIFICAR 1] marcador oculto en pagina 11.
 ...
-MARCADORES [VERIFICAR] EN EL CUERPO: 12
+MARCADORES [VERIFICAR] EN EL CUERPO: 9
 ```
 
 Las macros **no** terminan en `\ignorespaces`. Terminaban, y se comian el espacio *posterior* al marcador: como los marcadores se escriben pegados al punto de la frase anterior, el PDF salia con «evalua.Si puede» sin separacion. Corregido el 13/09/2026; afectaba tambien a los seis marcadores de la Seccion 3. TeX colapsa los espacios consecutivos, asi que quitarlo no introduce espacios dobles.
@@ -113,29 +113,26 @@ esta vacio**; si falta, no sale nada: ni etiqueta colgando ni linea de relleno.
 Para cerrar el marcador basta con escribir el dato en el tercer argumento, que
 es lo que se hizo con los cuatro codigos de alumno.
 
-**Los 12 marcadores vigentes.** Esta es la lista autoritativa; el `.md` es la
+**Los 9 marcadores vigentes.** Esta es la lista autoritativa; el `.md` es la
 fuente de los seis del cuerpo, de modo que **se corrigen en el `.md` y se
 reconvierte**, nunca en el `.tex`.
 
 | # | Fuente (se edita aqui) | `.tex` generado | Qué falta verificar | Ficha |
 |---|---|---|---|---|
-| 1 | `secciones/03_marco_normativo.md:27` | `03_marco_normativo.tex:50` | Las tres fechas del D.S. 016-2024-JUS y la disposicion derogatoria, contra *El Peruano* | A-13 |
-| 2 | `secciones/03_marco_normativo.md:29` | `03_marco_normativo.tex:62` | Descartar derogacion parcial de la Directiva 01-2020-JUS/DGTAIPD | A-19 |
-| 3 | `secciones/03_marco_normativo.md:31` | `03_marco_normativo.tex:78` | Denominacion oficial y fecha de publicacion del D.L. 1218 y de la Ley 30120 | A-20 |
-| 4 | `secciones/03_marco_normativo.md:73` | `03_marco_normativo.tex:285` | Articulo del D.S. 016-2024-JUS que consagra privacidad por diseno y por defecto | A-25 |
-| 5 | `secciones/03_marco_normativo.md:107` | `03_marco_normativo.tex:451` | Articulo del alcance extraterritorial y sus criterios de conexion | A-18 |
-| 6 | `secciones/03_marco_normativo.md:125` | `03_marco_normativo.tex:553` | Texto literal del RNF-01 y documento en que consta | — |
-| 7 | `main.tex:291` | — | Ciclo academico segun silabo | A-10 |
-| 8 | `main.tex:292` | — | Fecha de entrega segun silabo | A-10 |
+| 1 | `secciones/03_marco_normativo.md:27` | `03_marco_normativo.tex:53` | **Reducido el 13/09/2026:** queda solo la fecha de entrada en vigor (30/03/2025). Expedicion, publicacion y disposicion derogatoria confirmadas contra la separata de *El Peruano* | A-13 |
+| 2 | `secciones/03_marco_normativo.md:31` | `03_marco_normativo.tex:84` | Denominacion oficial y fecha de publicacion del D.L. 1218 y de la Ley 30120 | A-20 |
+| 3 | `secciones/03_marco_normativo.md:125` | `03_marco_normativo.tex:577` | Texto literal del RNF-01 y documento en que consta | — |
+| 4 | `main.tex:291` | — | Ciclo academico segun silabo | A-10 |
+| 5 | `main.tex:292` | — | Fecha de entrega segun silabo | A-10 |
 
-| 9 | `secciones/introduccion.tex:61` | — | Como se decide hoy la dotacion de personal y la apertura de mostradores | C-08 |
-| 10 | `secciones/introduccion.tex:106` | — | Incidentes de aglomeracion, tiempos de cola y quejas documentados por LAP | C-07 |
-| 11 | `secciones/introduccion.tex:112` | — | Aforo declarado del terminal y superficie por zona | C-07 |
-| 12 | `secciones/introduccion.tex:216` | — | Numero de zonas a cubrir y de camaras disponibles por zona | C-09 |
+| 6 | `secciones/introduccion.tex:61` | — | Como se decide hoy la dotacion de personal y la apertura de mostradores | C-08 |
+| 7 | `secciones/introduccion.tex:106` | — | Incidentes de aglomeracion, tiempos de cola y quejas documentados por LAP | C-07 |
+| 8 | `secciones/introduccion.tex:112` | — | Aforo declarado del terminal y superficie por zona | C-07 |
+| 9 | `secciones/introduccion.tex:216` | — | Numero de zonas a cubrir y de camaras disponibles por zona | C-09 |
 
 La Seccion 4 no tiene ninguno.
 
-**Advertencia sobre los seis marcadores de la Seccion 3 (1-6).** Ocultarlos tuvo un efecto que conviene tener presente: en cuatro de los seis (1, 2, 3 y 6) la prosa visible **afirma el dato en indicativo** y la reserva ya no se ve. Un lector del PDF lee «publicado el 30 de noviembre de 2024 y en vigor desde el 30 de marzo de 2025» sin saber que las tres fechas se contrastaron contra fuentes secundarias y no contra *El Peruano*, y lee el RNF-01 como requisito establecido sin saber que su texto literal no consta en ningun documento del repositorio. En los otros dos (4 y 5) la prosa simplemente no cita el articulo, de modo que ahi no hay afirmacion que matizar.
+**Advertencia sobre los marcadores de la Seccion 3 (1-3).** El 13/09/2026 se cerraron tres reservas (derogatoria de la Directiva, alcance extraterritorial y Articulo IX) y una cuarta se redujo a la fecha de entrada en vigor. De las seis originales quedan tres. Ocultarlos tuvo un efecto que conviene tener presente: en cuatro de los seis (1, 2, 3 y 6) la prosa visible **afirma el dato en indicativo** y la reserva ya no se ve. Un lector del PDF lee «publicado el 30 de noviembre de 2024 y en vigor desde el 30 de marzo de 2025» sin saber que las tres fechas se contrastaron contra fuentes secundarias y no contra *El Peruano*, y lee el RNF-01 como requisito establecido sin saber que su texto literal no consta en ningun documento del repositorio. En los otros dos (4 y 5) la prosa simplemente no cita el articulo, de modo que ahi no hay afirmacion que matizar.
 
 Por eso la nota de la pagina iii del informe **advierte expresamente** de que seis afirmaciones normativas de la Seccion 3 llevan una reserva de verificacion que no se imprime y remite a este apartado. Si el equipo prefiere que la reserva vuelva a verse en el cuerpo, la via correcta es **redactarla como prosa** en el `.md` (por ejemplo «segun fuentes secundarias concordantes»), no reactivar la impresion del marcador: el marcador es una nota de trabajo, no texto de informe. Los cuatro de la Introduccion (14-17) se editan directamente en el `.tex`, que ahi **si** es la fuente: la regla de no editar a mano solo alcanza a los `.tex` generados de las Secciones 3 y 4.
 
