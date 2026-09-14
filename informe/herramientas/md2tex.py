@@ -1,28 +1,23 @@
 # -*- coding: utf-8 -*-
-r"""Conversor md -> tex para las Secciones 3 y 4 y el Anexo B del informe LAP.
+r"""Conversor md -> tex de las partes del informe LAP escritas en Markdown.
 
-Los .md de secciones/ son la FUENTE de las Secciones 3 y 4 y del Anexo B.
-Los .tex que main.tex incluye se generan con este script y NO se editan a
-mano: si hay que cambiar algo, se cambia el .md y se vuelve a convertir.
+Los .md de secciones/ son la FUENTE; los .tex que main.tex incluye se
+generan con este script y NO se editan a mano.
 
     cd informe
-    py herramientas/md2tex.py secciones/03_marco_normativo.md secciones/03_marco_normativo.tex 3
-    py herramientas/md2tex.py secciones/04_analisis_impacto.md secciones/04_analisis_impacto.tex 4
-    py herramientas/md2tex.py secciones/anexo_b_marco_normativo.md secciones/anexo_b_marco_normativo.tex B
-    py herramientas/verificar_fidelidad.py secciones/03_marco_normativo.md secciones/03_marco_normativo.tex
-    py herramientas/verificar_fidelidad.py secciones/04_analisis_impacto.md secciones/04_analisis_impacto.tex
-    py herramientas/verificar_fidelidad.py secciones/anexo_b_marco_normativo.md secciones/anexo_b_marco_normativo.tex
+    py herramientas/md2tex.py secciones/03_marco_normativo.md        secciones/03_marco_normativo.tex        normativo
+    py herramientas/md2tex.py secciones/03_analisis_impacto.md       secciones/03_analisis_impacto.tex       impacto
+    py herramientas/md2tex.py secciones/anexo_b_marco_normativo.md   secciones/anexo_b_marco_normativo.tex   B
+    py herramientas/md2tex.py secciones/anexo_c_analisis_impacto.md  secciones/anexo_c_analisis_impacto.tex  C
+    py herramientas/verificar_fidelidad.py <md> <tex>   (para cada par)
     latexmk -pdf main.tex
 
-El tercer argumento (3, 4 o B) selecciona la tabla de \label. Esos
-\label sostienen las referencias cruzadas del resto del informe; si se
-tocan, el documento compila con referencias ??.
+El tercer argumento selecciona el nivel de los encabezados y la tabla de
+\label. Esos \label sostienen las referencias cruzadas del resto del
+informe; si se tocan, el documento compila con referencias ??.
 
 verificar_fidelidad.py compara la prosa del .md con la del .tex palabra
-por palabra: es la comprobacion de que la conversion no perdio ni altero
-texto. Desde el 14/09/2026 la salida esperada es IDENTICO en los tres
-.md (la diferencia que daba el \allowbreak de CHECKLIST_CUMPLIMIENTO.md en
-la Seccion 4 desaparecio al retirar esa mencion del texto).
+por palabra; la salida esperada es IDENTICO.
 
 No reescribe prosa: solo traduce marcado. Cualquier construccion Markdown
 no prevista se deja registrada en STDERR para revisarla a mano; una
@@ -80,26 +75,30 @@ def convert_inline(t):
     t = esc(t)
     return re.sub(r'\x00(\d+)\x00', lambda m: slots[int(m.group(1))], t)
 
-def convert(md, labels, header):
+# Niveles de LaTeX. Cada archivo fija con OFFSET a que nivel corresponde "#":
+#   offset 0 -> "#" section, "##" subsection, "###" subsubsection
+#   offset 1 -> "#" subsection, "##" subsubsection (anexos: todos los
+#               anexos cuelgan de la seccion 12, "Anexos")
+LEVELS = ['section', 'subsection', 'subsubsection']
+HEADING = re.compile(r'^(#{1,3})\s+((?:\d+|[A-Z])(?:\.\d+)*)\.?\s+(.*)$')
+
+def convert(md, labels, header, offset):
     out = [header]
     body = re.sub(r'^<!--.*?-->\s*', '', md, flags=re.S)
     for raw in body.split('\n\n'):
         block = raw.strip()
         if not block:
             continue
-        # "# 3. Titulo" para una seccion y "# B. Titulo" para un anexo; el
-        # numero o la letra no se escriben: los pone LaTeX.
-        m = re.match(r'^#\s+(?:\d+|[A-Z])\.\s+(.*)$', block)
-        if m:
-            out.append(r'\section{%s}' % convert_inline(m.group(1)))
-            out.extend(r'\label{%s}' % l for l in labels.get('SEC', []))
-            continue
-        m = re.match(r'^##\s+((?:\d+|[A-Z])\.\d+)\s+(.*)$', block)
-        if m:
-            num, title = m.group(1), m.group(2)
+        # "## 3.4 Titulo", "### 3.3.2 Titulo", "# B. Titulo", "## B.1 Titulo".
+        # El numero no se escribe: lo pone LaTeX. Solo sirve para buscar los
+        # \label y para dejar un comentario de orientacion en el .tex.
+        m = HEADING.match(block)
+        if m and '\n' not in block:
+            depth = len(m.group(1)) - 1 + offset
+            num, title = m.group(2), m.group(3)
             out.append('')
             out.append('%% ---- %s ----' % num)
-            out.append(r'\subsection{%s}' % convert_inline(title))
+            out.append('\\%s{%s}' % (LEVELS[depth], convert_inline(title)))
             out.extend(r'\label{%s}' % l for l in labels.get(num, []))
             continue
         if block.startswith('#'):
@@ -115,71 +114,49 @@ def convert(md, labels, header):
                                  break_on_hyphens=False))
     return '\n'.join(out) + '\n'
 
+def cabecera(titulo, fuente, notas):
+    lineas = ['=' * 69, '  ' + titulo, '  Responsable: Fabian Moreno Ugarte', '',
+              '  GENERADO desde %s, que es su FUENTE.' % fuente,
+              '  No editar aqui: editar el .md y reconvertir.', ''] + ['  ' + n for n in notas] + ['=' * 69]
+    return ''.join('%' + l + '\n' for l in lineas)
+
 if __name__ == '__main__':
     src, dst, which = sys.argv[1], sys.argv[2], sys.argv[3]
-    # Seccion 3 comprimida el 2026-09-14 de nueve subapartados a cuatro; el
-    # desarrollo completo paso al Anexo B. Los \label siguen en el cuerpo,
-    # sobre el subapartado que resume lo que cada referencia busca, para que
-    # "Seccion~\ref{...}" del resto del informe siga diciendo Seccion 3.x:
-    #   antes 3.1 -> 3.1   sec:directiva, sec:dl1218   (regimen aplicable)
-    #   nuevo      -> 3.2   sec:proporcionalidad       (datos y art. 7)
-    #   antes 3.5 -> 3.3   sec:privacidad-diseno       (M-01 a M-10)
-    #   antes 3.9 -> 3.4   sec:auditoria, sec:licencias (auditoria)
-    LABELS = {
-        '3': {
-            'SEC': ['sec:marco'],
-            '3.1': ['sec:directiva', 'sec:dl1218'],
-            '3.2': ['sec:proporcionalidad'],
-            '3.3': ['sec:privacidad-diseno'],
-            '3.4': ['sec:auditoria', 'sec:licencias'],
-        },
-        'B': {
-            'SEC': ['anx:marco'],
-        },
-        '4': {
-            'SEC': ['sec:analisis'],
-            '4.1': ['sec:eipd'],
-            '4.3': ['sec:impacto-social'],
-            '4.4': ['sec:impacto-ambiental'],
-            '4.5': ['sec:sintesis-impacto', 'sec:impacto-etico'],
-        },
-    }[which]
-    HEADERS = {
-        '3': ('%=====================================================================\n'
-              '%  SECCION 3 -- MARCO NORMATIVO APLICABLE\n'
-              '%  Responsable: Fabian Moreno Ugarte\n'
-              '%\n'
-              '%  GENERADO desde secciones/03_marco_normativo.md, que sigue siendo la\n'
-              '%  FUENTE de esta seccion. No editar aqui: editar el .md y reconvertir.\n'
-              '%\n'
-              '%  Version comprimida (2026-09-14): el desarrollo completo esta en el\n'
-              '%  Anexo B, generado desde secciones/anexo_b_marco_normativo.md.\n'
-              '%  Los marcadores label sostienen las referencias cruzadas del resto\n'
-              '%  del informe. La numeracion 3.1-3.4 es vinculante.\n'
-              '%=====================================================================\n'),
-        'B': ('%=====================================================================\n'
-              '%  ANEXO B -- MARCO NORMATIVO: DESARROLLO COMPLETO\n'
-              '%  Responsable: Fabian Moreno Ugarte\n'
-              '%\n'
-              '%  GENERADO desde secciones/anexo_b_marco_normativo.md, que es la\n'
-              '%  FUENTE de este anexo. No editar aqui: editar el .md y reconvertir.\n'
-              '%\n'
-              '%  Desarrolla la Seccion 3, que en el cuerpo va comprimida. Las\n'
-              '%  remisiones internas (B.2, B.9...) van escritas en el .md: si se\n'
-              '%  renumera un subapartado, hay que corregirlas a mano.\n'
-              '%=====================================================================\n'),
-        '4': ('%=====================================================================\n'
-              '%  SECCION 4 -- ANALISIS DE IMPACTO Y PRIVACIDAD DESDE EL DISENO\n'
-              '%  Responsable: Fabian Moreno Ugarte\n'
-              '%\n'
-              '%  GENERADO desde secciones/04_analisis_impacto.md, que sigue siendo la\n'
-              '%  FUENTE de esta seccion. No editar aqui: editar el .md y reconvertir.\n'
-              '%\n'
-              '%  Los marcadores label reproducen los anclajes de la version archivada. La\n'
-              '%  numeracion 4.1-4.5 es vinculante.\n'
-              '%=====================================================================\n'),
-    }[which]
+    # Reestructuracion al indice del modelo del curso (2026-09-14). Los \label
+    # de las antiguas Secciones 3 y 4 viven ahora en la Seccion 3:
+    #   3.3.3 Restricciones legales  <- sec:marco, sec:directiva, sec:dl1218,
+    #         sec:proporcionalidad, sec:auditoria, sec:licencias
+    #   3.4   Analisis               <- sec:analisis, sec:eipd, sec:sintesis-impacto
+    #   3.4.2 etico / 3.4.3 social / 3.4.4 ambiental
+    #         <- sec:impacto-etico / sec:impacto-social / sec:impacto-ambiental
+    # sec:privacidad-diseno ya no es generado: esta en secciones/requerimientos.tex.
+    CONF = {
+        'normativo': (0, {
+            '3.3.3': ['sec:marco', 'sec:directiva', 'sec:dl1218',
+                      'sec:proporcionalidad', 'sec:auditoria', 'sec:licencias'],
+        }, cabecera('SECCION 3 -- RESTRICCIONES ETICAS Y LEGALES (3.3.2 y 3.3.3)',
+                    'secciones/03_marco_normativo.md',
+                    ['Resumen: el desarrollo completo esta en el Anexo B.',
+                     'La restriccion legal (3.3.3) no debe pasar de una pagina.'])),
+        'impacto': (0, {
+            '3.4': ['sec:analisis', 'sec:eipd', 'sec:sintesis-impacto'],
+            '3.4.2': ['sec:impacto-etico'],
+            '3.4.3': ['sec:impacto-social'],
+            '3.4.4': ['sec:impacto-ambiental'],
+        }, cabecera('SECCION 3.4 -- ANALISIS TECNICO, ETICO, SOCIAL, AMBIENTAL',
+                    'secciones/03_analisis_impacto.md',
+                    ['Resumen: el desarrollo completo esta en el Anexo C.'])),
+        'B': (1, {'B': ['anx:marco']},
+              cabecera('ANEXO B -- MARCO NORMATIVO: DESARROLLO COMPLETO',
+                       'secciones/anexo_b_marco_normativo.md',
+                       ['Las remisiones internas (B.2, B.9...) van escritas en el .md.'])),
+        'C': (1, {'C': ['anx:impacto']},
+              cabecera('ANEXO C -- ANALISIS DE IMPACTO: DESARROLLO COMPLETO',
+                       'secciones/anexo_c_analisis_impacto.md',
+                       ['Las remisiones a B.x y C.x van escritas en el .md.'])),
+    }
+    offset, labels, header = CONF[which]
     md = io.open(src, encoding='utf-8').read()
-    tex = convert(md, LABELS, HEADERS)
+    tex = convert(md, labels, header, offset)
     io.open(dst, 'w', encoding='utf-8', newline='\n').write(tex)
     print('escrito %s (%d bytes)' % (dst, len(tex.encode('utf-8'))))

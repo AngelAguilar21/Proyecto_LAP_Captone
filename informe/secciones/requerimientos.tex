@@ -1,0 +1,66 @@
+% =====================================================================
+% SECCION 5 -- ESPECIFICACION DE REQUERIMIENTOS
+% Responsable del apartado 5.2: Fabian Moreno Ugarte
+%
+% Creada el 14/09/2026 al reestructurar el informe al indice del modelo
+% del curso. 5.1 es esqueleto. 5.2 recoge los requisitos de privacidad
+% M-01 a M-10, que antes estaban en el marco normativo (hoy Anexo B, B.5),
+% y el requisito de no identificacion (RNF-01) descrito en palabras. Nada
+% de 5.2 afirma algo que no conste en el Anexo B: si se corrige un
+% requisito, se corrige en los dos sitios.
+%
+% El \label{sec:privacidad-diseno} vive aqui: lo usan el Anexo A (medidas
+% M-02, M-03 y M-04) y ya no lo genera md2tex.py.
+% =====================================================================
+\section{Especificación de Requerimientos}
+\label{sec:requerimientos}
+
+\subsection{Requerimientos funcionales}
+\label{sec:req-funcionales}
+
+Esta sección se completará en la versión final del informe.
+
+\subsection{Requerimientos de privacidad}
+\label{sec:privacidad-diseno}
+
+La normativa de protección de datos exige que las garantías se incorporen
+desde la concepción del tratamiento y que la configuración más protectora
+venga activada por defecto (Sección~\ref{sec:marco}). El sistema recoge
+esa exigencia como requisitos no funcionales, es decir, como condiciones
+que debe cumplir con independencia de su funcionalidad.
+
+El requisito rector es que de la imagen no se deriven rasgos que permitan
+identificar a una persona, ni siquiera de forma indirecta (identificado en
+el proyecto como RNF-01). Su texto literal y el documento en que consta no
+figuran en la documentación disponible al cerrar esta versión, de modo que
+se recoge según lo reportado por el equipo y queda sujeto a contrastarlo
+con su fuente.\verificar{texto literal del RNF-01 y documento en que
+consta. No figura en la documentación del proyecto al cerrar esta
+versión, de modo que su formulación se recoge según lo reportado por el
+equipo y no según su fuente.} De él y del principio de proporcionalidad
+se derivan diez requisitos:
+
+\begin{itemize}[leftmargin=3.6em,labelwidth=3em,labelsep=0.6em,align=left,itemsep=0.2em]
+  \item[M-01] Procesamiento en el borde, de modo que el fotograma no salga
+        del perímetro del terminal.
+  \item[M-02] No persistencia del fotograma, que se procesa en memoria y
+        se descarta.
+  \item[M-03] Salida agregada por zona, sin coordenadas individuales
+        persistidas.
+  \item[M-04] Difuminado irreversible de rostros si algún fotograma debe
+        conservarse.
+  \item[M-05] Plazo de retención definido, con purga automática.
+  \item[M-06] Control de acceso por roles, con registro de auditoría.
+  \item[M-07] Cifrado en tránsito y en reposo.
+  \item[M-08] Carteles informativos conforme al Anexo~A.
+  \item[M-09] Documentación del linaje de los datos.
+  \item[M-10] Supervisión humana: el sistema alerta y no ejecuta acciones
+        automáticas sobre personas.
+\end{itemize}
+
+Donde un parámetro admita un ajuste más protector y otro menos protector
+(resolución de captura, frecuencia de muestreo, granularidad de la salida,
+plazo de retención), el valor predeterminado debe ser el más protector.
+Estos requisitos describen el sistema exigido y no el implementado: el
+prototipo del equipo cumple M-02, pero no M-03
+(Sección~\ref{sec:auditoria}).

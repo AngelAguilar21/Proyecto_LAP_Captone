@@ -4,14 +4,33 @@ Registro de los puntos abiertos del informe.
 
 **Responsable del archivo:** Fabián Moreno Ugarte — Validación ética/legal y documentación
 **Proyecto:** Capstone I, Universidad ESAN — Estimación de aglomeraciones, Aeropuerto Jorge Chávez (cliente: LAP)
-**Última actualización:** 14 de septiembre de 2026 (formato pedido por Liderazgo: Sección 3 comprimida y Anexo B)
+**Última actualización:** 14 de septiembre de 2026 (reestructuración al índice del modelo del curso)
 
-> **Numeración de la Sección 3 desde el 14/09/2026.** La Sección 3 del PDF se
-> comprimió a cuatro subapartados y su desarrollo completo pasó, sin recortes,
-> al **Anexo B** (`secciones/anexo_b_marco_normativo.md`). Los «§3.1» a «§3.9»
-> que este archivo cita en entradas anteriores a esa fecha corresponden hoy a
-> **B.1 a B.9**. En el cuerpo: 3.1 resume B.1; 3.2 resume B.2 a B.4; 3.3 resume
-> B.5 a B.8; 3.4 resume B.9.
+> **Estructura del informe desde el 14/09/2026 (índice del modelo del curso).**
+> 1 Resumen Ejecutivo · 2 Introducción · 3 Planteamiento del Problema y
+> Análisis del Contexto (3.1 Descripción del Caso, 3.2 Identificación de
+> Variables y Restricciones, 3.3 Restricciones del Proyecto: 3.3.1 Técnicas,
+> 3.3.2 Éticas, 3.3.3 Legales; 3.4 Análisis Técnico, Ético, Social, Ambiental)
+> · 4 Marco Teórico · 5 Especificación de Requerimientos (5.1 funcionales,
+> 5.2 privacidad) · 6 Diseño del Sistema · 7 Planificación y Gestión del
+> Proyecto · 8 Desarrollo y Entrenamiento del Modelo · 9 Resultados y Análisis
+> Comparativo · 10 Conclusiones y Recomendaciones · 11 Referencias · 12 Anexos
+> (A cartel, B marco normativo, C análisis de impacto). El índice del PDF lista
+> solo los 12 títulos de primer nivel y los tres anexos.
+>
+> **Cómo leer las entradas anteriores a esa fecha.** Este archivo conserva la
+> numeración y los nombres de archivo con que se abrió cada punto. Equivalencias:
+>
+> | Antes | Hoy |
+> |---|---|
+> | «§3.1» a «§3.9», `marco_etico_legal.tex`, `03_marco_normativo` (Sección 3 completa) | **Anexo B, B.1 a B.9**; resumen en 3.3.2 y 3.3.3 |
+> | Sección 3.5 / 3.3 comprimida (privacidad desde el diseño, M-01 a M-10) | **5.2 Requerimientos de privacidad** (y B.5) |
+> | Sección 4, 4.1 a 4.5, `analisis_impacto.tex`, `04_analisis_impacto` | **Anexo C, C.1 a C.5**; resumen en 3.4 |
+> | 1. Introducción: Contexto del problema / Alcance y limitaciones | **3.1 Descripción del Caso / 3.2 Identificación de Variables y Restricciones** (primer párrafo de «Limitación de dominio» en 3.3.1) |
+> | 2. Antecedentes | **4. Marco Teórico** |
+> | 5. Metodología (`metodologia.tex`): 5.1 Arquitectura | **6.1 Arquitectura propuesta** (`diseno_sistema.tex`) |
+> | 5.2 Datos y entrenamiento, 5.3 Métricas | **8.1 y 8.2** (`desarrollo_modelo.tex`) |
+> | 6. Resultados / 7. Conclusiones | **9 / 10** |
 
 ---
 
@@ -120,23 +139,23 @@ esta vacio**; si falta, no sale nada: ni etiqueta colgando ni linea de relleno.
 Para cerrar el marcador basta con escribir el dato en el tercer argumento, que
 es lo que se hizo con los cuatro codigos de alumno.
 
-**Los 12 marcadores vigentes (14/09/2026).** Esta es la lista autoritativa. Los de la Seccion 3 y del Anexo B **se corrigen en el `.md` y se reconvierte**, nunca en el `.tex`. Pasaron de 9 a 12 porque la Seccion 3 se comprimio y su desarrollo completo se traslado al Anexo B: cada una de las tres reservas normativas se afirma ahora en los dos sitios y lleva marcador en ambos. **Al cerrar una, hay que cerrarla en los dos `.md`.**
+**Los 12 marcadores vigentes (14/09/2026, tras la reestructuración al índice del modelo del curso).** Esta es la lista autoritativa. Los de los `.md` **se corrigen en el `.md` y se reconvierte**, nunca en el `.tex` generado. Cada una de las tres reservas normativas se afirma en el resumen del cuerpo y en el Anexo B, y lleva marcador en ambos. **Al cerrar una, hay que cerrarla en los dos sitios.**
 
 | # | Fuente (se edita aqui) | `.tex` generado | Qué falta verificar | Ficha |
 |---|---|---|---|---|
-| 1 | `secciones/03_marco_normativo.md:41` y `secciones/anexo_b_marco_normativo.md:37` | `03_marco_normativo.tex:49`, `anexo_b_marco_normativo.tex:56` | Solo la fecha de entrada en vigor del D.S. 016-2024-JUS (30/03/2025). Expedicion, publicacion y disposicion derogatoria confirmadas contra la separata de *El Peruano* | A-13 |
-| 2 | `secciones/03_marco_normativo.md:43` y `secciones/anexo_b_marco_normativo.md:41` | `03_marco_normativo.tex:69`, `anexo_b_marco_normativo.tex:93` | Denominacion oficial y fecha de publicacion del D.L. 1218 y de la Ley 30120 | A-20 |
-| 3 | `secciones/03_marco_normativo.md:71` y `secciones/anexo_b_marco_normativo.md:135` | `03_marco_normativo.tex:219`, `anexo_b_marco_normativo.tex:590` | Texto literal del RNF-01 y documento en que consta | D-04 |
+| 1 | `secciones/03_marco_normativo.md:33` (3.3.3) y `secciones/anexo_b_marco_normativo.md:38` | `03_marco_normativo.tex:44`, `anexo_b_marco_normativo.tex:57` | Solo la fecha de entrada en vigor del D.S. 016-2024-JUS (30/03/2025). Expedicion, publicacion y disposicion derogatoria confirmadas contra la separata de *El Peruano* | A-13 |
+| 2 | `secciones/03_marco_normativo.md:33` (3.3.3, mismo parrafo) y `secciones/anexo_b_marco_normativo.md:42` | `03_marco_normativo.tex:53`, `anexo_b_marco_normativo.tex:94` | Denominacion oficial y fecha de publicacion del D.L. 1218 y de la Ley 30120 | A-20 |
+| 3 | `secciones/requerimientos.tex:37` (5.2, se edita en el `.tex`) y `secciones/anexo_b_marco_normativo.md:136` | `anexo_b_marco_normativo.tex:591` | Texto literal del RNF-01 y documento en que consta | D-04 |
 | 4 | `main.tex:288` | — | Ciclo academico segun silabo | A-10 |
 | 5 | `main.tex:289` | — | Fecha de entrega segun silabo | A-10 |
-| 6 | `secciones/introduccion.tex:61` | — | Como se decide hoy la dotacion de personal y la apertura de mostradores | C-08 |
-| 7 | `secciones/introduccion.tex:106` | — | Incidentes de aglomeracion, tiempos de cola y quejas documentados por LAP | C-07 |
-| 8 | `secciones/introduccion.tex:112` | — | Aforo declarado del terminal y superficie por zona | C-07 |
-| 9 | `secciones/introduccion.tex:216` | — | Numero de zonas a cubrir y de camaras disponibles por zona | C-09 |
+| 6 | `secciones/planteamiento_problema.tex:54` (3.1) | — | Como se decide hoy la dotacion de personal y la apertura de mostradores | C-08 |
+| 7 | `secciones/planteamiento_problema.tex:69` (3.1) | — | Incidentes de aglomeracion, tiempos de cola y quejas documentados por LAP | C-07 |
+| 8 | `secciones/planteamiento_problema.tex:75` (3.1) | — | Aforo declarado del terminal y superficie por zona | C-07 |
+| 9 | `secciones/planteamiento_problema.tex:114` (3.2) | — | Numero de zonas a cubrir y de camaras disponibles por zona | C-09 |
 
-Los marcadores 1 a 3 cuentan dos veces en el log (uno por la Seccion 3 y otro por el Anexo B), de ahi el total de 12. La Seccion 4 no tiene ninguno.
+Los marcadores 1 a 3 cuentan dos veces en el log (uno en el cuerpo, 3.3.3 o 5.2, y otro en el Anexo B), de ahi el total de 12. El apartado 3.4 y el Anexo C no tienen ninguno.
 
-**Las reservas 1-3 ya se leen en el PDF (14/09/2026).** Hasta el 13/09/2026, ocultar los marcadores tenia un efecto que este apartado advertia: la prosa visible afirmaba el dato en indicativo y la reserva no se veia, y la nota de la pagina iii del informe suplia esa carencia remitiendo aqui. Por pedido del frente de Liderazgo e Integracion, esa nota se elimino y las tres reservas se **redactaron como prosa** dentro del parrafo que afirma cada dato, en la Seccion 3 y en el Anexo B, que es la via que este mismo apartado recomendaba. La fecha de entrada en vigor pasa ademas a condicional («se habria producido»). El marcador `[VERIFICAR]` se mantiene junto a cada reserva como nota de trabajo y para el recuento del log; la prosa no lo sustituye. Los cuatro de la Introduccion (6-9) se editan directamente en el `.tex`, que ahi **si** es la fuente.
+**Las reservas 1-3 ya se leen en el PDF (14/09/2026).** Hasta el 13/09/2026, ocultar los marcadores tenia un efecto que este apartado advertia: la prosa visible afirmaba el dato en indicativo y la reserva no se veia, y la nota de la pagina iii del informe suplia esa carencia remitiendo aqui. Por pedido del frente de Liderazgo e Integracion, esa nota se elimino y las tres reservas se **redactaron como prosa** dentro del parrafo que afirma cada dato, en la Seccion 3 y en el Anexo B, que es la via que este mismo apartado recomendaba. La fecha de entrada en vigor pasa ademas a condicional («se habria producido»). El marcador `[VERIFICAR]` se mantiene junto a cada reserva como nota de trabajo y para el recuento del log; la prosa no lo sustituye. Los cuatro de 3.1 y 3.2 (6-9), que antes estaban en la Introduccion, y el de 5.2 se editan directamente en el `.tex`, que ahi **si** es la fuente.
 
 **A-10b.** ✅ **Cerrado el 13/09/2026.** Los cuatro integrantes aportaron sus codigos y sus apellidos completos, y ya figuran en la portada: Aguilar Contreras, Angel (22200133); Rivadeneyra Huaman, Stephano Williams (22101822); Ortega Olazabal, Jose (25200719); Moreno Ugarte, Fabian (25200717). Se mantiene el orden historico de la portada, no el alfabetico. Cerro los cinco marcadores 7-11 de la lista anterior. Texto original del punto: La portada pide los integrantes como «Apellidos, Nombres
 (codigo)». No consta en el repositorio **ningun codigo de alumno**, y de
@@ -163,7 +182,7 @@ el `.tex`. Preferible PDF vectorial; si es PNG, a 300 ppp o mas.
 | B-05 | Decidir si se incorpora literatura sobre efectos conductuales de la videovigilancia. | El informe formula esa afirmación en condicional porque no hay respaldo bibliográfico validado. Con literatura, pasa a indicativo; sin ella, se queda como está. | Impacto ético |
 | B-06 | Verificación de licencias de ShanghaiTech A y B, UCF-QNRF y NWPU-Crowd. | Asignada a **Data Engineering**; seguimiento en `CHECKLIST_CUMPLIMIENTO.md`, sección B. Debe resolverse **antes** de entrenar, no después. Alimenta A-09. | Licencias |
 | B-07 | Proponer un plazo de retención concreto para la medida M-05. | El equipo no puede fijarlo sin conocer las necesidades analíticas de LAP (C-05), pero la propuesta la formula el equipo. | Privacidad desde el diseño, Anexo A |
-| B-08 | Redactar las secciones de Introducción, Metodología, Resultados y Conclusiones. | Sus apartados quedaron con la estructura y la numeración reservadas, y con una descripción en prosa de lo que debe ir en cada uno. Ya no llevan marcadores de relleno. | Secciones correspondientes |
+| B-08 | Redactar las secciones en esqueleto: 1 Resumen Ejecutivo, 5.1 Requerimientos funcionales, 6 Diseño del Sistema, 7 Planificación y Gestión, 8 Desarrollo y Entrenamiento, 9 Resultados y 10 Conclusiones. | Desde el 14/09/2026 todas llevan solo la frase «Esta sección se completará en la versión final del informe.»; las que ya tenían subapartados (6.1, 8.1, 8.2, 9.1, 9.2) conservan una descripción en prosa de lo que debe ir en cada uno. | Secciones correspondientes |
 
 ---
 
@@ -235,30 +254,36 @@ entrega porque afectan a qué versión es la buena.
 | E-10 | **Dos entregables en paralelo.** El `README` de la mañana del 11/09/2026 declaraba el PDF «legado» y el `.docx` como único entregable. Por la tarde el informe se consolidó en LaTeX y el PDF volvió a estar completo y compilando (40 páginas, 0 errores). Ambos coexistían sin que se hubiera decidido cuál manda, y el `README` describía un flujo que ya no era el vigente. | ✅ **Cerrado el 12/09/2026.** Entregable: **`main.pdf`, compilado desde `main.tex`**. El `.docx` pasa a ser copia de trabajo del frente de integración y se añadió a `informe/.gitignore` (binario de 2 MB que Git no fusiona y que ya está en el repositorio como fuente); `informe.zip` seguía ya ignorado en el `.gitignore` de la raíz. El `README` se reescribió completo al flujo vigente: se eliminaron los apartados «Cambio de herramienta», «Dónde se edita el documento» con el `.docx` como entregable y «Cómo compilar (legado)», y el **«Qué NO hacer»** ya no prohíbe reintroducir las Secciones 3 y 4 en el `.tex` —prohibía justo lo que se hizo— sino editar a mano los dos `.tex` **generados**, que es el riesgo real del flujo nuevo. Se documentó además la conversión con `herramientas/md2tex.py` y `verificar_fidelidad.py`, y que `papers/` está ignorado y por eso `citas_oficiales.txt` solo existe en local (causa de E-09). **Lo que NO cierra aquí:** el procedimiento de integración `.md` → `.docx` sigue abierto en **E-07**, por si el frente de integración mantiene su copia en Word. |
 | E-11 | **El `README` afirmaba que quedaban «siete `[VERIFICAR]`, todos sobre el articulado del D.S. 016-2024-JUS».** | ✅ **Cerrado el 12/09/2026 por este frente**, en la misma reescritura del `README` de E-10. Recuento verificado sobre el `.md` y sobre el `.tex` generado: en el cuerpo hay **seis**, no siete —el séptimo era el ejemplo `[VERIFICAR: ...]` del comentario de cabecera—, todos en la Sección 3 (la Sección 4 no tiene ninguno), y **solo dos** versan sobre el articulado del D.S. 016-2024-JUS: el artículo que consagra privacidad por diseño y por defecto (`03_marco_normativo.tex:286`) y el que fija el alcance extraterritorial (`:452`). Los otros cuatro son las fechas y la disposición derogatoria del propio D.S. (A-13, `:50`), la vigencia de la Directiva 01-2020-JUS/DGTAIPD (`:62`), la denominación del D.L. 1218 y la Ley 30120 (`:79`) y el texto literal del RNF-01 (D-04, `:555`). El `README` ya lo dice así. Los seis `[VERIFICAR]` en sí **siguen abiertos**: son A-13, D-04 y las verificaciones documentales de la sección (a.2), no este punto. |
 | E-12 | **`secciones/_archivo/README.md` era el último rastro del flujo viejo.** Seguía declarando el `.docx` como entregable y describiendo las Secciones 3 y 4 como mantenidas en Markdown fuera del `.tex`, que es el flujo que E-10 revirtió. Al estar dentro de `secciones/`, era lo primero que leería quien abriera la carpeta buscando las versiones antiguas. | ✅ **Cerrado el 12/09/2026 por este frente.** Reescrito de 54 a 12 líneas, con solo lo que hace falta saber: que la carpeta es material archivado y congelado, que el entregable vigente se compila desde `main.tex` con los `.tex` generados desde los `.md`, y que **nada de ahí se reintroduce sin revisarlo antes contra esos `.md`**, porque el texto divergió y volver a meterlo tal cual reabriría la duplicidad de fuente que cerró E-01. Se corrigió además la frase del `README` de `informe/` que remitía a este archivo describiéndolo como desactualizado. |
+| E-13 | **`secciones/introduccion.tex` la reescribio este frente, y `CLAUDE.md` la lista como seccion de otro integrante** («no se edita su contenido»). El encargo viene del frente de Liderazgo e Integracion: abrir por el problema **operativo** del terminal (aforo, aglomeraciones, tiempos de cola) en vez de por el marco normativo. | 🟡 **Abierto: falta que lo revise su responsable original.** Se reescribieron 1.1 Contexto y 1.2 Objetivos, y se anadio a 1.3 una precision sobre numero de zonas y camaras. La estructura y los `label` se conservan intactos (`sec:introduccion`, `sec:contexto`, `sec:objetivos`, `sec:alcance`), y las nueve referencias cruzadas que la seccion emite siguen resolviendo. No se uso **ninguna** cifra del terminal porque **no existe ninguna en el repositorio**: lo que falta quedo en cuatro `\verificar{...}` (C-07, C-08, aforo/superficie, numero de zonas y camaras). Este punto se cierra cuando el responsable de la seccion revise el texto o confirme el traspaso. |
+| E-14 | **Reestructuración al índice del modelo del curso (NeuroSegment).** El informe seguía un índice propio (Introducción, Antecedentes, Marco normativo, Análisis de impacto, Metodología, Resultados, Conclusiones). | ✅ **Cerrado el 14/09/2026.** Doce secciones en el orden del modelo; el índice del PDF lista solo los títulos de primer nivel y los anexos A-C. Marco normativo completo al Anexo B y análisis de impacto completo al Anexo C, con resúmenes en 3.3.2-3.3.3 y 3.4; M-01 a M-10 a 5.2. Texto de otros integrantes trasladado sin cambiar sus palabras (excepción anotada en `CLAUDE.md`). Todos los esqueletos llevan la misma frase neutra. Compilación: 46 páginas, 0 errores, 12 `[VERIFICAR]`. 3.3.3 queda en 385 palabras impresas, por debajo de una página. |
 
 ---
 
 ## (f) Estado de las secciones que no son de este frente
 
-Añadida el 11/09/2026 al consolidar el informe en LaTeX. Este frente **integró
-estas secciones sin tocar su contenido** y solo reporta qué les falta. La
-numeración y los `\label` de todas ellas se conservaron intactos.
+Añadida el 11/09/2026 al consolidar el informe en LaTeX; rehecha el 14/09/2026
+con el índice del modelo del curso. Este frente **integró estas secciones sin
+tocar sus palabras** (el traslado de texto entre archivos consta como excepción
+en `CLAUDE.md`) y solo reporta qué les falta.
 
 | Sección | Archivo | Estado real | Qué falta | Depende de |
 |---|---|---|---|---|
-| 1. Introducción | `secciones/introduccion.tex` | **Redactada.** ~1.225 palabras, con Contexto del problema, Objetivos y Alcance y limitaciones. No lleva caja de «sección en elaboración». | Nada estructural. Un solo detalle: en «Zonas cubiertas» remite a `PENDIENTES.md`, **punto C-09** (reutilización del CCTV existente) cuando lo que describe —qué cámaras y qué material audiovisual habilita LAP— encaja mejor en **C-14** (acceso a material del terminal). Conviene confirmarlo con su autor. | Su autor |
-| 2. Antecedentes | `secciones/antecedentes.tex` | **Redactada.** Es de este frente. Cubre CSRNet, P2PNet y P2R, con síntesis y tabla comparativa. | No cubre los cuatro antecedentes de seguimiento que sí están en el `.docx` (MOTRv2, GeneralTrack, multicámara por *clustering*, MCBLT) ni los de `fichas_antecedentes/`. Es la divergencia **E-03**, y es la que deja huérfanas las cuatro entradas de `referencias.bib` de **E-09**. | Ángel / Stephano |
-| 5. Metodología | `secciones/metodologia.tex` | **Esqueleto.** ~280 palabras contando comentarios. Los tres subapartados existen, pero cada uno es una sola frase en futuro («Este apartado documentará…»). | El contenido entero de 5.1 Arquitectura propuesta, 5.2 Datos y entrenamiento y 5.3 Métricas de evaluación. **Dos decisiones de aquí bloquean la auditoría de este frente:** la arquitectura y granularidad de salida (**B-01**) y el lugar donde se ejecuta la inferencia, *on-premise* o nube externa (**B-02**). Mientras no consten por escrito, la Sección 3.9 se queda redactada en condicional. | Su autor |
-| 6. Resultados | `secciones/resultados.tex` | **Esqueleto.** ~205 palabras contando comentarios. Dos subapartados, una frase en futuro cada uno. | Las tablas de error de conteo y de localización (6.1) y los casos de éxito y de fallo (6.2). Regla ya escrita en el propio archivo y que hay que respetar: **cada cifra debe indicar sobre qué datos fue medida**, porque la brecha de dominio impide presentar resultados sobre conjuntos públicos como desempeño esperable en el terminal. Los casos de fallo alimentan además la capacitación de operadores de la Sección 4.3. | Su autor |
-| 7. Conclusiones | `secciones/conclusiones.tex` | **Esqueleto.** ~175 palabras contando comentarios. Sin subapartados. | Las conclusiones del proyecto y las líneas de trabajo futuro. Los insumos ya existen: síntesis de antecedentes y Sección 4.5. **Dos resultados de la auditoría deben aparecer aquí sin atenuarlos:** la exactitud no está validada en el dominio de destino y el desempeño desagregado por características demográficas no ha sido evaluado. | Su autor |
+| 1. Resumen Ejecutivo | `secciones/resumen_ejecutivo.tex` | **Esqueleto** (frase común). Nueva el 14/09/2026. | Todo. Se redacta al final, cuando las demás secciones estén cerradas. | Equipo |
+| 2. Introducción | `secciones/introduccion.tex` | **Redactada.** Desde el 14/09/2026 conserva «Qué dato operativo aporta el sistema», 2.1 Objetivos y el párrafo de cierre; Contexto y Alcance pasaron a la Sección 3. | Nada estructural. Sigue abierta su revisión por el responsable original (**E-13**). | Su autor |
+| 3.1-3.3.1 Planteamiento | `secciones/planteamiento_problema.tex` | **Redactado**, con el texto trasladado de la Introducción. La frase que abre 3.2 y el segundo párrafo de 3.3.1 son de integración. | En «Zonas cubiertas» (3.2) el marcador remite a **C-09** cuando lo que describe, qué cámaras y material habilita LAP, encaja mejor en **C-14**. Conviene confirmarlo con su autor. | Su autor / LAP |
+| 4. Marco Teórico | `secciones/antecedentes.tex` | **Redactado.** Es de este frente. Cubre CSRNet, P2PNet y P2R, con síntesis y tabla comparativa. | No cubre los cuatro antecedentes de seguimiento del `.docx` (MOTRv2, GeneralTrack, multicámara por *clustering*, MCBLT) ni los de `fichas_antecedentes/`. Es la divergencia **E-03**, que deja huérfanas las cuatro entradas de `referencias.bib` de **E-09**. | Ángel / Stephano |
+| 5.1 Requerimientos funcionales | `secciones/requerimientos.tex` | **Esqueleto** (frase común). 5.2 sí está redactado y es de este frente. | Los requerimientos funcionales del sistema. | Equipo |
+| 6. Diseño del Sistema | `secciones/diseno_sistema.tex` | **Esqueleto.** Frase común y 6.1 Arquitectura propuesta, una frase en futuro (antes 5.1 de Metodología). | La arquitectura. **Dos decisiones de aquí bloquean la auditoría de 3.3.3 y B.9:** arquitectura y granularidad de salida (**B-01**) e inferencia *on-premise* o en nube externa (**B-02**). Mientras no consten por escrito, la auditoría se queda en condicional. | Su autor |
+| 7. Planificación y Gestión | `secciones/planificacion.tex` | **Esqueleto** (frase común). Nueva el 14/09/2026. | Todo. | Equipo |
+| 8. Desarrollo y Entrenamiento | `secciones/desarrollo_modelo.tex` | **Esqueleto.** Frase común; 8.1 Datos y entrenamiento y 8.2 Métricas, una frase en futuro cada uno (antes 5.2 y 5.3). | Conjuntos de datos y licencias (**B-06**), estrategia de adaptación de dominio y justificación de métricas. | Su autor |
+| 9. Resultados | `secciones/resultados.tex` | **Esqueleto.** Frase común; 9.1 y 9.2, una frase en futuro cada uno. | Tablas de error de conteo y localización (9.1) y casos de éxito y fallo (9.2). **Cada cifra debe indicar sobre qué datos fue medida.** Los casos de fallo alimentan la capacitación de operadores de 3.4.3 y C.3. | Su autor |
+| 10. Conclusiones | `secciones/conclusiones.tex` | **Esqueleto.** Frase común y un párrafo de lo que debe recoger. | Conclusiones y trabajo futuro. **Dos resultados de la auditoría deben aparecer sin atenuarlos:** exactitud no validada en el dominio de destino y desempeño desagregado por características demográficas no evaluado. | Su autor |
 | Anexo A. Cartel | `secciones/anexo_cartel.tex` | **Redactado.** Es de este frente. | Cinco campos en blanco que solo LAP puede completar: **C-01** a **C-05**. Sin ellos el cartel no cumple el deber de información del art. 18 y la medida **M-08** queda abierta. | LAP |
 
-**Lectura corta:** de las cuatro secciones ajenas a este frente, **una está
-redactada** (Introducción) y **tres son esqueletos** (Metodología, Resultados,
-Conclusiones), que es lo que ya venía registrado en **B-08**. La que más
-arrastra al resto es Metodología: de sus dos decisiones abiertas depende que la
-auditoría de la Sección 3.9 pueda pasar de condicional a conclusión.
-| E-13 | **`secciones/introduccion.tex` la reescribio este frente, y `CLAUDE.md` la lista como seccion de otro integrante** («no se edita su contenido»). El encargo viene del frente de Liderazgo e Integracion: abrir por el problema **operativo** del terminal (aforo, aglomeraciones, tiempos de cola) en vez de por el marco normativo. | 🟡 **Abierto: falta que lo revise su responsable original.** Se reescribieron 1.1 Contexto y 1.2 Objetivos, y se anadio a 1.3 una precision sobre numero de zonas y camaras. La estructura y los `label` se conservan intactos (`sec:introduccion`, `sec:contexto`, `sec:objetivos`, `sec:alcance`), y las nueve referencias cruzadas que la seccion emite siguen resolviendo. No se uso **ninguna** cifra del terminal porque **no existe ninguna en el repositorio**: lo que falta quedo en cuatro `\verificar{...}` (C-07, C-08, aforo/superficie, numero de zonas y camaras). Este punto se cierra cuando el responsable de la seccion revise el texto o confirme el traspaso. |
+**Lectura corta:** siete secciones o apartados siguen en esqueleto (1, 5.1, 6,
+7, 8, 9 y 10), que es lo que registra **B-08**. La que más arrastra al resto es
+Diseño del Sistema: de sus dos decisiones abiertas depende que la auditoría de
+3.3.3 y B.9 pueda pasar de condicional a conclusión.
 
 ---
 

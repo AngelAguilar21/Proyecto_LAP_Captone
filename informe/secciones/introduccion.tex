@@ -25,48 +25,17 @@
 % Seccion 3 (sec:auditoria), y por eso no se comprometen con una
 % granularidad de salida concreta.
 % =====================================================================
+% REESTRUCTURACION (14/09/2026) -- indice del modelo del curso
+% Esta seccion pasa a ser la 2. El "Contexto del problema" y el "Alcance y
+% limitaciones" se trasladaron, sin cambiar sus palabras, a
+% secciones/planteamiento_problema.tex (Seccion 3). Aqui quedan "Que dato
+% operativo aporta el sistema", los Objetivos y el parrafo de cierre. Solo
+% se retocaron tres remisiones que dejaban de ser ciertas: dos "Seccion de
+% Metodologia" (ahora \ref{sec:diseno}) y "El problema que abre esta
+% seccion", que ya no abre esta seccion.
+% =====================================================================
 \section{Introducción}
 \label{sec:introduccion}
-
-\subsection{Contexto del problema}
-\label{sec:contexto}
-
-El Aeropuerto Internacional Jorge Chávez, operado por Lima Airport
-Partners (LAP), no distribuye a sus pasajeros de manera uniforme. En
-determinadas franjas horarias, y en puntos concretos del terminal
-(filtros de seguridad, control migratorio, mostradores de
-\emph{check-in}, salas de embarque), se forman concentraciones muy
-superiores a las del resto del recinto en ese mismo momento.
-
-La aglomeración, por sí sola, no constituye el problema. Lo constituye
-cuando la cantidad de personas reunidas en un punto excede, durante un
-tiempo sostenido, la capacidad de atención dispuesta para ese punto: es
-entonces cuando aparecen las colas que se alargan, los tiempos de espera
-que comprometen la conexión de un vuelo y las condiciones de
-incomodidad o de riesgo en un espacio cerrado. La magnitud que interesa
-medir no es, por tanto, el volumen total de pasajeros del terminal, sino
-una combinación de tres variables: \emph{cuántas} personas, en
-\emph{qué} zona y durante \emph{cuánto} tiempo.
-
-Medir esa combinación importa porque las decisiones que la atienden son
-de corto plazo y reversibles: habilitar un mostrador adicional,
-redirigir el flujo hacia un filtro descargado, adelantar un relevo de
-personal o abrir una segunda fila. Todas ellas dependen de conocer dónde
-se está formando la concentración \emph{mientras} se forma. Un recuento
-que llega al cierre de la jornada sirve para planificar el mes
-siguiente, pero no para resolver la cola de esta mañana.
-
-El procedimiento con que LAP resuelve hoy esa decisión no consta en la
-documentación disponible para el equipo, de modo que este informe no lo
-describe ni lo evalúa.\verificar{cómo se decide hoy la dotación de
-personal y la apertura de mostradores en el terminal: procedimiento,
-periodicidad y responsable. Solicitado a LAP como punto C-08 de
-PENDIENTES.md.} Sí puede enunciarse la limitación genérica de cualquier
-método basado en observación humana periódica, que es la alternativa
-frente a la cual se plantea este proyecto: cubre un punto a la vez,
-produce una lectura discontinua en el tiempo, y su registro depende de
-que alguien lo anote, de modo que no deja una serie homogénea sobre la
-que puedan compararse dos días, dos zonas o dos franjas horarias.
 
 \subsubsection*{Qué dato operativo aporta el sistema}
 
@@ -98,27 +67,6 @@ caracterizar biométricamente a los pasajeros que aparecen en la imagen.
 Esta condición delimita el problema tanto como las anteriores, y se
 retoma al cierre de esta sección.
 
-Conviene precisar el alcance de todo lo anterior para no sobredimensionar
-el problema que el proyecto atiende. El equipo no cuenta, al momento de
-escribir este informe, con evidencia documentada por LAP que cuantifique
-el problema en el propio terminal: no dispone de incidentes de
-aglomeración registrados, de tiempos de cola medidos ni de quejas de
-pasajeros contabilizadas.\verificar{incidentes por aglomeración
-documentados, tiempos de cola observados y quejas recibidas. Es el
-pedido más importante del análisis: sin él, el examen de
-proporcionalidad de la Sección 3 se sostiene sobre una premisa no
-acreditada. Solicitado a LAP como punto C-07 de PENDIENTES.md.}
-Tampoco consta el aforo del terminal ni su superficie por
-zona.\verificar{aforo declarado y superficie de las zonas del terminal.
-No figura ninguna de las dos magnitudes en la documentación del
-proyecto.} El proyecto parte, en consecuencia, de una necesidad
-operativa plausible y compartida por la literatura de conteo de
-multitudes en espacios de alto tránsito, y no de una cifra propia de
-incidentes en el Aeropuerto Jorge Chávez. Todas las magnitudes que este
-informe sí reporta proceden de conjuntos de datos públicos o de
-grabaciones propias del equipo, y se identifican como tales en cada
-caso.
-
 \subsection{Objetivos}
 \label{sec:objetivos}
 
@@ -149,7 +97,8 @@ el marco normativo peruano de protección de datos personales.
         conteo agregado por zona o localización individual) que
         resulte de aplicar el principio de proporcionalidad de la
         Sección~\ref{sec:directiva} y la síntesis de antecedentes de la
-        Sección~\ref{sec:sintesis-antecedentes}. Esta decisión se documentará en la Sección de Metodología cuando el equipo la cierre; al cerrar esta versión del informe sigue abierta, y tanto la arquitectura como la granularidad de salida están pendientes de fijarse por escrito.
+        Sección~\ref{sec:sintesis-antecedentes}. Esta decisión se documentará en la
+        Sección~\ref{sec:diseno} cuando el equipo la cierre; al cerrar esta versión del informe sigue abierta, y tanto la arquitectura como la granularidad de salida están pendientes de fijarse por escrito.
   \item Producir las tres salidas operativas comprometidas en el
         objetivo general (ocupación por zona, evolución temporal y
         alertas por umbral de permanencia) y verificarlas sobre
@@ -172,7 +121,7 @@ el marco normativo peruano de protección de datos personales.
         darlos por resueltos (Sección~\ref{sec:conclusiones}).
 \end{enumerate}
 
-El problema que abre esta sección es operativo, pero el medio para
+El problema que aborda este proyecto es operativo, pero el medio para
 resolverlo consiste en tratar imágenes de personas en un espacio de uso
 público, y eso somete al proyecto a un régimen jurídico que condiciona
 el diseño antes que la implementación. La decisión de granularidad del
@@ -183,51 +132,3 @@ impacto correspondiente; aquí basta con dejar señalado que las tres
 salidas operativas descritas se han definido de forma agregada
 precisamente para que la utilidad para LAP no dependa de identificar a
 ningún pasajero.
-
-\subsection{Alcance y limitaciones del proyecto}
-\label{sec:alcance}
-
-\textbf{Alcance funcional.} El proyecto cubre la estimación de la
-concentración de personas por zona a partir de imágenes de cámaras fijas.
-Queda expresamente fuera de su alcance cualquier forma de identificación,
-reidentificación o caracterización individual de las personas detectadas:
-el sistema está pensado para responder \emph{cuántas personas hay, y
-dónde}, no \emph{quién es cada una}. La Sección~\ref{sec:ant-p2pnet}
-señala, sin embargo, que esta distinción es una cuestión de política de
-persistencia y no solo de algoritmo: el mismo modelo que localiza personas
-puede, si sus salidas se retienen y se asocian entre cuadros, aproximarse
-a un seguimiento de trayectorias. Por eso la granularidad de salida que
-finalmente se implemente es, como se indica en el objetivo específico 3,
-una decisión que debe quedar documentada por escrito antes de cerrar la
-Sección de Metodología.
-
-\textbf{Zonas cubiertas.} Las zonas concretas del terminal sobre las que
-se entrena y evalúa el sistema dependen de qué cámaras y qué material
-audiovisual habilite LAP para el proyecto, dato que a la fecha de este
-informe no ha sido confirmado y que solo LAP puede proporcionar. Donde este informe menciona zonas a título de ejemplo
-(filtros de seguridad, mostradores de \emph{check-in}, salas de embarque),
-lo hace como ilustración del tipo de espacio al que el sistema podría
-aplicarse, no como una cobertura ya acordada con el cliente. El número de
-zonas que finalmente se defina, y el número de cámaras que las
-cubra, tampoco están fijados.\verificar{número de zonas del terminal a
-cubrir y número de cámaras disponibles por zona. El prototipo trabaja
-hoy con dos cámaras sobre una única zona, pero es material propio del
-equipo grabado en la universidad, no del terminal: no es una cifra
-extrapolable.}
-
-\textbf{Fase del proyecto y limitación de dominio.} Esta primera entrega
-corresponde a Capstone I: un desarrollo y validación conceptual del
-sistema sobre conjuntos de datos públicos de conteo de multitudes, sin
-acceso todavía a material propio del Aeropuerto Jorge Chávez. Esto impone
-la limitación más importante del proyecto en esta etapa, y conviene
-enunciarla sin atenuarla porque condiciona la lectura de todo lo que
-sigue: como documenta en detalle la Sección~\ref{sec:ant-p2r}, los propios
-autores de la literatura revisada reconocen una brecha de dominio entre
-los conjuntos públicos de entrenamiento y un entorno de despliegue nuevo,
-y señalan que el desempeño se degrada de forma marcada cuando no media una
-etapa de adaptación de dominio. En consecuencia, ninguna cifra de
-desempeño que se reporte en la Sección de Resultados debe leerse como una
-predicción de exactitud para el Aeropuerto Jorge Chávez: es, en el mejor
-de los casos, una cota de referencia sobre datos públicos, sujeta a
-validarse en sitio antes de comunicarse a LAP como una expectativa de
-desempeño (Sección~\ref{sec:auditoria}).

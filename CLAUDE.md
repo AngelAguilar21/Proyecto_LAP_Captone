@@ -41,12 +41,28 @@ leyendo el código y que más fácilmente se hace mal:
 - **El entregable es `informe/main.pdf`**, compilado desde `informe/main.tex`.
   No es `Informe_LAP_Aglomeraciones.docx`, que es copia de trabajo del frente de
   integración y está en `.gitignore`.
-- **`secciones/03_marco_normativo.tex`, `secciones/04_analisis_impacto.tex` y
-  `secciones/anexo_b_marco_normativo.tex` son generados. No se editan a mano.**
-  Su fuente son los `.md` del mismo nombre; se
-  regeneran con `herramientas/md2tex.py` y se comprueban con
-  `herramientas/verificar_fidelidad.py`. Una edición a mano se pierde en la
-  siguiente conversión sin dejar rastro.
+- **El informe sigue el índice del modelo del curso (NeuroSegment)** desde el
+  14/09/2026: 1 Resumen Ejecutivo, 2 Introducción, 3 Planteamiento del
+  Problema y Análisis del Contexto, 4 Marco Teórico, 5 Especificación de
+  Requerimientos, 6 Diseño del Sistema, 7 Planificación y Gestión, 8 Desarrollo
+  y Entrenamiento del Modelo, 9 Resultados, 10 Conclusiones, 11 Referencias y
+  12 Anexos (A cartel, B marco normativo, C análisis de impacto). La Sección 3
+  sale de tres archivos, en este orden: `planteamiento_problema.tex` (3.1, 3.2,
+  3.3.1), `03_marco_normativo` (3.3.2 y 3.3.3) y `03_analisis_impacto` (3.4).
+- **El índice del PDF lista solo los 12 títulos de primer nivel**, como el
+  modelo, más los anexos A, B y C bajo «12. Anexos» (`tocdepth` 1 en el cuerpo
+  y 2 desde la Sección 12, en `main.tex`). Los subapartados existen y van
+  numerados en el cuerpo, pero no se listan: no subir `tocdepth`.
+- **Son generados y no se editan a mano:** `secciones/03_marco_normativo.tex`,
+  `secciones/03_analisis_impacto.tex`, `secciones/anexo_b_marco_normativo.tex`
+  y `secciones/anexo_c_analisis_impacto.tex`. Su fuente son los `.md` del
+  mismo nombre; se regeneran con `herramientas/md2tex.py` (tercer argumento
+  `normativo`, `impacto`, `B` o `C`) y se comprueban con
+  `herramientas/verificar_fidelidad.py`, que debe decir IDENTICO. Una edición a
+  mano se pierde en la siguiente conversión sin dejar rastro.
+- **3.3.3 (Restricciones Legales) no pasa de una página** en el PDF (385
+  palabras impresas el 14/09/2026). Lo que se añada ahí sale de otra parte; el
+  detalle va al Anexo B.
 - **`secciones/_archivo/` ya no existe:** se borró en `4646d7a` y solo queda en
   el historial de git. No se recupera nada de ahí sin contrastarlo con los `.md`.
 - **No añadir `\pendiente{...}{...}`:** la macro se eliminó a propósito y no es
@@ -63,15 +79,22 @@ leyendo el código y que más fácilmente se hace mal:
   es decisión de la reunión del equipo (E-03 / E-09 en `PENDIENTES.md`).
   `Huang_2023_CVPR` es de **CVPR2023W** y `Wang_2025_ICCV` de **ICCV2025W**:
   ambas son de *Workshops*, no de la conferencia principal.
-- **No renumerar las Secciones 3 y 4:** 20 referencias cruzadas (`\ref`) del
-  resto del informe apuntan ahí, 15 de ellas a un subapartado concreto (3.1,
-  3.2, 3.3, 3.4, 4.3, 4.4, 4.5). La Sección 4 remite además a 3.2-3.4 con el
-  número escrito a mano en su `.md`.
-- **La Sección 3 va comprimida y su desarrollo completo está en el Anexo B**
-  (desde el 14/09/2026, pedido del frente de Liderazgo e Integración). Los dos
-  `.md` afirman lo mismo con distinto detalle: un dato que se corrige en uno se
-  corrige en el otro, y las tres reservas `[VERIFICAR]` normativas están en
-  ambos.
+- **Los `\label` de las antiguas Secciones 3 y 4 viven ahora en la Sección 3**
+  y los pone `md2tex.py`: `sec:marco`, `sec:directiva`, `sec:dl1218`,
+  `sec:proporcionalidad`, `sec:auditoria` y `sec:licencias` sobre 3.3.3;
+  `sec:analisis`, `sec:eipd` y `sec:sintesis-impacto` sobre 3.4; y
+  `sec:impacto-etico/social/ambiental` sobre 3.4.2-3.4.4. Más de veinte `\ref`
+  del resto del informe dependen de ellos. `sec:privacidad-diseno` ya no es
+  generado: está en `requerimientos.tex` (5.2). Varias remisiones van con el
+  número escrito a mano en los `.md` («Sección 5», «Sección 3.4», «Sección 4»,
+  «Anexo B», «apartado B.9»): si se renumera, se corrigen a mano.
+- **Cuerpo resumido, desarrollo completo en anexo.** 3.3.2-3.3.3 resumen el
+  Anexo B; 3.4 resume el Anexo C; 5.2 recoge M-01 a M-10 del apartado B.5. Cada
+  par afirma lo mismo con distinto detalle: un dato que se corrige en uno se
+  corrige en el otro, y las reservas `[VERIFICAR]` normativas están en ambos.
+- **Esqueletos:** toda sección o apartado sin contenido lleva solo la frase
+  «Esta sección se completará en la versión final del informe.» Nada de «a
+  cargo de otro integrante» ni «sección en elaboración».
 - **Formato fijado por Liderazgo (14/09/2026):** Times 12 pt, todo en negro,
   sangría de 1,25 cm sin espacio entre párrafos, sin recuadros, tablas en
   blanco y negro, carátula sin filetes y **ninguna raya (—) en el cuerpo**. No
@@ -88,14 +111,31 @@ ingeniería y **no se modifica desde el frente del informe**, salvo el
 ahí (es el caso de `informe.zip`).
 
 Dentro de `informe/secciones/`, son del frente ético-legal `antecedentes.tex`,
-los `.md` de las Secciones 3 y 4 y del Anexo B y `anexo_cartel.tex`. `introduccion.tex`,
-`metodologia.tex`, `resultados.tex` y `conclusiones.tex` son de otros
-integrantes: **no se edita su contenido.** Excepción registrada: el 14/09/2026,
-por el pedido de formato de Liderazgo, en `introduccion.tex` y
-`metodologia.tex` se sustituyeron las rayas por paréntesis, comas o punto y
-seguido, y se reescribieron las tres frases que remitían a `PENDIENTES.md` o
-`CHECKLIST_CUMPLIMIENTO.md` (y a códigos como C-09) como reserva en prosa. Nada
-más de esos archivos se tocó.
+los `.md` (`03_marco_normativo`, `03_analisis_impacto`, anexos B y C),
+`anexo_cartel.tex` y el apartado 5.2 de `requerimientos.tex`.
+`introduccion.tex`, `planteamiento_problema.tex` (salvo lo indicado abajo),
+`diseno_sistema.tex`, `desarrollo_modelo.tex`, `resultados.tex` y
+`conclusiones.tex` son de otros integrantes: **no se edita su contenido.**
+
+Excepciones registradas:
+
+- 14/09/2026, formato de Liderazgo: en `introduccion.tex` y la antigua
+  `metodologia.tex` se sustituyeron las rayas por paréntesis, comas o punto y
+  seguido, y se reescribieron las tres frases que remitían a `PENDIENTES.md` o
+  `CHECKLIST_CUMPLIMIENTO.md` (y a códigos como C-09) como reserva en prosa.
+- 14/09/2026, reestructuración al índice del modelo del curso, autorizada por
+  Fabián Moreno Ugarte: se **movió** texto de otros integrantes **sin cambiar
+  sus palabras**. De `introduccion.tex`, «Contexto del problema» y «Alcance y
+  limitaciones» pasaron a `planteamiento_problema.tex` (3.1, 3.2 y primer
+  párrafo de 3.3.1). `metodologia.tex` se renombró `desarrollo_modelo.tex`
+  (Sección 8) y su «Arquitectura propuesta» pasó a `diseno_sistema.tex`
+  (Sección 6). Solo se cambiaron: los títulos al índice del modelo; las
+  remisiones que dejaban de ser ciertas («Sección de Metodología» por
+  `\ref{sec:diseno}`, «El problema que abre esta sección»); los avisos de
+  esqueleto por la frase neutra común; y, en `planteamiento_problema.tex`, la
+  frase que abre 3.2 y el segundo párrafo de 3.3.1, que son de integración y
+  están redactados con datos que ya constaban en el informe. Nada más de esos
+  archivos se tocó.
 
 **El PDF no cita archivos del repositorio ni códigos internos.** Ni
 `PENDIENTES.md`, `CHECKLIST_CUMPLIMIENTO.md`, `NOTAS_FUENTES.md` o rutas, ni
@@ -112,9 +152,8 @@ fuentes que el lector no tiene («el código documenta», «el material de
 presentación del equipo») sin atribuirlas de forma comprensible, y un código de
 requisito (RNF-01) se describe en palabras la primera vez. Se mantienen, en
 cambio, «al cerrar esta versión», «no consta por escrito» y «queda abierto»,
-que marcan qué está acreditado. Excepción conocida: las secciones en esqueleto
-(Metodología, Resultados, Conclusiones) aún dicen «el frente ético-legal la
-audita» y no se tocan hasta que sus responsables las redacten.
+que marcan qué está acreditado. (En los esqueletos, esa clase de avisos solo
+queda en comentarios `%`, que no se imprimen.)
 
 ## Compilar
 
@@ -126,12 +165,12 @@ latexmk -pdf main.tex
 
 En Windows, **correr `latexmk` desde Git Bash, no desde PowerShell**: ahí MiKTeX no encuentra `perl` y latexmk falla sin compilar nada.
 
-Estado esperado: **44 páginas, 0 errores**, ninguna cita ni referencia cruzada
-sin resolver. Queda 1 aviso de `hyperref` (destino duplicado `page.1`) y 3
-avisos de Biber (`legacy month field`, en `main.blg`, no en `main.log`), todos
-cosméticos y conocidos. El log termina con `MARCADORES [VERIFICAR] EN EL
-CUERPO: 12`. Si has tocado un `.md` de las Secciones 3 o 4 o del Anexo B,
-**regenera su `.tex` antes de compilar**.
+Estado esperado: **46 páginas, 0 errores**, ninguna cita ni referencia cruzada
+sin resolver, índice en una sola página. Queda 1 aviso de `hyperref` (destino
+duplicado `page.1`) y 3 avisos de Biber (`legacy month field`, en `main.blg`,
+no en `main.log`), todos cosméticos y conocidos. El log termina con
+`MARCADORES [VERIFICAR] EN EL CUERPO: 12`. Si has tocado un `.md` de la
+Sección 3 o de los Anexos B o C, **regenera su `.tex` antes de compilar**.
 
 Cambió el 13/09/2026: eran 40 páginas mientras los marcadores `[VERIFICAR]` se
 imprimían; ahora no se imprimen y la Sección 3 ocupa una página menos. De los
@@ -144,6 +183,9 @@ la Sección 3 comprimida y la nota de la página iii retirada acortan; el Anexo 
 ocupa 12). Con ese cambio desapareció también la caja `Overfull`.
 Pasó a 44 el mismo día al retirar del cuerpo el vocabulario interno (frentes,
 archivos, códigos) y describir en palabras el requisito RNF-01.
+Pasó a 46 el mismo día con la reestructuración al índice del modelo del curso
+(cinco secciones nuevas en esqueleto, Anexo C con el análisis de impacto
+completo). El índice, con solo los títulos de primer nivel, cabe en una página.
 
 ### Marcadores `[VERIFICAR]`
 

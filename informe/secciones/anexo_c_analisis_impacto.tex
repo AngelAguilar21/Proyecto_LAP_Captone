@@ -1,37 +1,40 @@
 %=====================================================================
-%  SECCION 4 -- ANALISIS DE IMPACTO Y PRIVACIDAD DESDE EL DISENO
+%  ANEXO C -- ANALISIS DE IMPACTO: DESARROLLO COMPLETO
 %  Responsable: Fabian Moreno Ugarte
 %
-%  GENERADO desde secciones/04_analisis_impacto.md, que sigue siendo la
-%  FUENTE de esta seccion. No editar aqui: editar el .md y reconvertir.
+%  GENERADO desde secciones/anexo_c_analisis_impacto.md, que es su FUENTE.
+%  No editar aqui: editar el .md y reconvertir.
 %
-%  Los marcadores label reproducen los anclajes de la version archivada. La
-%  numeracion 4.1-4.5 es vinculante.
+%  Las remisiones a B.x y C.x van escritas en el .md.
 %=====================================================================
 
-\section{Análisis de impacto y privacidad desde el diseño}
-\label{sec:analisis}
 
-% ---- 4.1 ----
-\subsection{Metodología del análisis de impacto}
-\label{sec:eipd}
+% ---- C ----
+\subsection{Análisis de impacto: desarrollo completo}
+\label{anx:impacto}
 
-Esta sección evalúa el impacto del sistema propuesto sobre los derechos
-de las personas observadas y sobre el entorno en que se despliega. Su
+Este anexo recoge el desarrollo completo del análisis de impacto que la
+Sección 3.4 presenta de forma resumida.
+
+% ---- C.1 ----
+\subsubsection{Metodología del análisis de impacto}
+
+Este anexo evalúa el impacto del sistema propuesto sobre los derechos de
+las personas observadas y sobre el entorno en que se despliega. Su
 estructura no es arbitraria: reproduce deliberadamente la de una
 Evaluación de Impacto en Protección de Datos, esto es, identificar el
 tratamiento, valorar su necesidad y proporcionalidad, identificar los
 riesgos para los derechos de los titulares y proponer medidas de
 mitigación.
 
-Esa correspondencia no es una analogía metodológica. Como se expuso en
-la Sección 3.4, el D.S. 016-2024-JUS exige una evaluación de impacto
-antes de iniciar tratamientos de alto riesgo, y la videovigilancia
-masiva figura expresamente entre los supuestos que la activan. El
-sistema parte de la captación masiva y continua de imágenes de personas
-en las zonas comunes de un terminal aeroportuario, de modo que el
-supuesto se activa con independencia de que el modelo produzca conteos
-agregados y no identifique a nadie. Esta sección es, por tanto, el
+Esa correspondencia no es una analogía metodológica. Como se expone en
+el apartado B.9 del Anexo B, el D.S. 016-2024-JUS exige una evaluación
+de impacto antes de iniciar tratamientos de alto riesgo, y la
+videovigilancia masiva figura expresamente entre los supuestos que la
+activan. El sistema parte de la captación masiva y continua de imágenes
+de personas en las zonas comunes de un terminal aeroportuario, de modo
+que el supuesto se activa con independencia de que el modelo produzca
+conteos agregados y no identifique a nadie. Este anexo es, por tanto, el
 insumo sustantivo de un documento que el proyecto está obligado a
 producir, y no un ejercicio analítico de acompañamiento.
 
@@ -57,8 +60,8 @@ demográfico) dependen de información operativa que solo LAP posee o de
 mediciones que el equipo aún no ha realizado. Donde ocurre, se indica
 expresamente en lugar de rellenarse con una cifra plausible.
 
-% ---- 4.2 ----
-\subsection{Sesgos del sistema}
+% ---- C.2 ----
+\subsubsection{Sesgos del sistema}
 
 El sistema puede fallar de manera desigual, y conviene distinguir tres
 fuentes de desigualdad que operan por mecanismos distintos y admiten
@@ -144,11 +147,10 @@ incluya una evaluación de desempeño desagregada, al menos por franja de
 estatura y por presencia de equipaje voluminoso. La recomendación es
 condicional en sentido estricto, porque sin acceso a material del
 terminal no es realizable, y esa dependencia refuerza la solicitud de
-acceso planteada en la Sección 3.4.
+acceso planteada en el apartado B.9 del Anexo B.
 
-% ---- 4.3 ----
-\subsection{Sesgo de automatización y factor humano}
-\label{sec:impacto-social}
+% ---- C.3 ----
+\subsubsection{Sesgo de automatización y factor humano}
 
 Un riesgo distinto de los anteriores, y menos discutido, es la
 sustitución progresiva del criterio humano por el del sistema. Si el
@@ -158,14 +160,14 @@ un efecto peor que su ausencia, porque la atención humana ya se retiró.
 El fenómeno no depende de que el modelo funcione mal: depende de que
 funcione bien durante el tiempo suficiente para que nadie lo cuestione.
 
-Este riesgo tiene un anclaje normativo directo. Como se expuso en la
-Sección 3.3, el artículo 23 de la Ley 29733 reconoce el derecho al
-tratamiento objetivo, esto es, a no verse sometido a una decisión con
-efectos jurídicos o significativos sustentada únicamente en un
-tratamiento automatizado. La medida M-10, conforme a la cual el sistema
-emite alertas y no ejecuta acciones automáticas sobre personas, responde
-a esa exigencia y mantiene al sistema fuera del supuesto del artículo
-23. Pero M-10 es insuficiente por sí sola, porque describe la
+Este riesgo tiene un anclaje normativo directo. Como se expone en el
+apartado B.7 del Anexo B, el artículo 23 de la Ley 29733 reconoce el
+derecho al tratamiento objetivo, esto es, a no verse sometido a una
+decisión con efectos jurídicos o significativos sustentada únicamente en
+un tratamiento automatizado. La medida M-10, conforme a la cual el
+sistema emite alertas y no ejecuta acciones automáticas sobre personas,
+responde a esa exigencia y mantiene al sistema fuera del supuesto del
+artículo 23. Pero M-10 es insuficiente por sí sola, porque describe la
 arquitectura y no la práctica: un operador que aprueba mecánicamente
 cuanto el tablero propone reintroduce de hecho la decisión automatizada
 que la medida pretendía evitar, aunque formalmente medie una acción
@@ -174,7 +176,7 @@ humana.
 De ahí que la capacitación del personal deba tratarse como medida de
 mitigación y no como accesorio de implantación. Los operadores necesitan
 conocer las limitaciones del modelo, y en particular tres de las
-documentadas en esta sección: que el desempeño sobre datos públicos no
+documentadas en este anexo: que el desempeño sobre datos públicos no
 predice el desempeño en el terminal mientras no exista validación en
 sitio; que existe un modo de fallo por sobreestimación severa
 documentado en \cite{Lin_2025_CVPR}; y que el régimen de baja densidad,
@@ -197,9 +199,8 @@ nulo, y la normalización misma formaría parte del fenómeno. Sostener el
 punto con firmeza exigiría respaldo bibliográfico que este informe
 todavía no tiene.
 
-% ---- 4.4 ----
-\subsection{Lectura ambiental del costo de cómputo}
-\label{sec:impacto-ambiental}
+% ---- C.4 ----
+\subsubsection{Lectura ambiental del costo de cómputo}
 
 El entrenamiento de modelos de visión es intensivo en cómputo y, por
 tanto, en energía. El equipo no ha medido el consumo energético del
@@ -249,7 +250,7 @@ borde, adoptado como medida M-01 por razones de protección de datos, que
 evita transmitir video de forma continua hacia la nube con el ahorro de
 transmisión asociado.
 
-Este es el resultado analítico más útil de la subsección y conviene
+Este es el resultado analítico más útil del apartado y conviene
 presentarlo como tal ante el cliente: las decisiones que reducen la
 exposición de datos personales (muestrear menos, procesar localmente, no
 persistir imágenes, agregar la salida) son exactamente las mismas que
@@ -258,9 +259,9 @@ principios apuntan en la misma dirección, lo que refuerza el argumento
 de privacidad con una justificación adicional que no depende del
 cumplimiento normativo.
 
-Quedan dos puntos abiertos. El primero es que convertir esta subsección
-de cualitativa en cuantitativa depende de una sola medición: las horas
-de GPU efectivamente empleadas durante el desarrollo. Es un registro
+Quedan dos puntos abiertos. El primero es que convertir este apartado de
+cualitativo en cuantitativa depende de una sola medición: las horas de
+GPU efectivamente empleadas durante el desarrollo. Es un registro
 sencillo, pero no es reconstruible a posteriori: si no se lleva desde el
 inicio del entrenamiento, la huella del desarrollo queda definitivamente
 sin cuantificar. Por esa razón, este informe recomienda registrar las
@@ -274,10 +275,8 @@ o con compromisos de reporte ambiental, porque, de existir, el análisis
 debería alinearse con sus categorías de medición en lugar de proponer un
 marco paralelo.
 
-% ---- 4.5 ----
-\subsection{Riesgos residuales y decisiones pendientes}
-\label{sec:sintesis-impacto}
-\label{sec:impacto-etico}
+% ---- C.5 ----
+\subsubsection{Riesgos residuales y decisiones pendientes}
 
 Integrando lo anterior, el perfil de riesgo del sistema admite una
 síntesis en cuatro dimensiones. En la ética, el impacto positivo es
@@ -355,19 +354,19 @@ Son tres, y no todas tienen el mismo signo. El uso del término «personas
 anonimizadas» para describir lo que la Ley 29733 califica como
 disociación aparece tanto en la presentación preliminar del proyecto
 como en la documentación del módulo de almacenamiento del prototipo, y
-está tratado en la Sección 3.2. La medición de permanencia en zona
-comercial como finalidad distinta de la estimación de aglomeraciones,
-que exigiría base de legitimación propia, se trata en la Sección 3.2; el
-esquema de datos del prototipo, que registra zona y marcas de primera y
-última detección por persona, la hace técnicamente posible hoy. En
-cambio, la preocupación sobre reidentificación mediante
-\emph{embeddings} de apariencia \textbf{no se confirmó}: el prototipo
-resuelve la fusión entre cámaras por asociación espacio-temporal y
-reserva un descriptor de color no biométrico como mero desempate, de
-modo que la decisión de diseño va en la dirección que exige el requisito
-de no derivar de la imagen rasgos que permitan identificar a una
-persona, ni siquiera de forma indirecta, según se detalla en la Sección
-3.4.
+está tratado en el apartado B.2 del Anexo B. La medición de permanencia
+en zona comercial como finalidad distinta de la estimación de
+aglomeraciones, que exigiría base de legitimación propia, se trata en el
+apartado B.3 del Anexo B; el esquema de datos del prototipo, que
+registra zona y marcas de primera y última detección por persona, la
+hace técnicamente posible hoy. En cambio, la preocupación sobre
+reidentificación mediante \emph{embeddings} de apariencia \textbf{no se
+confirmó}: el prototipo resuelve la fusión entre cámaras por asociación
+espacio-temporal y reserva un descriptor de color no biométrico como
+mero desempate, de modo que la decisión de diseño va en la dirección que
+exige el requisito de no derivar de la imagen rasgos que permitan
+identificar a una persona, ni siquiera de forma indirecta, según se
+detalla en el apartado B.9 del Anexo B.
 
 A esas discrepancias se añade un riesgo residual de distinta clase,
 porque no es una divergencia documental sino un incumplimiento

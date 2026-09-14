@@ -296,6 +296,13 @@ Moreno Ugarte, Fabián                 & \campoportada{código de Moreno}{\hspac
 \pagenumbering{roman}
 % Interlineado sencillo solo en el indice: a 12 pt y 1,5 desbordaba una
 % linea a una segunda pagina.
+% Desde la reestructuracion al indice del modelo del curso (14/09/2026) el
+% indice lista SOLO los 12 titulos de primer nivel, como el modelo: en la
+% clase article \section es el nivel 1, de modo que tocdepth=1 excluye
+% subsection y subsubsection. Los subapartados siguen numerados en el
+% cuerpo. La unica excepcion son los anexos A, B y C bajo "12. Anexos"
+% (ver el \addtocontents antes de la Seccion 12).
+\setcounter{tocdepth}{1}
 {\singlespacing\tableofcontents}
 \clearpage
 
@@ -307,26 +314,36 @@ Moreno Ugarte, Fabián                 & \campoportada{código de Moreno}{\hspac
 \pagenumbering{arabic}
 
 %------------------------- SECCIONES ---------------------------------
-% NOTA (2026-09-11, segunda revision) -- SECCIONES 3 Y 4 REINCORPORADAS
-% Los .md siguen siendo la FUENTE de las Secciones 3 y 4:
-%   secciones/03_marco_normativo.md
-%   secciones/04_analisis_impacto.md
-% Los .tex que se incluyen aqui se GENERAN desde esos .md y no se editan
-% a mano; si hay que cambiar algo de la Seccion 3 o 4, se cambia en el
-% .md y se vuelve a convertir.
-% Estos dos \input apuntaban antes a secciones/_archivo/, que quedo
-% OBSOLETO y ya no interviene en la compilacion. Los \label de los
-% archivos generados reproducen los anclajes de aquella version para que
-% las referencias cruzadas del resto del informe sigan resolviendo.
+% REESTRUCTURACION (2026-09-14) -- INDICE DEL MODELO DEL CURSO
+%   1 Resumen Ejecutivo            7 Planificacion y Gestion del Proyecto
+%   2 Introduccion                 8 Desarrollo y Entrenamiento del Modelo
+%   3 Planteamiento del Problema   9 Resultados y Analisis Comparativo
+%   4 Marco Teorico               10 Conclusiones y Recomendaciones
+%   5 Especificacion de Req.      11 Referencias
+%   6 Diseno del Sistema          12 Anexos (A, B, C)
+% La Seccion 3 se compone de tres archivos, en este orden:
+%   planteamiento_problema.tex  3.1, 3.2 y 3.3.1   (escrito a mano)
+%   03_marco_normativo.tex      3.3.2 y 3.3.3      (GENERADO desde su .md)
+%   03_analisis_impacto.tex     3.4                (GENERADO desde su .md)
+% Los .tex generados no se editan a mano: se cambia el .md y se reconvierte
+% con herramientas/md2tex.py.
+\input{secciones/resumen_ejecutivo}
+\clearpage
 \input{secciones/introduccion}
+\clearpage
+\input{secciones/planteamiento_problema}
+\input{secciones/03_marco_normativo}
+\input{secciones/03_analisis_impacto}
 \clearpage
 \input{secciones/antecedentes}
 \clearpage
-\input{secciones/03_marco_normativo}
+\input{secciones/requerimientos}
 \clearpage
-\input{secciones/04_analisis_impacto}
+\input{secciones/diseno_sistema}
 \clearpage
-\input{secciones/metodologia}
+\input{secciones/planificacion}
+\clearpage
+\input{secciones/desarrollo_modelo}
 \clearpage
 \input{secciones/resultados}
 \clearpage
@@ -334,21 +351,31 @@ Moreno Ugarte, Fabián                 & \campoportada{código de Moreno}{\hspac
 \clearpage
 
 %------------------------ BIBLIOGRAFIA -------------------------------
-\phantomsection
-\addcontentsline{toc}{section}{Referencias}
-\printbibliography[title={Referencias}]
+% Seccion numerada (11) como en el modelo del curso.
+\section{Referencias}
+\label{sec:referencias}
+\printbibliography[heading=none]
 
 \clearpage
 
 %--------------------------- ANEXOS ----------------------------------
-\appendix
-% En el indice los anexos figuran solo por su titulo, sin subapartados:
-% el Anexo B repite la estructura completa de la Seccion 3 y listarla
-% otra vez alargaria el indice, que es justo lo que se quiso acortar.
-\addtocontents{toc}{\protect\setcounter{tocdepth}{1}}
+% Seccion 12 "Anexos"; cada anexo es un subapartado con letra (A, B, C) y
+% sus apartados internos van como A.1, B.1... No se usa \appendix, que
+% reiniciaria la numeracion de las secciones con letras.
+% En el indice figuran los tres anexos por su titulo, sin sus apartados:
+% el Anexo B y el C repiten el desarrollo de la Seccion 3 y listarlos
+% otra vez alargaria el indice.
+\section{Anexos}
+\label{sec:anexos}
+\renewcommand{\thesubsection}{\Alph{subsection}}
+\renewcommand{\thesubsubsection}{\thesubsection.\arabic{subsubsection}}
+\addtocontents{toc}{\protect\setcounter{tocdepth}{2}}
 \input{secciones/anexo_cartel}
 \clearpage
 % GENERADO desde secciones/anexo_b_marco_normativo.md (no editar aqui).
 \input{secciones/anexo_b_marco_normativo}
+\clearpage
+% GENERADO desde secciones/anexo_c_analisis_impacto.md (no editar aqui).
+\input{secciones/anexo_c_analisis_impacto}
 
 \end{document}
