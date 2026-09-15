@@ -1,27 +1,7 @@
-# Base de visión por computadora para el Proyecto LAP
-# Dependencias validadas del pipeline UCF-QNRF:
-# Python 3.9.6, numpy 2.0.2, matplotlib 3.9.4,
-# Pillow 11.3.0 y scipy 1.13.1.
+# Entorno común AeroTrack: Python 3.12, conteo y seguimiento en CPU.
+-r proyecto_lap_prototipo/requirements-tracking.txt
 
-numpy==2.0.2
-opencv-python-headless
-matplotlib==3.9.4
+# Preparación de datasets y utilidades del proyecto.
 pandas
-Pillow==11.3.0
-scipy==1.13.1
-
-# PyTorch CPU
---extra-index-url https://download.pytorch.org/whl/cpu
-torch
-torchvision
-
-# Detección de objetos
-ultralytics
-
-# Tracking multi-objeto
-lap
-filterpy
-
-# Utilidades
 tqdm
 PyYAML

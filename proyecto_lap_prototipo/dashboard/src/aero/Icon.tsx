@@ -1,5 +1,6 @@
-export default function Icon({ name, size = 18 }: { name: string; size?: number }) {
+export default function Icon({ name, size = 18, rotation=0 }: { name: string; size?: number; rotation?:number }) {
   const paths: Record<string, string> = {
+    compass: 'M22 12A10 10 0 1 1 2 12 10 10 0 0 1 22 12 M12 4 16 18 12 14 8 18Z',
     plane: 'M22 2 9 9 2 7 1 9 7 13 9 19 11 20 12 14 19 9Z M8 14 4 18',
     grid: 'M3 3H9V9H3Z M15 3H21V9H15Z M3 15H9V21H3Z M15 15H21V21H15Z',
     map: 'M3 5 9 3 15 5 21 3V19L15 21 9 19 3 21Z M9 3V19 M15 5V21',
@@ -25,5 +26,5 @@ export default function Icon({ name, size = 18 }: { name: string; size?: number 
     link: 'M9 15 15 9 M7 14 4 17A4 4 0 0 0 10 22L14 18 M10 6 14 2A4 4 0 0 1 20 8L17 11',
     trash: 'M3 5H21 M9 5V2H15V5 M5 5 6 22H18L19 5 M10 9V18 M14 9V18',
   };
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name] || paths.grid}/></svg>;
+  return <svg style={rotation?{transform:`rotate(${rotation}deg)`}:undefined} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name] || paths.grid}/></svg>;
 }

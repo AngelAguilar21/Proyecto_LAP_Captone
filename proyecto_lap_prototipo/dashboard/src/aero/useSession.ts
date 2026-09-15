@@ -12,6 +12,7 @@ export function useSession() {
   const token = useRef('');
   const saved = useRef('');
   const revision = useRef(-1);
+  const instance = useRef<string>();
   const current = useRef(config);
   current.current = config;
   const dirty = config !== null && JSON.stringify(config) !== saved.current;
@@ -25,12 +26,13 @@ export function useSession() {
         if (!response.ok) throw new Error('Backend no disponible');
         const next: SessionState = await response.json();
         if (!alive) return;
-        if (!token.current || revision.current !== next.configRevision) {
+        if (!token.current || revision.current !== next.configRevision || instance.current !== next.serverInstance) {
           const configResponse = await fetch('/api/config', { signal: AbortSignal.timeout(6000) });
           if (!configResponse.ok) throw new Error('No se pudo sincronizar la configuración');
           const data = await configResponse.json();
           if (!alive) return;
           token.current = data.token;
+          instance.current = next.serverInstance;
           revision.current = data.revision;
           if (!current.current || isActive(next.status) || JSON.stringify(current.current) === saved.current) setConfig(data.config);
           else setNotice('Otra ventana actualizó la configuración. Tu borrador se conserva; guárdalo o recarga para usar los cambios del servidor.');
@@ -44,6 +46,8 @@ export function useSession() {
     return () => { alive = false; clearTimeout(timer); };
   }, []);
 
+  useEffect(()=>{const warn=(e:BeforeUnloadEvent)=>{if(dirty){e.preventDefault();e.returnValue='';}};window.addEventListener('beforeunload',warn);return()=>window.removeEventListener('beforeunload',warn);},[dirty]);
+
   const post = useCallback(async (path: string, body: unknown, binary = false) => {
     const response = await fetch(`/api/${path}`, { method: 'POST', headers: { 'Content-Type': binary ? 'application/octet-stream' : 'application/json', 'X-LAP-Token': token.current }, body: binary ? body as Blob : JSON.stringify(body), signal: AbortSignal.timeout(binary ? 180000 : 15000) });
     const data = await response.json();
@@ -56,11 +60,12 @@ export function useSession() {
     finally { setBusy(false); }
   }, []);
   const save = useCallback(async (draft?: Config) => {
+    const before = current.current;
     const value = draft || current.current;
     if (!value) throw new Error('Todavía no hay configuración');
     await post('config', value);
     saved.current = JSON.stringify(value);
-    setConfig(value);
+    setConfig(latest => latest === before ? value : latest);
   }, [post]);
   return { config, setConfig, state, connected, busy, error, setError, notice, setNotice, post, action, save, dirty };
 }

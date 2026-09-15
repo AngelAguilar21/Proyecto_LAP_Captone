@@ -134,8 +134,8 @@ class AeroTrackTests(unittest.TestCase):
         xlsx,_=export(self.engine.config,snapshot,'zones','xlsx')
         from openpyxl import load_workbook
         wb=load_workbook(io.BytesIO(xlsx))
-        self.assertEqual(wb.active.cell(5,1).value,'Sector X')
-        self.assertIsInstance(wb.active.cell(6,3).value,(int,float))
+        self.assertEqual(wb.active.cell(5,1).value,'Sector')
+        self.assertIsInstance(wb.active.cell(6,6).value,(int,float))
         pdf,_=export(self.engine.config,snapshot,'zones','pdf')
         self.assertTrue(pdf.startswith(b'%PDF-'))
         self.assertGreater(len(pdf),1000)

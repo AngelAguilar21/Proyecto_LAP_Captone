@@ -39,9 +39,6 @@ def raster_pdf(data, page):
         return _pdf_png(data,page)
     except ImportError:
         runtime = os.environ.get("AEROTRACK_DOCUMENT_PYTHON")
-        bundled = Path.home()/".cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe"
-        if not runtime and bundled.is_file():
-            runtime = str(bundled)
         if not runtime or not Path(runtime).is_file():
             raise ValueError("Para importar PDF se necesita pypdfium2 o AEROTRACK_DOCUMENT_PYTHON con esa dependencia.")
         result = subprocess.run([runtime,str(Path(__file__).resolve()),"pdf",str(page)],input=data,capture_output=True,timeout=40,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))

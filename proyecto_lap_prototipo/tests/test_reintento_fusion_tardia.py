@@ -16,7 +16,7 @@ los 3s).
 import sys
 from pathlib import Path
 
-RAIZ = Path(r"C:\Users\PC-01\OneDrive - Universidad ESAN\Escritorio\PROYECTO_LAP_CAPSTONE\Proyecto_LAP_Captone\proyecto_lap_prototipo")
+RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "src"))
 
 import nodes

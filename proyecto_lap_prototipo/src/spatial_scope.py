@@ -24,10 +24,13 @@ def coverage_contains(camera, point):
     return math.hypot(dx,dy) <= radius+1e-7 and abs(math.atan2(sideways,forward)) <= math.radians(camera.get('fov',60)/2)+1e-7
 
 
-def accepts(camera, config, u, v, ground):
+def accepts(camera, config, u, v, ground, image_only=False):
     if camera.get('detectionZone') and not inside((u,v), camera['detectionZone']):
         return False
-    if config.get('workArea') and not inside(ground, config['workArea']):
+    # Sin homografía solo se puede evaluar la máscara de la imagen.
+    if image_only:
+        return True
+    if not config.get('mapAsset') and config.get('workArea') and not inside(ground, config['workArea']):
         return False
     if camera.get('restrictCoverage', False) and not coverage_contains(camera, ground):
         return False

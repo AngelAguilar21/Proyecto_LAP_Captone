@@ -20,6 +20,7 @@ Parches:
      load_state_dict) reemplaza todo el peso del backbone de todas formas.
 """
 from pathlib import Path
+import re
 
 RAIZ_P2PNET = Path(__file__).resolve().parent.parent / "external" / "P2PNet"
 
@@ -27,10 +28,7 @@ PARCHES = [
     {
         "archivo": RAIZ_P2PNET / "util" / "misc.py",
         "buscar": "if float(torchvision.__version__[:3]) < 0.7:",
-        "reemplazo": (
-            "_tv_major, _tv_minor = (int(x) for x in torchvision.__version__.split(\".\")[:2])\n"
-            "if (_tv_major, _tv_minor) < (0, 7):"
-        ),
+        "reemplazo": 'if tuple(int(x) for x in torchvision.__version__.split(".")[:2]) < (0, 7):',
     },
     {
         "archivo": RAIZ_P2PNET / "models" / "backbone.py",
@@ -50,6 +48,12 @@ PARCHES = [
 ]
 
 
+def reparar_version(contenido):
+    # El parche anterior introducía una línea sin indentación dentro de interpolate.
+    patron = r'(?m)^([ \t]*)_tv_major, _tv_minor = .*\n[ \t]*if \(_tv_major, _tv_minor\) < \(0, 7\):'
+    return re.sub(patron, lambda m: m[1]+PARCHES[0]["reemplazo"], contenido)
+
+
 def aplicar():
     if not RAIZ_P2PNET.exists():
         raise RuntimeError(
@@ -60,13 +64,16 @@ def aplicar():
     for parche in PARCHES:
         archivo = parche["archivo"]
         contenido = archivo.read_text(encoding="utf-8")
+        if archivo.name == "misc.py":
+            reparado = reparar_version(contenido)
+            if reparado != contenido:
+                archivo.write_text(reparado, encoding="utf-8")
+                contenido = reparado
         if parche["reemplazo"] in contenido:
             print(f"[=] {archivo.relative_to(RAIZ_P2PNET)} ya tiene el parche aplicado.")
             continue
         if parche["buscar"] not in contenido:
-            print(f"[!] {archivo.relative_to(RAIZ_P2PNET)}: no se encontro el texto esperado "
-                  "(¿cambio el submodulo de version? revisar manualmente).")
-            continue
+            raise RuntimeError(f"{archivo}: no se encontró el texto esperado; revisa la versión del submódulo.")
         archivo.write_text(contenido.replace(parche["buscar"], parche["reemplazo"]), encoding="utf-8")
         print(f"[OK] Parche aplicado en {archivo.relative_to(RAIZ_P2PNET)}")
 

@@ -69,8 +69,8 @@ class DetectorP2PNet:
     def _preparar_frame(self, frame_bgr: np.ndarray):
         frame_rgb = frame_bgr[:, :, ::-1]
         alto, ancho = frame_rgb.shape[:2]
-        nuevo_ancho = max(128, round(ancho / 128) * 128)
-        nuevo_alto = max(128, round(alto / 128) * 128)
+        nuevo_ancho = max(128, ancho // 128 * 128)
+        nuevo_alto = max(128, alto // 128 * 128)
         imagen = Image.fromarray(frame_rgb).resize((nuevo_ancho, nuevo_alto), Image.LANCZOS)
         escala_x = ancho / nuevo_ancho
         escala_y = alto / nuevo_alto

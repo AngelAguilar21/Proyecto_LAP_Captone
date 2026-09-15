@@ -47,3 +47,30 @@ proyecto_lap_prototipo/config/live.local.tmp
 proyecto_lap_prototipo/dashboard/node_modules/
 proyecto_lap_prototipo/dashboard/dist/
 proyecto_lap_prototipo/data/uploads/
+proyecto_lap_prototipo/config/counting.local.json
+proyecto_lap_prototipo/config/counting.local.tmp
+proyecto_lap_prototipo/config/counting.sqlite*
+proyecto_lap_prototipo/config/ultralytics/
+*.download
+proyecto_lap_prototipo/data/replays/
+Ultralytics/
+proyecto_lap_prototipo/Ultralytics/
+/proyecto_lap_prototipo/data/replay-test-artifacts/
+
+# Cache reproducible y respaldo de detalle cartográfico.
+proyecto_lap_prototipo/data/map-detail-cache/
+proyecto_lap_prototipo/data/maps-before-detail/
+
+# Herramientas personales y conversaciones de asistentes
+.codex/
+.agents/
+CLAUDE.md
+AGENTS.md
+**/codex-clipboard-*
+
+# Respaldos, resultados y capturas locales del prototipo
+proyecto_lap_prototipo/config/backups/
+proyecto_lap_prototipo/data/archived-before-map-unification/
+proyecto_lap_prototipo/data/qa-unified/
+proyecto_lap_prototipo/data/replay-map-v1/
+proyecto_lap_prototipo/docs/REVISION_USABILIDAD_MONITOREO.md

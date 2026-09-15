@@ -36,6 +36,17 @@ def validate_config(c):
     if not isinstance(lines,list) or len(lines)>6000 or any(not isinstance(line,list) or len(line)!=4 or any(not finite(x,0,1) for x in line) for line in lines):
         raise ValueError("Líneas del plano inválidas.")
     cameras = c.get("cameras")
+    plans=c.get("plans",{})
+    if not isinstance(plans,dict) or len(plans)>8:
+        raise ValueError("Catálogo de planos inválido.")
+    for pid, plan in plans.items():
+        if pid not in ("custom","lap-1","lap-2","lap-3","lap-4") or not isinstance(plan,dict):
+            raise ValueError("Plano desconocido.")
+        validate_config({**c,**plan,"plans":{},"cameras":[]})
+    if c.get("planId","custom") not in ("custom","lap-1","lap-2","lap-3","lap-4"):
+        raise ValueError("Nivel desconocido.")
+    if c.get("mapAsset") and c["mapAsset"] not in [f"/maps/lap/{n}.json" for n in (1,2,3,4)]:
+        raise ValueError("Referencia cartográfica inválida.")
     if not isinstance(cameras, list) or not 0 <= len(cameras) <= 32:
         raise ValueError("Configura como máximo 32 cámaras.")
     ids = set()
@@ -51,7 +62,11 @@ def validate_config(c):
             raise ValueError(f"Fuente inválida: {cid}.")
         if not finite(cam.get("offset", 0), 0, 86400):
             raise ValueError("Offset debe ser no negativo (segundos que se omiten al inicio).")
-        for key, maximum in [("x", c["width"]), ("y", c["height"])]:
+        pid=cam.get("planId","custom")
+        if pid not in ("custom","lap-1","lap-2","lap-3","lap-4") or (pid!=c.get("planId","custom") and pid not in plans):
+            raise ValueError(f"Plano de cámara desconocido en {cid}.")
+        cam_plan=c if cam.get("planId","custom")==c.get("planId","custom") else plans.get(cam.get("planId","custom"),c)
+        for key, maximum in [("x", cam_plan["width"]), ("y", cam_plan["height"])]:
             if not finite(cam.get(key), 0, maximum):
                 raise ValueError(f"Posición {key} inválida en {cid}.")
         if not isinstance(cam.get("links", []), list):
@@ -62,11 +77,11 @@ def validate_config(c):
         for field in ("name", "location"):
             if field in cam and (not isinstance(cam[field], str) or len(cam[field]) > 160):
                 raise ValueError(f"{cid}: {field} inválido.")
-        for field in ("active", "restrictCoverage"):
+        for field in ("active", "restrictCoverage", "denseCounting", "illustrative"):
             if field in cam and not isinstance(cam[field],bool):
                 raise ValueError(f"{field}: debe ser booleano.")
         if cam.get("coveragePolygon"):
-            validate_polygon(cam["coveragePolygon"],c["width"],c["height"],"Cobertura")
+            validate_polygon(cam["coveragePolygon"],cam_plan["width"],cam_plan["height"],"Cobertura")
         if cam.get("coverageShape", "cone") not in ("cone","rectangle","free"):
             raise ValueError("Forma de cobertura inválida.")
         if "coverageWidth" in cam and not finite(cam["coverageWidth"],.01,10000):
@@ -77,10 +92,42 @@ def validate_config(c):
         for p in pairs:
             if not isinstance(p, list) or len(p) != 4 or not all(finite(v, -10000, 10000) for v in p):
                 raise ValueError("Cada correspondencia contiene [u, v, x, y].")
-            if not 0 <= p[0] <= 1 or not 0 <= p[1] <= 1 or not 0 <= p[2] <= c["width"] or not 0 <= p[3] <= c["height"]:
+            if not 0 <= p[0] <= 1 or not 0 <= p[1] <= 1 or not 0 <= p[2] <= cam_plan["width"] or not 0 <= p[3] <= cam_plan["height"]:
                 raise ValueError("Puntos fuera del video o del plano.")
         if len(pairs) >= 4:
             calibration(pairs)
+        for field, lo, hi in [('denseInterval',2,60),('crowdThreshold',1,1000),('crowdDwell',0,3600)]:
+            if field in cam and not finite(cam[field],lo,hi):
+                raise ValueError(f'{cid}: {field} fuera de rango.')
+        if cam.get('analysisZones'):
+            from counting.analytics import validate as validate_counting
+            validate_counting({'source':'config-camera','confidence':.5,'interval':1,'maxSide':768,'zones':cam['analysisZones']})
+        count_lines = cam.get('countLines',[])
+        if not isinstance(count_lines,list) or len(count_lines)>20:
+            raise ValueError('Máximo 20 líneas de entrada/salida por cámara.')
+        line_ids=set()
+        for line in count_lines:
+            if not isinstance(line,dict) or not isinstance(line.get('id'),str) or not line['id'] or line['id'] in line_ids:
+                raise ValueError('Cada línea necesita un identificador único.')
+            line_ids.add(line['id'])
+            if not isinstance(line.get('name'),str) or not 1<=len(line['name'])<=80 or line.get('entrySide') not in (-1,1):
+                raise ValueError('Indica nombre y dirección de entrada de la línea.')
+            for key in ('a','b'):
+                if not isinstance(line.get(key),list) or len(line[key])!=2 or not all(finite(v,0,1) for v in line[key]):
+                    raise ValueError('Los extremos deben estar dentro de la imagen.')
+            if math.dist(line['a'],line['b'])<.02:
+                raise ValueError('Separa los extremos de la línea de entrada/salida.')
+            if line.get('bands') is not None:
+                bands=line['bands']
+                if not isinstance(bands,dict): raise ValueError('Áreas del acceso inválidas.')
+                a,b=line['a'],line['b'];dx,dy=b[0]-a[0],b[1]-a[1]
+                for side,sign in [('negative',-1),('positive',1)]:
+                    points=bands.get(side)
+                    if not isinstance(points,list) or len(points)!=2: raise ValueError('Cada lado del acceso necesita dos puntos exteriores.')
+                    for point in points:
+                        if not isinstance(point,list) or len(point)!=2 or not all(finite(v,0,1) for v in point): raise ValueError('Los puntos del acceso deben estar dentro de la imagen.')
+                        if sign*(dx*(point[1]-a[1])-dy*(point[0]-a[0]))<=.00001: raise ValueError('Mantén las áreas exterior e interior a lados opuestos de la línea de acceso.')
+                    validate_polygon([a,b,points[1],points[0]],1,1,'Área de confirmación del acceso')
         zone = cam.get("detectionZone")
         if zone is not None:
             validate_polygon(zone,1,1,f"{cid}: zona de detección")
@@ -160,9 +207,48 @@ class IdentityStore:
         self.local = {}
         self.serial = 0
         self.events = deque(maxlen=150)
+        self.overlap_evidence = {}
+
+    def reconcile_overlap(self, observations, t):
+        """Reconcilia IDs ya creados solo con coincidencia mutua y evidencia sostenida."""
+        if not self.config['clocksVerified']:
+            return
+        known = [o for o in observations if o.get('point') is not None and (o['camera'],o['local']) in self.local]
+        nearest = {}
+        for i,a in enumerate(known):
+            cam = next(c for c in self.config['cameras'] if c['id']==a['camera'])
+            scores=[]
+            for j,b in enumerate(known):
+                if a['camera']==b['camera'] or b['camera'] not in cam.get('links',[]):continue
+                other=next(c for c in self.config['cameras'] if c['id']==b['camera'])
+                if cam.get('planId','custom')!=other.get('planId','custom'):continue
+                if self.local[a['camera'],a['local']]==self.local[b['camera'],b['local']]:continue
+                distance=math.dist(a['point'],b['point'])/self.config['matchDistance']
+                appearance=color_distance(a.get('color'),b.get('color'))
+                if distance<=1 and appearance<.25:scores.append((distance+appearance,j))
+            scores.sort()
+            if scores and (len(scores)==1 or scores[1][0]-scores[0][0]>.25):nearest[i]=scores[0][1]
+        evidence={}
+        for i,j in nearest.items():
+            if j<=i or nearest.get(j)!=i:continue
+            a,b=known[i],known[j]
+            ids=tuple(sorted([self.local[a['camera'],a['local']],self.local[b['camera'],b['local']]]))
+            if ids[0]==ids[1] or any(gid not in self.people for gid in ids):continue
+            old=self.overlap_evidence.get(ids,{'t':-100,'n':0})
+            evidence[ids]={'t':t,'n':old['n']+1 if t-old['t']<=1.5 else 1}
+            if evidence[ids]['n']<3:continue
+            cameras=[{o['camera'] for o in known if self.local[o['camera'],o['local']]==gid} for gid in ids]
+            if cameras[0]&cameras[1]:continue
+            keep,drop=ids
+            self.local={key:keep if value==drop else value for key,value in self.local.items()}
+            self.people[keep]['association']='estimated'
+            self.people.pop(drop,None)
+            self.events.appendleft({'type':'handoff','id':keep,'from':a['camera'],'to':b['camera'],'t':t,'reason':'coincidencia mutua sostenida'})
+        self.overlap_evidence=evidence
 
     def update(self, observations, t):
         cfg = self.config
+        self.reconcile_overlap(observations,t)
         claimed = set()
         grouped = {}
         for o in observations:
@@ -194,6 +280,8 @@ class IdentityStore:
                     if dt < 0 or dt > cfg["handoffSeconds"]:
                         continue
                     old_cam = next(c for c in cfg["cameras"] if c["id"] == p["camera"])
+                    new_cam=next(c for c in cfg["cameras"] if c["id"]==o["camera"])
+                    if new_cam.get("planId","custom")!=old_cam.get("planId","custom"):continue
                     if o["camera"] not in old_cam.get("links", []):
                         continue
                     # A track still observed elsewhere can only match as an overlap.
@@ -268,7 +356,7 @@ class Occupancy:
         dt = 0 if self.last_t is None else max(0, min(t - self.last_t, 2))
         self.last_t = t
         size = cfg["radius"]
-        grid_size = cfg["width"] / 24
+        grid_size = min(2.,cfg["width"]/24) if cfg.get("unit")=="meters" else cfg["width"]/24
         occupied = {}
         for p in points:
             x, y = p["point"]
