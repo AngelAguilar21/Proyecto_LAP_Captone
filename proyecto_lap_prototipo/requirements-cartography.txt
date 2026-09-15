@@ -1,0 +1,3 @@
+# Solo para regenerar la copia vectorial de los planos públicos.
+mapbox-vector-tile==2.2.0
+shapely==2.1.2

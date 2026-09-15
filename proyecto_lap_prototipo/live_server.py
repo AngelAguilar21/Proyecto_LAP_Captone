@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import socket
 import sys
 import subprocess
 import threading
@@ -19,6 +20,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 ROOT = Path(__file__).resolve().parent
+# Al abrir el servidor directamente, conservar el entorno validado del proyecto.
+project_env = ROOT.parent / ".venv"
+project_python = project_env / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+if __name__ == "__main__" and project_python.is_file() and Path(sys.prefix).resolve() != project_env.resolve():
+    os.execv(str(project_python), [str(project_python), str(Path(__file__).resolve()), *sys.argv[1:]])
 sys.path.insert(0, str(ROOT / "src"))
 from live_core import IdentityStore, Occupancy, calibration, project, validate_config
 from live_metrics import SessionMetrics
@@ -40,6 +46,7 @@ def default_config():
 class Engine:
     def __init__(self, config_path=None):
         self.config_path = Path(config_path) if config_path else CONFIG_PATH
+        self.data_root = self.config_path.parent if config_path else ROOT
         self.config = default_config()
         self.config_error = None
         if self.config_path.exists():
@@ -59,6 +66,7 @@ class Engine:
         self.pause_event = threading.Event()
         self.worker = None
         self.token = secrets.token_urlsafe(32)
+        self.instance = secrets.token_hex(8)
         self.revision = 0
         self.runtime_config = None
         self.frames = {}
@@ -68,9 +76,26 @@ class Engine:
         self.state = {"status": "idle", "people": [], "cameras": [], "events": [], "t": 0,
                       "analytics": {"clusters": [], "zones": [], "heat": [], "mappedCount": 0}, "error": self.config_error}
 
+        # Restaura únicamente agregados finalizados; nunca reactiva una fuente ni IDs en vivo.
+        if not self.config_error:
+            summaries=[]
+            for path in (self.data_root/'data/replays').glob('*/manifest.json'):
+                try:
+                    meta=json.loads(path.read_text(encoding='utf-8'))
+                    if meta.get('module')=='unified' and meta.get('status') in ('ended','stopped') and meta.get('cameraAnalytics') and meta.get('levelAnalytics'):
+                        summaries.append(meta)
+                except (OSError,ValueError):pass
+            if summaries:
+                last=max(summaries,key=lambda value:value['created']);pid=last['config'].get('planId','custom')
+                if any(c['id'] in last['cameraAnalytics'] for c in self.config['cameras']):
+                    analytics=copy.deepcopy(last['levelAnalytics'].get(pid,self.state['analytics']))
+                    analytics.update(clusters=[],mappedCount=0)
+                    for zone in analytics.get('zones',[]):zone.update(count=0,alert=False)
+                    self.state.update(status=last['status'],session=last['session'],mode='yolo',t=last['end'],planId=pid,analytics=analytics,levelAnalytics=last['levelAnalytics'],cameraAnalytics=last['cameraAnalytics'],identityDeleted=True)
+
     def snapshot(self):
         with self.lock:
-            return copy.deepcopy({**self.state, "serverTime": time.time(), "configRevision": self.revision, "sourceChecks":self.source_checks, "audit":list(self.audit)})
+            return copy.deepcopy({**self.state, "serverTime": time.time(), "serverInstance": self.instance, "configRevision": self.revision, "sourceChecks":self.source_checks, "audit":list(self.audit)})
 
     def record(self, action, detail):
         self.audit.appendleft({"at":datetime.now(timezone.utc).isoformat(),"action":action,"detail":detail})
@@ -111,6 +136,8 @@ class Engine:
 
     def start(self, request):
         with self.lock:
+            if getattr(self, "counting", None) and self.counting.active():
+                raise ValueError("Detén el análisis de conteo antes de iniciar tracking.")
             if self.worker and self.worker.is_alive():
                 raise ValueError("Ya hay una sesión activa; detenla primero.")
             mode = request.get("detector", "yolo")
@@ -119,12 +146,19 @@ class Engine:
             if not self.config["cameras"]:
                 raise ValueError("Añade al menos una cámara antes de iniciar.")
             camera_id = request.get("camera")
+            camera_ids=request.get("cameraIds")
+            if camera_ids is not None and (not isinstance(camera_ids,list) or not camera_ids or any(cid not in {c["id"] for c in self.config["cameras"]} for cid in camera_ids)):
+                raise ValueError("Selecciona cámaras existentes.")
             if camera_id and camera_id not in {c["id"] for c in self.config["cameras"]}:
                 raise ValueError("Cámara desconocida.")
-            selected = [c for c in self.config["cameras"] if c.get("active",True) and (not camera_id or c["id"]==camera_id)]
+            selected = [c for c in self.config["cameras"] if c.get("active",True) and (c["id"]==camera_id if camera_id else c.get("planId","custom")==self.config.get("planId","custom"))]
+            if camera_ids is not None:
+                selected=[c for c in self.config["cameras"] if c["id"] in camera_ids and c.get("active",True)]
             if not selected:
                 raise ValueError("Activa al menos una cámara.")
             if request.get("requireUnified") and mode != "demo":
+                if any(c.get('illustrative') for c in selected):
+                    raise ValueError('Las ubicaciones ilustrativas permiten probar el mapa, pero no validar identidades entre cámaras. Usa referencias reales del mismo suelo y tiempos sincronizados.')
                 if len(selected)>1 and not self.config["clocksVerified"]:
                     raise ValueError("Verifica el tiempo común y los desfases antes del conteo multicámara.")
                 if any(len(c.get("pairs",[]))<4 for c in selected):
@@ -142,6 +176,16 @@ class Engine:
             self.state = {"status": "starting", "mode": mode, "people": [], "cameras": [], "events": [], "t": 0,
                           "analytics": {"clusters": [], "zones": [], "heat": [], "mappedCount": 0}, "error": None, "session": secrets.token_hex(4)}
             self.runtime_config = copy.deepcopy(self.config)
+            self.runtime_config["cameras"] = copy.deepcopy(selected)
+            for camera in self.runtime_config['cameras']:
+                camera['links']=[cid for cid in camera.get('links',[]) if cid in {c['id'] for c in selected}]
+            self.state["planId"] = selected[0].get("planId","custom")
+            if not request.get("requireUnified"):
+                self.runtime_config["clocksVerified"]=False
+            if camera_id:
+                pid=selected[0].get("planId","custom")
+                if pid!=self.config.get("planId","custom"):
+                    self.runtime_config.update(copy.deepcopy(self.config.get("plans",{}).get(pid,{})))
             self.worker = threading.Thread(target=self.run, args=(self.runtime_config, dict(request)), daemon=True)
             self.worker.start()
             self.record("Sesión iniciada",f"{mode} · {camera_id or 'todas las cámaras'}")
@@ -166,6 +210,8 @@ class Engine:
 
     def run(self, config, request):
         captures = {}
+        replay = None
+        combined = None
         mode = request.get("detector", "yolo")
         try:
             if mode == "demo":
@@ -175,16 +221,16 @@ class Engine:
             import numpy as np
             from types import SimpleNamespace
             from tracking import ByteTrackPuntos
+            from following.appearance import torso_histogram
+            from following.tracker import BoxTracker
+            from following.flow import ZoneFlow, FlowField
             detector = None
             if mode == "p2pnet":
                 from detection import DetectorP2PNet
                 detector = DetectorP2PNet(str(ROOT / "external" / "P2PNet" / "weights" / "SHTechA.pth"), umbral=.1)
             elif mode == "yolo":
-                from ultralytics import YOLO
-                weights = request.get("weights") or str(ROOT / "models" / "yolo11n.pt")
-                if not weights or not Path(weights).is_file():
-                    raise ValueError("Selecciona una ruta local de pesos YOLO; no se descargan modelos automáticamente.")
-                detector = YOLO(weights)
+                from following.detector import PersonDetector
+                detector = PersonDetector(request.get("weights"), image_size=request.get("inferenceSize",640))
             else:
                 detector = cv2.HOGDescriptor()
                 detector.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
@@ -200,8 +246,9 @@ class Engine:
                 if isinstance(source, str) and not source.lower().startswith(("rtsp://", "http://", "https://", "rtmp://")):
                     source = str((ROOT / source).resolve())
                 stream = isinstance(source, int) or "://" in str(source)
-                if isinstance(source, str) and stream:
-                    cap = cv2.VideoCapture(source, cv2.CAP_FFMPEG, [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000, cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000])
+                if stream:
+                    from following.source import NetworkCapture
+                    cap = NetworkCapture(source, ROOT)
                 else:
                     cap = cv2.VideoCapture(source)
                 try:
@@ -218,7 +265,11 @@ class Engine:
                 fps = cap.get(cv2.CAP_PROP_FPS)
                 if not np.isfinite(fps) or fps <= 0:
                     fps = 25.
-                c.update(cap=cap, fps=fps, stream=stream, frameIndex=-1, tracker=ByteTrackPuntos(umbral_alto=.35 if mode=="yolo" else .6,max_frames_perdido=15), h=calibration(c.get("pairs", [])))
+                c.update(cap=cap, fps=fps, stream=stream, duration=cap.get(cv2.CAP_PROP_FRAME_COUNT)/fps if not stream else None, frameIndex=-1,
+                         tracker=BoxTracker() if mode=="yolo" else ByteTrackPuntos(umbral_alto=.6,max_frames_perdido=15),
+                         h=calibration(c.get("pairs", [])))
+                if c.get("restrictCoverage") and (c["h"] is None or mode=="p2pnet"):
+                    raise ValueError(f"{c['id']}: calibra el suelo para limitar por cobertura del plano, o usa solo la zona útil de la imagen.")
                 statuses[c["id"]] = {"id": c["id"], "status": "ready"}
             active = [c for c in cams if "cap" in c]
             if len(active)!=len(cams) and request.get("requireUnified"):
@@ -230,6 +281,23 @@ class Engine:
             if len({c["stream"] for c in active}) > 1:
                 raise ValueError("No mezcles archivos y cámaras en vivo en una sesión; sus relojes no son equivalentes.")
             identities, occupancy, metrics = IdentityStore(config), Occupancy(config), SessionMetrics()
+            if not active[0]["stream"]:
+                from replay import ReplayWriter
+                replay = ReplayWriter(self.data_root,self.state["session"],"unified" if request.get("combined") else "tracking",[{"id":c["id"],"name":c.get("name",c["id"]),"source":c["source"],"offset":c.get("offset",0),"planId":c.get("planId","custom"),"countLines":c.get("countLines",[])} for c in active],{k:v for k,v in config.items() if k != "cameras"})
+            from following.combined import CombinedAnalysis
+            combined = CombinedAnalysis(cams, ROOT) if request.get('combined') else None
+            camera_analytics = {}
+            level_configs={pid:config if pid==config.get('planId','custom') else {**config,**config.get('plans',{}).get(pid,{})} for pid in {c.get('planId','custom') for c in cams}}
+            level_occupancy={pid:Occupancy(value) for pid,value in level_configs.items()}
+            level_flow={pid:ZoneFlow(value) for pid,value in level_configs.items()}
+            flow_fields={pid:FlowField(value) for pid,value in level_configs.items()}
+            camera_maps={c['id']:Occupancy(level_configs[c.get('planId','custom')]) for c in cams}
+            camera_levels={c['id']:c.get('planId','custom') for c in cams}
+            for camera in cams:
+                plan=level_configs[camera.get('planId','custom')]
+                camera['scope']={key:plan.get(key) for key in ('width','height','workArea','zones','mapAsset')}
+            flow = ZoneFlow(config)
+            trails = {}
             wall_start = time.monotonic()
             timeline = 0.
             while active and not self.stop_event.is_set():
@@ -255,24 +323,21 @@ class Engine:
                     ok, frame = cap.read()
                     c["frameIndex"] += 1
                     if not ok:
-                        statuses[c["id"]] = {"id": c["id"], "status": "error" if c["stream"] else "ended", "error": "Fuente sin imagen" if c["stream"] else None}
+                        statuses[c["id"]] = {**statuses[c["id"]], "status": "error" if c["stream"] else "ended", "error": "Fuente sin imagen" if c["stream"] else None}
                         active.remove(c)
-                        if not c["stream"] or request.get("requireUnified"):
+                        if request.get("requireUnified"):
                             active.clear()
                             break
                         continue
+                    if frame.shape[1]>1280:
+                        frame=cv2.resize(frame,(1280,round(frame.shape[0]*1280/frame.shape[1])))
                     height, width = frame.shape[:2]
                     raw_frames[c["id"]] = frame
                     detections, boxes = [], []
                     if mode == "p2pnet":
                         detections = detector.detectar(frame)
                     elif mode == "yolo":
-                        result = detector.predict(frame, classes=[0], conf=.15, imgsz=960, max_det=1000, verbose=False)[0]
-                        for b in result.boxes:
-                            x1, y1, x2, y2 = b.xyxy[0].cpu().tolist()
-                            score = float(b.conf[0])
-                            detections.append(SimpleNamespace(x=(x1 + x2) / 2, y=y2, confianza=score))
-                            boxes.append([x1, y1, x2, y2])
+                        detections, boxes = detector.detect(frame)
                     else:
                         scale = min(1., 640 / width)
                         small = cv2.resize(frame, (int(width * scale), int(height * scale)))
@@ -288,53 +353,75 @@ class Engine:
                     keep = []
                     for i,d in enumerate(detections):
                         ground = project(c['h'],d.x/width,d.y/height) if c['h'] is not None and mode!='p2pnet' else None
-                        if accepts(c,config,d.x/width,d.y/height,ground):
+                        if accepts(c,c["scope"],d.x/width,d.y/height,ground,image_only=c['h'] is None or mode=='p2pnet'):
                             keep.append(i)
                     excluded = len(detections)-len(keep)
                     detections = [detections[i] for i in keep]
                     if boxes:
                         boxes = [boxes[i] for i in keep]
-                    tracks, _, _ = c["tracker"].actualizar(detections, t)
+                    if mode == "yolo":
+                        tracks = c["tracker"].update(detections, boxes, t, (height, width))
+                    else:
+                        tracks, _, _ = c["tracker"].actualizar(detections, t)
                     for tr in tracks:
                         px, py = tr.posicion
                         nearest = min(range(len(detections)), key=lambda i: (detections[i].x - px)**2 + (detections[i].y - py)**2) if detections else None
-                        box = boxes[nearest] if boxes and nearest is not None else None
-                        color = None
-                        if box:
-                            x1, y1, x2, y2 = box
-                            roi = frame[max(0, int(y1 + (y2-y1)*.25)):min(height, int(y1 + (y2-y1)*.7)), max(0, int(x1)):min(width, int(x2))]
-                            if roi.size:
-                                hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-                                color = cv2.calcHist([hsv], [0, 1], None, [16, 8], [0, 180, 0, 256])
-                                cv2.normalize(color, color, alpha=1, norm_type=cv2.NORM_L1)
-                        if not accepts(c,config,px/width,py/height,project(c["h"],px/width,py/height) if c["h"] is not None and mode!="p2pnet" else None):
+                        box = tr.box if mode == "yolo" else (boxes[nearest] if boxes and nearest is not None else None)
+                        color = torso_histogram(frame, box)
+                        if not accepts(c,c["scope"],px/width,py/height,project(c["h"],px/width,py/height) if c["h"] is not None and mode!="p2pnet" else None,image_only=c['h'] is None or mode=='p2pnet'):
                             continue
                         point = None
                         if c["h"] is not None and mode != "p2pnet":
                             point = project(c["h"], px / width, py / height)
-                            if point and not (0 <= point[0] <= config["width"] and 0 <= point[1] <= config["height"]):
+                            if point and not (0 <= point[0] <= c["scope"]["width"] and 0 <= point[1] <= c["scope"]["height"]):
                                 point = None
                         observations.append({"camera": c["id"], "local": tr.id, "point": point, "pixel": [float(px), float(py)], "box": box, "color": color, "score": tr.score})
-                    statuses[c["id"]] = {"id": c["id"], "status": "live", "width": width, "height": height, "fps":c["fps"], "calibrated": c["h"] is not None and mode != "p2pnet", "count": sum(o["camera"]==c["id"] for o in observations), "excluded":excluded, "timestamp": t, "sourceTime":c["frameIndex"]/c["fps"] if not c["stream"] else None}
+                    statuses[c["id"]] = {"id": c["id"], "status": "live", "width": width, "height": height, "fps":c["fps"], "duration":c.get("duration"), "calibrated": c["h"] is not None and mode != "p2pnet", "count": sum(o["camera"]==c["id"] for o in observations), "excluded":excluded, "timestamp": t, "sourceTime":c["frameIndex"]/c["fps"] if not c["stream"] else None}
                     with self.lock:
                         self.source_checks[c["id"]] = {"source":c["source"],"valid":True,"width":width,"height":height,"fps":c["fps"],"checkedAt":time.time()}
                 if not active or self.stop_event.is_set():
                     break
                 people = identities.update(observations, t)
+                if combined:
+                    for c in active:
+                        group=[p for p in people if p['camera']==c['id']]
+                        camera_analytics[c['id']] = combined.observe(c,raw_frames[c['id']],group,t)
+                        camera_analytics[c['id']]['map']=camera_maps[c['id']].update(group,t)
                 encoded = {}
                 for cid, frame in raw_frames.items():
                     # Operator-only view on a loopback-only server: the operator already
                     # has the raw source video, so the feed is served at full detail with
                     # tracking overlays drawn on top, not degraded for anonymity.
+                    overlay_scale = max(1., frame.shape[1]/1440)
+                    line_width = max(2, round(2*overlay_scale))
                     for p in [p for p in people if p["camera"] == cid]:
                         px, py = map(int, p["pixel"])
+                        trail = trails.setdefault((cid, p["id"]), deque(maxlen=25))
+                        trail.append((px, py))
+                        if len(trail) > 1:
+                            cv2.polylines(frame, [np.asarray(trail, dtype=np.int32)], False, (70, 220, 120), line_width)
                         if p["box"]:
                             x1, y1, x2, y2 = map(int, p["box"])
-                            cv2.rectangle(frame, (x1, y1), (x2, y2), (70, 220, 120), 2)
+                            cv2.rectangle(frame, (x1, y1), (x2, y2), (70, 220, 120), line_width)
                         cv2.circle(frame, (px, py), 5, (70, 220, 120), -1)
                         suffix = " ~" if p["association"] != "local" else ""
-                        cv2.putText(frame, p["id"] + suffix, (max(0, px - 25), max(18, py - 14)), cv2.FONT_HERSHEY_SIMPLEX, .55, (80, 255, 150), 2)
-                    ok, jpg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 92])
+                        label = p["id"] + suffix
+                        font = .6*overlay_scale
+                        (tw, th), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font, line_width)
+                        lx, ly = max(0, min(px-tw//2, frame.shape[1]-tw)), max(th+6, py-round(10*overlay_scale))
+                        cv2.rectangle(frame, (lx, ly-th-5), (lx+tw, ly+baseline), (12, 35, 23), -1)
+                        cv2.putText(frame, label, (lx, ly), cv2.FONT_HERSHEY_SIMPLEX, font, (120, 255, 170), line_width)
+                    camera=next(c for c in cams if c['id']==cid)
+                    for line in camera.get('countLines',[]):
+                        a,b=[(round(p[0]*frame.shape[1]),round(p[1]*frame.shape[0])) for p in (line['a'],line['b'])]
+                        cv2.line(frame,a,b,(90,240,180),line_width)
+                        dx,dy=b[0]-a[0],b[1]-a[1];length=max(1.,(dx*dx+dy*dy)**.5)
+                        middle=((a[0]+b[0])//2,(a[1]+b[1])//2);side=line.get('entrySide',1)
+                        tip=(round(middle[0]-dy/length*35*side),round(middle[1]+dx/length*35*side))
+                        cv2.arrowedLine(frame,middle,tip,(90,240,180),line_width,tipLength=.3)
+                    if frame.shape[1] > 1440:
+                        frame = cv2.resize(frame, (1440, round(frame.shape[0]*1440/frame.shape[1])))
+                    ok, jpg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 88])
                     if ok:
                         encoded[cid] = jpg.tobytes()
                         with self.lock:
@@ -342,17 +429,45 @@ class Engine:
                 sample_times = [c["frameIndex"]/c["fps"]-c.get("offset",0) for c in active if not c["stream"]]
                 skew = max(sample_times)-min(sample_times) if len(sample_times)>1 else 0.
                 elapsed = time.monotonic() - start
+                seen = {(p["camera"], p["id"]) for p in people}
+                trails = {key: value for key, value in trails.items() if key in seen}
                 with self.lock:
                     self.frames.update(encoded)
                     analytics = occupancy.update(people,t)
+                    analytics["flow"] = flow.update(people,t)
+                    levels={}
+                    for pid, counter in level_occupancy.items():
+                        group=[p for p in people if camera_levels[p['camera']]==pid]
+                        levels[pid]=counter.update(group,t)
+                        levels[pid]['flow']=level_flow[pid].update(group,t)
+                        levels[pid]['flowVectors']=flow_fields[pid].update(group,t)
+                    analytics=levels.get(config.get('planId','custom'),analytics)
+                    if replay:
+                        views=[]
+                        for c in active:
+                            h,w=raw_frames[c["id"]].shape[:2]
+                            views.append({"id":c["id"],"t":statuses[c["id"]]["sourceTime"],"analysis":camera_analytics.get(c["id"]),"people":[{"id":p["id"],"box":[p["box"][0]/w,p["box"][1]/h,p["box"][2]/w,p["box"][3]/h] if p["box"] else None,"pixel":[p["pixel"][0]/w,p["pixel"][1]/h],"point":p["point"],"association":p["association"]} for p in people if p["camera"]==c["id"]]})
+                        replay.append({"t":t,"cameras":views,"analytics":analytics,"levels":levels})
                     self.state.update(status="paused" if self.pause_event.is_set() else "running", people=people, cameras=list(statuses.values()), events=list(identities.events), t=t,
-                                      analytics=analytics, synchronization={"mode":"live" if active[0]["stream"] else "recordings", "contentVerified":config["clocksVerified"], "sampleSkewSeconds":round(skew,5), "commonTime":t}, totals=metrics.update(people,analytics,t), series=list(metrics.series), processingMs=round(elapsed * 1000), updatedAt=time.time())
-                timeline += .2
+                                      analytics=analytics, levelAnalytics=levels, cameraAnalytics=camera_analytics, synchronization={"mode":"live" if active[0]["stream"] else "recordings", "contentVerified":config["clocksVerified"], "sampleSkewSeconds":round(skew,5), "commonTime":t}, totals=metrics.update(people,analytics,t), series=list(metrics.series), processingMs=round(elapsed * 1000), updatedAt=time.time())
+                timeline = round(timeline+.2,6)
                 self.stop_event.wait(max(0., .2 - elapsed))
         except Exception as exc:
             with self.lock:
                 self.state.update(status="error", error=f"{type(exc).__name__}: {exc}", people=[])
         finally:
+            if combined:
+                final_analytics=combined.close()
+                self.state['cameraAnalytics']=final_analytics
+                if replay:
+                    replay.meta['cameraAnalytics']=final_analytics
+                    replay.meta['levelAnalytics']=self.state.get('levelAnalytics',{})
+                    replay.meta['derivedMapVersion']=2
+            if replay:
+                try:
+                    replay.finish("error" if self.state["status"]=="error" else "stopped" if self.stop_event.is_set() else "ended")
+                except OSError as exc:
+                    self.state.update(status="error", error=f"No se pudo guardar la reproducción: {exc}")
             for cap in captures.values():
                 cap.release()
             with self.lock:
@@ -367,11 +482,12 @@ class Engine:
                 self.state["identityDeleted"] = True
                 self.frames = dict(self.preview_frames)
                 self.runtime_config = None
-                self.record("Sesión finalizada","IDs y recorridos individuales eliminados; se conservan métricas agregadas en memoria.")
+                self.record("Sesión finalizada","Estado activo limpiado. Los análisis de archivos conservan observaciones e IDs de sesión para revisar el video.")
                 for camera in self.state.get("cameras", []):
+                    camera["lastCount"] = camera.get("count", 0)
+                    camera["count"] = 0
                     if camera["status"] in ("live", "ready"):
                         camera["status"] = "stopped" if self.stop_event.is_set() else "ended"
-                        camera["count"] = 0
 
     def demo(self, config):
         import math
@@ -404,7 +520,7 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     def send_data(self, code, body, content_type="application/json"):
-        data = json.dumps(body, ensure_ascii=False, allow_nan=False).encode("utf-8") if content_type == "application/json" else body
+        data = json.dumps(body, ensure_ascii=False, allow_nan=False).encode("utf-8") if content_type == "application/json" and not isinstance(body, bytes) else body
         self.send_response(code)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(data)))
@@ -431,6 +547,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_data(403, {"error": "Acceso local requerido."})
         url = urlparse(self.path)
         engine = self.server.engine
+        if url.path.startswith("/api/replay/"):
+            from replay import get
+            return get(self,url,self.server.engine.data_root)
+        if url.path.startswith("/api/counting/"):
+            from counting.api import get
+            return get(self, url, ROOT)
         if url.path == "/api/config":
             with engine.lock:
                 return self.send_data(200, {"config": engine.config, "token": engine.token, "revision": engine.revision})
@@ -525,6 +647,9 @@ class Handler(BaseHTTPRequestHandler):
             data = json.loads(self.rfile.read(size))
             if not isinstance(data, dict):
                 raise ValueError("Solicitud inválida.")
+            if parsed.path.startswith("/api/counting/"):
+                from counting.api import post
+                return post(self, parsed.path, data, ROOT)
             if self.path == "/api/calibration-check":
                 import numpy as np
                 import cv2
@@ -540,6 +665,41 @@ class Handler(BaseHTTPRequestHandler):
                 if spread<.005:
                     raise ValueError("Referencias casi alineadas: distribuye los nodos por todo el suelo visible.")
                 return self.send_data(200,{"rmse":float(np.sqrt(np.mean(np.sum((predicted-points[:,2:])**2,axis=1)))),"spread":spread})
+            if self.path == "/api/camera-preview":
+                import cv2
+                cid=data.get("camera")
+                camera=next((c for c in engine.config["cameras"] if c["id"]==cid),None)
+                if not camera:
+                    raise ValueError("Cámara desconocida.")
+                if engine.worker and engine.worker.is_alive():
+                    raise ValueError("Finaliza el seguimiento para obtener una vista previa.")
+                seconds=data.get("seconds",0)
+                if not isinstance(seconds,(int,float)) or not 0<=seconds<=86400:
+                    raise ValueError("Instante inválido.")
+                source=data.get("source",camera["source"])
+                if not isinstance(source,(str,int)) or isinstance(source,bool):
+                    raise ValueError("Fuente inválida.")
+                if isinstance(source,str) and "://" not in source:
+                    source=str((ROOT/source).resolve())
+                cap=(cv2.VideoCapture(source,cv2.CAP_FFMPEG,[cv2.CAP_PROP_OPEN_TIMEOUT_MSEC,5000,cv2.CAP_PROP_READ_TIMEOUT_MSEC,5000])
+                     if isinstance(source,str) and "://" in source else cv2.VideoCapture(source))
+                try:
+                    if not cap.isOpened(): raise ValueError("No se pudo abrir la cámara.")
+                    cap.set(cv2.CAP_PROP_ORIENTATION_AUTO,1)
+                    fps=cap.get(cv2.CAP_PROP_FPS) or 25
+                    if seconds: cap.set(cv2.CAP_PROP_POS_MSEC,seconds*1000)
+                    ok,frame=cap.read()
+                    if not ok: raise ValueError("No hay imagen en ese instante.")
+                    from counting.engine import CountingEngine
+                    encoded=CountingEngine.encode(frame)
+                    h,w=frame.shape[:2]
+                    with engine.lock:
+                        engine.frames[cid]=encoded
+                        engine.state["cameras"]=[c for c in engine.state["cameras"] if c["id"]!=cid]+[{"id":cid,"status":"ready","width":w,"height":h,"fps":fps,"sourceTime":seconds}]
+                        engine.source_checks[cid]={"source":camera["source"],"valid":True,"width":w,"height":h,"fps":fps,"checkedAt":time.time()}
+                    return self.send_data(200,{"width":w,"height":h,"fps":fps,"duration":cap.get(cv2.CAP_PROP_FRAME_COUNT)/fps})
+                finally:
+                    cap.release()
             if self.path == "/api/config":
                 engine.configure(data)
             elif self.path == "/api/start":
@@ -564,8 +724,15 @@ def main():
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--config-path", type=Path, help="Archivo de configuración alternativo para pruebas aisladas.")
     args = parser.parse_args()
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
+    server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler, bind_and_activate=False)
+    if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+        server.allow_reuse_address = False
+        server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+    server.server_bind()
+    server.server_activate()
     server.engine = Engine(args.config_path)
+    from replay import recover_interrupted
+    recover_interrupted(server.engine.data_root)
     print(f"LAP: http://127.0.0.1:{args.port} — solo equipo local", flush=True)
     try:
         server.serve_forever()
@@ -573,6 +740,10 @@ def main():
         pass
     finally:
         server.engine.stop()
+        if getattr(server.engine, "counting", None):
+            server.engine.counting.stop()
+            if server.engine.counting.worker:
+                server.engine.counting.worker.join(timeout=10)
         server.server_close()
 
 

@@ -12,14 +12,38 @@ import sys
 def report_data(config, state, kind):
     if not state.get("session"):
         raise ValueError("Inicia una sesión para generar un reporte.")
-    if kind in ("zones", "comparison"):
-        headers=["Sector X","Sector Y","Personas x segundos","Pico observado","IDs observados","Prioridad"]
-        rows=[[c["x"],c["y"],round(c["seconds"],3),c["peak"],c.get("visits",0),i+1] for i,c in enumerate(state["analytics"]["heat"])]
+    if kind=="cameras":
+        headers=['Cámara','Última muestra (s)','Personas en muestra','Máximo observado','Instante del máximo (s)','Promedio visible','Entradas','Salidas']
+        names={c['id']:c.get('name',c['id']) for c in config['cameras']}
+        rows=[]
+        for cid,a in state.get('cameraAnalytics',{}).items():
+            o=a['occupancy'];lines=a.get('crossings',[])
+            rows.append([names.get(cid,cid),a['t'],o['count'],o['peak'],o['peakAt'],round(o['mean'],2),sum(l['entries'] for l in lines),sum(l['exits'] for l in lines)])
+        title='Resumen de monitoreo por cámara'
+    elif kind in ("zones", "comparison"):
+        headers=["Sector","Nivel","Referencia","Sector X","Sector Y","Personas x segundos","Pico observado","IDs observados","Prioridad"]
+        cameras=[v for v in config['cameras'] if v.get('planId','custom')==state.get('planId',config.get('planId','custom'))]
+        def reference(cell):
+            if not cameras:return config.get('floor','Plano')
+            near=min(cameras,key=lambda v:(v['x']-cell['x'])**2+(v['y']-cell['y'])**2)
+            return 'Cerca de '+near.get('name',near['id'])
+        rows=[[f'S{i+1}',state.get('planId',config.get('planId','custom')),reference(c),c["x"],c["y"],round(c["seconds"],3),c["peak"],c.get("visits",0),i+1] for i,c in enumerate(state["analytics"]["heat"])]
         title="Zonas de ocupación" if kind=="zones" else "Comparación de sectores"
+    elif kind=="access-events":
+        headers=['Cámara','Local / acceso','Movimiento','Instante de fuente (s)']
+        names={c['id']:c.get('name',c['id']) for c in config['cameras']}
+        rows=[[names.get(cid,cid),l['name'],'Entrada' if e['direction']=='entries' else 'Salida',e['t']] for cid,a in state.get('cameraAnalytics',{}).items() for l in a.get('crossings',[]) for e in l.get('events',[])]
+        title='Eventos de entrada y salida por local (hasta 1000 por acceso)'
     elif kind=="occupancy":
         headers=["Zona","Ocupación actual","Personas x segundos","Pico observado","IDs observados"]
         rows=[[z["name"],z["count"],round(z.get("seconds",0),3),z.get("peak",0),z.get("visits",0)] for z in state["analytics"]["zones"]]
         title="Ocupación por zona"
+    elif kind=="crossings":
+        headers=["Zona", "Entradas observadas", "Salidas observadas", "Último cruce (s de fuente)"]
+        rows=[[z["name"],z["entries"],z["exits"],z["lastCrossing"]] for z in state["analytics"].get("flow",[])]
+        for cid,a in state.get('cameraAnalytics',{}).items():
+            rows.extend([[f"{cid} / {line['name']}",line['entries'],line['exits'],line['lastCrossing']] for line in a.get('crossings',[])])
+        title="Entradas y salidas por zona y acceso"
     elif kind=="flow":
         bins={}
         for sample in state.get("series",[]):
@@ -144,9 +168,6 @@ def export(config,state,kind,format):
         result=function(data)
     except ImportError:
         runtime=os.environ.get("AEROTRACK_DOCUMENT_PYTHON")
-        bundled=Path.home()/".cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe"
-        if not runtime and bundled.is_file():
-            runtime=str(bundled)
         if not runtime or not Path(runtime).is_file():
             raise ValueError("Este reporte requiere reportlab (PDF) u openpyxl (Excel), o un AEROTRACK_DOCUMENT_PYTHON con esas dependencias.")
         process=subprocess.run([runtime,str(Path(__file__).resolve()),format],input=json.dumps(data).encode(),capture_output=True,timeout=45,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))

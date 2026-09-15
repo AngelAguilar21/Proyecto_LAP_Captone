@@ -1,5 +1,10 @@
 # Proyecto LAP Capstone
 
+## Ejecutar el sistema AeroTrack
+
+Consulta [INSTALACION.md](INSTALACION.md) para clonar esta rama con P2PNet, instalar YOLO y ByteTrack, preparar los mapas e iniciar el sistema desde cero. En Windows, el instalador es `preparar_sistema.ps1`.
+
+
 Proyecto interdisciplinario orientado al análisis de afluencia de personas mediante Computer Vision para Lima Airport Partners (LAP).
 
 Este repositorio contiene el trabajo de Data Engineering asociado a la preparación, validación, limpieza y trazabilidad de datasets utilizados en experimentos de crowd counting.
