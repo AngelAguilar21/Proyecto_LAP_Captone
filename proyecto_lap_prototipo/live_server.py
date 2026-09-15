@@ -520,7 +520,7 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     def send_data(self, code, body, content_type="application/json"):
-        data = json.dumps(body, ensure_ascii=False, allow_nan=False).encode("utf-8") if content_type == "application/json" else body
+        data = json.dumps(body, ensure_ascii=False, allow_nan=False).encode("utf-8") if content_type == "application/json" and not isinstance(body, bytes) else body
         self.send_response(code)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(data)))

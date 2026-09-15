@@ -14,6 +14,14 @@ from counting.analytics import CountingAnalytics
 from types import SimpleNamespace
 
 class WorkspaceTests(unittest.TestCase):
+ def test_static_json_is_served_as_bytes_and_api_objects_are_encoded(self):
+  from unittest.mock import Mock
+  for body in [b'{"floor":3}', {'floor':3}]:
+   response=Mock();response.wfile=BytesIO()
+   Handler.send_data(response,200,body,'application/json')
+   self.assertEqual(json.loads(response.wfile.getvalue()),{'floor':3})
+   response.send_header.assert_any_call('Content-Length',str(len(response.wfile.getvalue())))
+
  def test_interrupted_replay_keeps_last_valid_sample(self):
   with tempfile.TemporaryDirectory() as tmp:
    root=Path(tmp);writer=ReplayWriter(root,'abc12345','tracking',[],{})

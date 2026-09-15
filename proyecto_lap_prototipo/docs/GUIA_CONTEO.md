@@ -1,5 +1,8 @@
 # AeroTrack: conteo y aglomeraciones
 
+Para instalar **todo el sistema integrado**, sigue [INSTALACION.md](../../INSTALACION.md). Los pasos siguientes se limitan al módulo especializado de conteo.
+
+
 Este módulo procesa una fuente por sesión con P2PNet en CPU. Estima cabezas,
 ocupación por zonas, concentración espacial y episodios que superan un umbral
 durante un tiempo definido. No requiere plano ni calibración.

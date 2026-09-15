@@ -12,3 +12,4 @@ filterpy==1.4.5
 lap==0.5.12
 openpyxl==3.1.5
 reportlab==4.4.3
+pypdfium2==4.30.0
