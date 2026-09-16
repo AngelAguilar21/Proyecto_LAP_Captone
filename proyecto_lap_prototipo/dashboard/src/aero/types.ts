@@ -4,7 +4,7 @@ export type View = 'replay' | 'overview' | 'counting' | 'setup' | 'map' | 'camer
 export interface Camera {
   analysisZones?:{id:string;name:string;points:Point[];threshold:number;dwell:number}[];
   denseCounting?:boolean; denseInterval?:number; crowdThreshold?:number; crowdDwell?:number; illustrative?:boolean;
-  countLines?:{id:string;name:string;a:Point;b:Point;entrySide:number;bands?:{negative:Point[];positive:Point[]}}[];
+  countLines?:{id:string;name:string;place?:{id:string;name:string;point:Point;planId:string};a:Point;b:Point;entrySide:number;bands?:{negative:Point[];positive:Point[]}}[];
   planId?: string;
   color?: string; active?: boolean; restrictCoverage?: boolean;
   id: string; name?: string; location?: string; type?: 'fixed' | 'overhead' | 'tilted';

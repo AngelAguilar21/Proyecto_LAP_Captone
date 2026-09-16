@@ -664,7 +664,8 @@ class Handler(BaseHTTPRequestHandler):
                 spread=float(cv2.contourArea(cv2.convexHull(points[:,:2].astype(np.float32))))
                 if spread<.005:
                     raise ValueError("Referencias casi alineadas: distribuye los nodos por todo el suelo visible.")
-                return self.send_data(200,{"rmse":float(np.sqrt(np.mean(np.sum((predicted-points[:,2:])**2,axis=1)))),"spread":spread})
+                from live_core import calibration_diagnostics
+                return self.send_data(200,calibration_diagnostics(pairs))
             if self.path == "/api/camera-preview":
                 import cv2
                 cid=data.get("camera")

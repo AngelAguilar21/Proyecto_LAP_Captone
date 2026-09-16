@@ -26,6 +26,13 @@ class AccessTests(unittest.TestCase):
   counter=LineCounter([self.line()])
   counter.update([{'id':'p','pixel':[.9,.4]}],0)
   self.assertEqual(counter.update([{'id':'p','pixel':[.9,.6]}],.2)[0]['entries'],0)
+ def test_place_association_is_retained_and_level_is_validated(self):
+  line=self.line();line['place']={'id':'poi-1','name':'Local en plano','point':[1,1],'planId':'custom'}
+  cfg=default_config();cfg['cameras'][0]['countLines']=[line]
+  validate_config(cfg)
+  self.assertEqual(LineCounter([line]).update([],0)[0]['place']['id'],'poi-1')
+  line['place']['planId']='lap-4'
+  with self.assertRaisesRegex(ValueError,'mismo nivel'):validate_config(cfg)
  def test_invalid_confirmation_side_is_rejected(self):
   cfg=default_config();cfg['cameras'][0]['countLines']=[self.line()]
   validate_config(cfg)

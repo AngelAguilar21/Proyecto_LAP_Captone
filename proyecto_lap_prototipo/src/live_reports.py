@@ -32,7 +32,7 @@ def report_data(config, state, kind):
     elif kind=="access-events":
         headers=['Cámara','Local / acceso','Movimiento','Instante de fuente (s)']
         names={c['id']:c.get('name',c['id']) for c in config['cameras']}
-        rows=[[names.get(cid,cid),l['name'],'Entrada' if e['direction']=='entries' else 'Salida',e['t']] for cid,a in state.get('cameraAnalytics',{}).items() for l in a.get('crossings',[]) for e in l.get('events',[])]
+        rows=[[names.get(cid,cid),f"{l['place']['name']} / {l['name']}" if l.get('place') else l['name'],'Entrada' if e['direction']=='entries' else 'Salida',e['t']] for cid,a in state.get('cameraAnalytics',{}).items() for l in a.get('crossings',[]) for e in l.get('events',[])]
         title='Eventos de entrada y salida por local (hasta 1000 por acceso)'
     elif kind=="occupancy":
         headers=["Zona","Ocupación actual","Personas x segundos","Pico observado","IDs observados"]
