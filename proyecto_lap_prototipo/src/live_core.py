@@ -110,6 +110,15 @@ def validate_config(c):
             if not isinstance(line,dict) or not isinstance(line.get('id'),str) or not line['id'] or line['id'] in line_ids:
                 raise ValueError('Cada línea necesita un identificador único.')
             line_ids.add(line['id'])
+            place = line.get('place')
+            if place is not None:
+                if not isinstance(place, dict) or not isinstance(place.get('id'), str) or not isinstance(place.get('name'), str) or not 1 <= len(place['name']) <= 200:
+                    raise ValueError('Local asociado inválido.')
+                if place.get('planId') != cam.get('planId', 'custom'):
+                    raise ValueError('El acceso debe asociarse a un local del mismo nivel que la cámara.')
+                p = place.get('point')
+                if not isinstance(p, list) or len(p) != 2 or not finite(p[0], 0, cam_plan['width']) or not finite(p[1], 0, cam_plan['height']):
+                    raise ValueError('La ubicación del local está fuera del plano.')
             if not isinstance(line.get('name'),str) or not 1<=len(line['name'])<=80 or line.get('entrySide') not in (-1,1):
                 raise ValueError('Indica nombre y dirección de entrada de la línea.')
             for key in ('a','b'):
@@ -170,6 +179,15 @@ def calibration(pairs):
     if len(pairs) < 4:
         return None
     points = np.asarray(pairs, dtype=np.float64)
+    if points.ndim != 2 or points.shape[1] != 4 or not np.isfinite(points).all():
+        raise ValueError("Referencias inválidas.")
+    for coords in (points[:, :2], points[:, 2:]):
+        span = max(float(np.ptp(coords, axis=0).max()), .01)
+        if len(np.unique(coords, axis=0)) != len(coords):
+            raise ValueError("Hay referencias repetidas. Elimina el punto duplicado.")
+        area = cv2.contourArea(cv2.convexHull(coords.astype(np.float32)))
+        if area / (span * span) < .001:
+            raise ValueError("Referencias casi alineadas: distribuye los puntos por el suelo visible.")
     h, _ = cv2.findHomography(points[:, :2], points[:, 2:], 0)
     if h is None or not np.isfinite(h).all() or np.linalg.matrix_rank(h) < 3:
         raise ValueError("Calibración degenerada: distribuye los puntos por el suelo visible.")
@@ -177,7 +195,36 @@ def calibration(pairs):
     span = max(float(np.ptp(points[:, 2:], axis=0).max()), .01)
     if float(np.linalg.norm(projected - points[:, 2:], axis=1).max()) > span * .08:
         raise ValueError("Correspondencias inconsistentes; revisa los puntos de calibración.")
+    # A horizon through the reference polygon makes interior projections unstable.
+    denominators = np.c_[points[:, :2], np.ones(len(points))] @ h[2]
+    if np.min(denominators) <= 0 <= np.max(denominators):
+        raise ValueError("La proyección se cruza dentro del área calibrada. Revisa el orden de las correspondencias.")
     return h
+
+
+def calibration_diagnostics(pairs):
+    h = calibration(pairs)
+    if h is None:
+        raise ValueError("Se necesitan al menos cuatro referencias.")
+    points = np.asarray(pairs, dtype=float)
+    predicted = cv2.perspectiveTransform(points[:, :2].reshape(-1, 1, 2), h).reshape(-1, 2)
+    errors = np.linalg.norm(predicted - points[:, 2:], axis=1)
+    spread = float(cv2.contourArea(cv2.convexHull(points[:, :2].astype(np.float32))))
+    checks = []
+    if len(points) > 4:
+        for index in range(len(points)):
+            try:
+                other = calibration(np.delete(points, index, axis=0).tolist())
+                result = project(other, *points[index, :2])
+                if result is not None:
+                    checks.append(float(np.linalg.norm(result - points[index, 2:])))
+            except ValueError:
+                pass
+    return {"rmse": float(np.sqrt(np.mean(errors**2))), "spread": spread,
+            "maxError": float(errors.max()), "pointErrors": errors.tolist(),
+            "validationError": max(checks) if checks else None, "validationPoints": len(checks),
+            "warning": "Añade referencias adicionales para comprobar puntos no usados en cada ajuste." if not checks else
+                       "Comprobación dejando fuera una referencia cada vez; no sustituye una medición física independiente."}
 
 
 def project(h, u, v):

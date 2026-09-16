@@ -8,7 +8,7 @@ class LineCounter:
     def __init__(self, lines):
         self.lines = lines
         self.previous = {}
-        self.totals = {line['id']: {'id': line['id'], 'name': line['name'], 'entries': 0, 'exits': 0, 'lastCrossing': None, 'events': [], 'hours': {}} for line in lines}
+        self.totals = {line['id']: {'id': line['id'], 'name': line['name'], 'place': line.get('place'), 'entries': 0, 'exits': 0, 'lastCrossing': None, 'events': [], 'hours': {}} for line in lines}
 
     def update(self, people, t):
         self.previous = {k: v for k, v in self.previous.items() if t-v['t'] <= 2}

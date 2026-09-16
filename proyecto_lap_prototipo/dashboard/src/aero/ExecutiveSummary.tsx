@@ -1,0 +1,13 @@
+import {useState} from 'react';
+import {formatTime} from './types';
+
+type Row={t:number;zones:{name:string;count:number;peak?:number;alert?:boolean}[]};
+export default function ExecutiveSummary({rows,onTime}:{rows:Row[];onTime?:(t:number)=>void}){
+ const [selected,setSelected]=useState('');
+ const names=[...new Set(rows.flatMap(r=>r.zones.map(z=>z.name)))];
+ const ranking=names.map(name=>{const samples=rows.map(r=>({t:r.t,z:r.zones.find(z=>z.name===name)})).filter(r=>r.z);let total=0,seconds=0;for(let i=1;i<samples.length;i++){const dt=Math.max(0,samples[i].t-samples[i-1].t);total+=samples[i-1].z!.count*dt;seconds+=dt;}const peak=samples.reduce((a,b)=>b.z!.count>a.z!.count?b:a,samples[0]);return {name,mean:seconds?total/seconds:samples[0].z!.count,peak:peak.z!.count,t:peak.t};}).sort((a,b)=>b.mean-a.mean);
+ const active=names.includes(selected)?selected:ranking[0]?.name;
+ const series=rows.map(r=>({t:r.t,count:r.zones.find(z=>z.name===active)?.count})).filter(r=>r.count!==undefined);
+ const max=Math.max(1,...series.map(r=>r.count!)),start=series[0]?.t||0,end=series[series.length-1]?.t||0;
+ return <section className="executive-summary aero-panel"><div className="panel-heading"><div><h2>Resumen por zonas</h2><p>Promedio de personas presentes y evolución durante el análisis.</p></div></div>{!ranking.length?<p className="empty-text">Define zonas del plano y calibra las cámaras para obtener un ranking por ubicación. Las zonas de imagen aparecen con el nombre de su cámara.</p>:<div className="executive-summary-grid"><div><table><thead><tr><th>Zona</th><th>Promedio</th><th>Máximo</th></tr></thead><tbody>{ranking.map(r=><tr key={r.name} className={active===r.name?'is-selected':''}><td><button onClick={()=>setSelected(r.name)}>{r.name}</button></td><td>{r.mean.toFixed(1)}</td><td><button title={`Ir al máximo: ${formatTime(r.t)}`} disabled={!onTime} onClick={()=>{setSelected(r.name);onTime?.(r.t);}}>{r.peak} <small>{formatTime(r.t)}</small></button></td></tr>)}</tbody></table></div><div className="zone-trend"><h3>{active}</h3><svg viewBox="0 0 640 190" role="img" aria-label={`Evolución de personas en ${active}`}><path d="M36 12V160H625" fill="none" stroke="#ced9e2"/>{[0,.5,1].map(v=><g key={v}><path d={`M36 ${160-v*135}H625`} stroke="#e4eaf0"/><text x="28" y={164-v*135} textAnchor="end">{Math.round(max*v)}</text></g>)}<polyline points={series.map(r=>`${36+(r.t-start)/Math.max(.01,end-start)*580},${160-r.count!/max*135}`).join(' ')} fill="none" stroke="#146b94" strokeWidth="2.5"/><text x="36" y="184">{formatTime(start)}</text><text x="620" y="184" textAnchor="end">{formatTime(end)}</text></svg><small>Personas simultáneas observadas. Los máximos de distintos instantes no se suman.</small></div></div>}</section>;
+}

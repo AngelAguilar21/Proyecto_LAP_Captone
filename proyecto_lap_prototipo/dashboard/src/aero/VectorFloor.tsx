@@ -1,9 +1,10 @@
+import {loadMapAsset} from './mapAssets';
 import {memo,useEffect,useState} from 'react';
 type Geometry={type:string;coordinates:any};
 type Feature={id:string;geometry:Geometry;properties:{name?:string;class?:string;type?:string;category?:string;is_label_shown?:boolean;local_rank?:number}};
 function VectorFloor({asset,scale,bearing=0}:{asset:string;scale:number;bearing?:number}){
   const [features,setFeatures]=useState<Feature[]>([]);
-  useEffect(()=>{let alive=true;setFeatures([]);void fetch(asset).then(r=>{if(!r.ok)throw Error();return r.json();}).then(d=>{if(alive)setFeatures(d.features);}).catch(()=>{});return()=>{alive=false;};},[asset]);
+  useEffect(()=>{let alive=true;setFeatures([]);void loadMapAsset(asset).then(d=>{if(alive)setFeatures(d.features);}).catch(()=>{});return()=>{alive=false;};},[asset]);
   const path=(g:Geometry):string=>{
     const line=(p:number[][],close=false)=>p.map((xy,i)=>`${i?'L':'M'}${xy[0]},${xy[1]}`).join(' ')+(close?' Z':'');
     if(g.type==='Polygon')return g.coordinates.map((r:number[][])=>line(r,true)).join(' ');
