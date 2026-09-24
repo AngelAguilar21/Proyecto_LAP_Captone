@@ -77,7 +77,7 @@ def validate_config(c):
         for field in ("name", "location"):
             if field in cam and (not isinstance(cam[field], str) or len(cam[field]) > 160):
                 raise ValueError(f"{cid}: {field} inválido.")
-        for field in ("active", "restrictCoverage", "denseCounting", "illustrative"):
+        for field in ("active", "restrictCoverage", "denseCounting", "illustrative", "luggageWatch"):
             if field in cam and not isinstance(cam[field],bool):
                 raise ValueError(f"{field}: debe ser booleano.")
         if cam.get("coveragePolygon"):
@@ -96,7 +96,7 @@ def validate_config(c):
                 raise ValueError("Puntos fuera del video o del plano.")
         if len(pairs) >= 4:
             calibration(pairs)
-        for field, lo, hi in [('denseInterval',2,60),('crowdThreshold',1,1000),('crowdDwell',0,3600)]:
+        for field, lo, hi in [('denseInterval',2,60),('crowdThreshold',1,1000),('crowdDwell',0,3600),('luggageDwell',10,7200),('luggageInterval',2,60)]:
             if field in cam and not finite(cam[field],lo,hi):
                 raise ValueError(f'{cid}: {field} fuera de rango.')
         if cam.get('analysisZones'):

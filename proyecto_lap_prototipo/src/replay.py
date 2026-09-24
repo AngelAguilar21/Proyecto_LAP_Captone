@@ -5,10 +5,10 @@ from datetime import datetime,timezone
 from urllib.parse import parse_qs
 
 class ReplayWriter:
- def __init__(self,root,sid,module,cameras,config):
+ def __init__(self,root,sid,module,cameras,config,project_id=None):
   self.directory=root/'data'/'replays'/sid
   self.directory.mkdir(parents=True,exist_ok=True)
-  self.meta={'session':sid,'module':module,'created':datetime.now(timezone.utc).isoformat(),'status':'running','cameras':cameras,'config':config,'end':0}
+  self.meta={'session':sid,'module':module,'created':datetime.now(timezone.utc).isoformat(),'status':'running','cameras':cameras,'config':config,'end':0,'projectId':project_id}
   self.path=self.directory/'manifest.json'
   self.save()
   self.output=(self.directory/'samples.jsonl').open('w',encoding='utf-8')
@@ -46,10 +46,15 @@ def get(handler,url,root):
  q=parse_qs(url.query);sid=q.get('session',[''])[0]
  try:
   if url.path.endswith('/history'):
+   # Cada proyecto ve solo sus propias sesiones: son espacios distintos y
+   # mezclarlas haria parecer que un terminal tiene grabaciones de otro.
+   activo=getattr(handler.server.engine,'project_id',None)
    rows=[]
    for p in (root/'data'/'replays').glob('*/manifest.json'):
-    try:rows.append(public(json.loads(p.read_text(encoding='utf-8'))))
+    try:meta=json.loads(p.read_text(encoding='utf-8'))
     except (OSError,ValueError):continue
+    if activo and meta.get('projectId') not in (activo,None):continue
+    rows.append(public(meta))
    return handler.send_data(200,sorted(rows,key=lambda r:r['created'],reverse=True)[:50])
   meta=manifest(root,sid)
   if url.path.endswith('/data'):

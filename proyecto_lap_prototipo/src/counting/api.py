@@ -7,7 +7,8 @@ from .engine import CountingEngine
 def engine_for(parent, root):
     with parent.lock:
         if getattr(parent, "counting", None) is None:
-            parent.counting = CountingEngine(root, parent.config_path.parent/"counting.local.json")
+            settings = getattr(parent, "settings_root", None) or parent.config_path.parent
+            parent.counting = CountingEngine(root, settings/"counting.local.json")
             parent.counting.data_root = parent.data_root
         return parent.counting
 

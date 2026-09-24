@@ -1,0 +1,276 @@
+/* Rediseño de la consola.
+   Tres decisiones de fondo, no cosméticas:
+
+   1. Neutro frío en vez del beige cálido anterior. Un beige lee como software
+      de oficina; una sala de control de aeropuerto lee en grises azulados.
+   2. El ámbar deja de ser el color de los botones y pasa a ser el color de la
+      atención (alertas, estado en vivo). Antes competía consigo mismo: si todo
+      botón es ámbar, una alerta ámbar ya no destaca. Las acciones pasan a azul.
+   3. Escala tipográfica real. El texto base estaba en 12px y los secundarios en
+      9px, apretado e incómodo de leer durante un turno largo.
+
+   Se carga al final para ganar sobre las hojas anteriores sin reescribirlas. */
+
+.aero {
+  --lienzo: #f4f6f9;
+  --superficie: #ffffff;
+  --superficie-2: #eef2f7;
+  --borde: #dfe5ee;
+  --borde-fuerte: #c9d3e0;
+  --tinta: #16202c;
+  --tinta-2: #38475a;
+  --tenue: #5c6b7f;
+  --accion: #0b5fb0;
+  --accion-oscura: #084a8c;
+  --accion-suave: #e7f0fa;
+  --senal: #c2740a;          /* relleno, puntos, bordes */
+  --senal-texto: #8a5106;    /* el mismo ambar no es legible como texto sobre blanco */
+  --senal-suave: #fdf3e3;
+  --alerta: #bd2c3e;
+  --alerta-suave: #fceaec;
+
+  --r-control: 8px;
+  --r-panel: 14px;
+  --sombra: 0 1px 2px #16202c0d, 0 12px 30px #16202c0f;
+  --sombra-alta: 0 2px 6px #16202c14, 0 22px 50px #16202c1f;
+  --t: 150ms cubic-bezier(.2, .7, .3, 1);
+
+  background: var(--lienzo);
+  color: var(--tinta);
+  font-family: 'Hanken Grotesk', 'Public Sans', system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+/* --- Tipografía: señalética para cifras y titulares, humanista para leer --- */
+.aero h1, .aero h2, .aero h3,
+.aero .aero-logo strong,
+.aero .metric-card strong,
+.aero .mini-metrics b {
+  font-family: 'Big Shoulders Display', 'Barlow Semi Condensed', sans-serif;
+  font-weight: 800;
+  letter-spacing: .1px;
+}
+.aero h1 { font-size: clamp(27px, 2.4vw, 36px); line-height: 1.08; color: var(--tinta); }
+.aero h2 { font-size: 20px; line-height: 1.15; }
+.aero h3 { font-size: 16px; }
+.aero p { color: var(--tinta-2); }
+.aero small, .aero .subtle { font-size: 12px; line-height: 1.6; color: var(--tenue); }
+.aero label { font-size: 12.5px; color: var(--tinta-2); font-weight: 500; }
+.aero table { font-size: 13px; }
+.aero th { font-size: 11.5px; color: var(--tenue); background: var(--superficie-2); padding: 13px 18px; font-weight: 600; }
+.aero td { padding: 15px 18px; border-color: var(--borde); color: var(--tinta); }
+.aero tbody tr:nth-child(even) { background: #f8fafc; }
+.aero .eyebrow { color: var(--tenue); font-size: 11px; letter-spacing: .6px; }
+
+/* Cifras en mono tabular: comparar columnas de números es el trabajo diario. */
+.aero .metric-card strong,
+.aero .alert-when strong,
+.aero .session-bar time,
+.aero .project-card-meta,
+.aero .technical-list dd { font-variant-numeric: tabular-nums; }
+
+/* --- Superficies --- */
+.aero .aero-panel {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--r-panel);
+  box-shadow: var(--sombra);
+  overflow: hidden;
+}
+.aero .panel-heading {
+  background: var(--superficie);
+  border-bottom: 1px solid var(--borde);
+  min-height: 56px;
+  padding: 15px 20px;
+}
+.aero .panel-heading h2 { font-size: 17px; }
+.aero .metric-card {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--r-panel);
+  padding: 18px 20px;
+  transition: border-color var(--t), box-shadow var(--t), transform var(--t);
+}
+.aero .metric-card:hover { border-color: var(--borde-fuerte); box-shadow: var(--sombra); transform: translateY(-2px); }
+.aero .metric-card > svg { color: var(--accion); }
+.aero .metric-card strong { font-size: 32px; line-height: 1; color: var(--tinta); }
+.aero .metric-card span { font-size: 11.5px; color: var(--tenue); }
+.aero .metric-card small { font-size: 11px; color: var(--tenue); }
+.aero .text-blue { color: var(--accion); }
+.aero .text-green { color: var(--accion); }
+.aero .text-amber { color: var(--senal-texto); }
+.aero .text-red { color: var(--alerta); }
+
+/* --- Acciones: azul manda, ámbar se reserva para la atención --- */
+.aero button {
+  border-radius: var(--r-control);
+  border: 1px solid var(--borde-fuerte);
+  background: var(--superficie);
+  color: var(--tinta);
+  padding: 10px 15px;
+  font-weight: 600;
+  font-size: 13px;
+  transition: background var(--t), border-color var(--t), box-shadow var(--t), transform var(--t), color var(--t);
+}
+.aero button:hover:not(:disabled) { background: var(--superficie-2); border-color: #b4c2d4; }
+.aero button:active:not(:disabled) { transform: translateY(1px); }
+.aero button.primary {
+  background: var(--accion);
+  border-color: var(--accion);
+  color: #ffffff;
+  box-shadow: 0 1px 2px #0b5fb033, 0 8px 18px #0b5fb029;
+}
+.aero button.primary:hover:not(:disabled) { background: var(--accion-oscura); border-color: var(--accion-oscura); box-shadow: 0 2px 5px #0b5fb03d, 0 12px 26px #0b5fb036; }
+.aero button.selected, .aero button.on {
+  background: var(--accion-suave);
+  border-color: #a9c9e8;
+  color: var(--accion-oscura);
+}
+.aero button.danger { background: var(--alerta-suave); border-color: #eeb9c0; color: var(--alerta); }
+.aero button.ghost { background: transparent; border-color: transparent; }
+.aero button.ghost:hover:not(:disabled) { background: var(--superficie-2); border-color: var(--borde); }
+.aero button:disabled { opacity: .42; }
+
+.aero input, .aero select, .aero textarea {
+  border-radius: var(--r-control);
+  border: 1px solid var(--borde-fuerte);
+  background: var(--superficie);
+  color: var(--tinta);
+  padding: 10px 12px;
+  font-size: 13px;
+  transition: border-color var(--t), box-shadow var(--t);
+}
+.aero input:focus, .aero select:focus, .aero textarea:focus {
+  border-color: var(--accion);
+  box-shadow: 0 0 0 3px #0b5fb024;
+  outline: none;
+}
+.aero input[type=checkbox], .aero input[type=radio] { accent-color: var(--accion); }
+.aero button:focus-visible { outline: 3px solid #0b5fb0; outline-offset: 2px; }
+
+/* --- Etiquetas de estado: el color dice qué pasa, no decora --- */
+.aero .pill {
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+.aero .pill.blue, .aero .pill.good { background: var(--accion-suave); color: var(--accion-oscura); border-color: #cfe1f5; }
+.aero .pill.warn { background: var(--senal-suave); color: #8a5106; border-color: #f2dcb8; }
+.aero .pill.muted { background: var(--superficie-2); color: var(--tenue); border-color: var(--borde); }
+.aero .dot.green, .aero .dot.blue { background: var(--accion); }
+.aero .dot.amber { background: var(--senal); }
+.aero .dot.red { background: var(--alerta); }
+
+/* --- Cabecera: el estado de la sesión es lo primero que mira un operador --- */
+.aero-header {
+  min-height: 78px;
+  padding: 12px 26px;
+  background: var(--superficie);
+  border-bottom: 1px solid var(--borde);
+  box-shadow: 0 1px 0 #dfe5ee, 0 8px 24px #16202c0a;
+}
+.aero-header::after { display: none; }
+.aero-logo { color: var(--tinta); }
+.aero-logo strong { font-size: 28px; letter-spacing: -.3px; }
+.aero-logo svg { color: var(--accion); }
+.aero-title h1 { font-size: 19px; }
+.aero-title p { font-size: 12px; color: var(--tenue); margin-top: 2px; }
+.header-indicators { font-size: 12px; gap: 18px; margin-left: 16px; color: var(--tenue); }
+.header-indicators > span:first-child { font-weight: 700; color: var(--tinta); }
+.header-indicators svg { color: var(--accion); }
+
+.header-project {
+  display: flex; flex-direction: row; align-items: center; gap: 9px;
+  margin: 0 0 0 auto; padding: 8px 14px;
+  background: var(--accion-suave);
+  border: 1px solid #cfe1f5;
+  border-radius: 999px;
+  font-size: 12.5px;
+  transition: border-color var(--t);
+}
+.aero .header-project:hover { border-color: #a9c9e8; }
+.header-project svg { color: var(--accion); flex-shrink: 0; }
+.header-project select {
+  width: auto; min-width: 120px; max-width: 230px;
+  border: 0; padding: 0; background: transparent;
+  font-weight: 700; font-size: 12.5px; color: var(--accion-oscura);
+}
+.header-project select:focus { box-shadow: none; }
+
+/* --- Navegación: destino actual inequívoco --- */
+.aero-nav { background: var(--superficie); border-bottom: 1px solid var(--borde); min-height: 54px; padding: 0 22px; gap: 4px; }
+.aero .aero-nav button {
+  font-size: 13px; font-weight: 600; padding: 16px 16px;
+  border: 0; border-radius: 0; background: transparent; color: var(--tenue);
+  box-shadow: inset 0 -2px transparent;
+}
+.aero .aero-nav button:hover:not(:disabled) { color: var(--tinta); background: var(--superficie-2); }
+.aero .aero-nav button.active {
+  color: var(--accion-oscura); background: transparent;
+  box-shadow: inset 0 -3px var(--accion);
+}
+.aero .product-subnav { background: var(--superficie-2); border-bottom: 1px solid var(--borde); }
+.aero .product-subnav button { font-size: 12.5px; }
+.settings-context { color: var(--tenue); font-size: 12.5px; }
+
+/* --- Contenido --- */
+.aero-main { padding: 24px 26px 40px; }
+.page-heading { margin: 4px 0 22px; }
+.page-heading p { font-size: 13.5px; color: var(--tinta-2); max-width: 82ch; margin-top: 8px; }
+.metrics-row, .executive-metrics { gap: 14px; }
+.empty-text { font-size: 13px; color: var(--tenue); padding: 32px 22px; }
+.notice {
+  border-radius: 10px; padding: 13px 16px; font-size: 13px;
+  background: var(--accion-suave); border: 1px solid #cfe1f5; color: #0a4a8a;
+}
+.notice.warning { background: var(--senal-suave); border-color: #f2dcb8; color: #8a5106; }
+.notice.error { background: var(--alerta-suave); border-color: #eeb9c0; color: var(--alerta); }
+.aero .toast { border-radius: 13px; box-shadow: var(--sombra-alta); font-size: 13px; }
+
+/* --- Filas sobre las que se actúa --- */
+.aero .alert-row, .aero .project-card, .aero .users-row {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--r-panel);
+  transition: border-color var(--t), box-shadow var(--t), transform var(--t);
+}
+.aero .alert-row:hover, .aero .project-card:hover { border-color: var(--borde-fuerte); box-shadow: var(--sombra); transform: translateY(-2px); }
+.aero .alert-row.open { border-color: #eeb9c0; box-shadow: inset 3px 0 var(--alerta); }
+.aero .project-card.current { border-color: #a9c9e8; box-shadow: inset 3px 0 var(--accion); }
+
+/* --- Entrada al sistema --- */
+.login-card, .picker-card, .connection-card {
+  border-radius: 18px; box-shadow: var(--sombra-alta); border-color: var(--borde);
+  padding: 34px;
+}
+.login-card h1, .picker-card h1, .connection-card h1 { font-size: 26px; }
+.connection-screen { background: var(--lienzo); }
+
+/* --- Asistente --- */
+.wizard-body { border-radius: var(--r-panel); box-shadow: var(--sombra); border-color: var(--borde); }
+.wizard-steps { border-color: var(--borde); }
+.aero .wizard-steps button { font-size: 12.5px; color: var(--tenue); }
+.aero .wizard-steps button.current { background: var(--accion); color: #ffffff; }
+.aero .wizard-steps button.current strong { color: #ffffff; }
+.wizard-steps .current .wizard-number { background: #ffffff; color: var(--accion); }
+.wizard-steps .done .wizard-number { background: var(--accion-suave); color: var(--accion-oscura); }
+.wizard-number { background: var(--superficie-2); color: var(--tinta-2); }
+.wizard-help { font-size: 12.5px; color: var(--tinta-2); }
+
+/* --- Paneles con fondo propio que deben seguir al nuevo neutro --- */
+.aero .source-list, .aero .camera-controls, .aero .step-intro,
+.aero .setup-steps, .aero .zone-rules, .aero .rules-form { background: var(--superficie-2); }
+.aero .setup-body, .aero .project-form { background: var(--superficie); }
+.aero .review-summary { background: linear-gradient(140deg, var(--accion), var(--accion-oscura)); border-color: #a9c9e8; }
+.aero .business-note { background: linear-gradient(140deg, var(--accion), var(--accion-oscura)); border-color: #a9c9e8; }
+.aero .setup-banner { background: var(--senal-suave); border-color: #f2dcb8; }
+.aero .setup-banner svg, .aero .unsaved { color: #8a5106; }
+.aero .setup-banner button { background: var(--senal); border-color: var(--senal); color: #ffffff; }
+
+@media (prefers-reduced-motion: reduce) {
+  .aero .metric-card:hover, .aero .alert-row:hover,
+  .aero .project-card:hover, .aero button:active:not(:disabled) { transform: none; }
+}

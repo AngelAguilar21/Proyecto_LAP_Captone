@@ -29,6 +29,10 @@ sys.path.insert(0, str(ROOT / "src"))
 from live_core import IdentityStore, Occupancy, calibration, project, validate_config
 from live_metrics import SessionMetrics
 from spatial_scope import accepts
+import projects
+import business_data
+import sqlite3
+import auth
 
 CONFIG_PATH = ROOT / "config" / "live.local.json"
 
@@ -45,8 +49,456 @@ def default_config():
 
 class Engine:
     def __init__(self, config_path=None):
-        self.config_path = Path(config_path) if config_path else CONFIG_PATH
-        self.data_root = self.config_path.parent if config_path else ROOT
+        # Con ruta explícita (pruebas) se trabaja sobre un archivo suelto; sin
+        # ella se usa el proyecto activo del índice.
+        self.managed = config_path is None
+        if self.managed:
+            self.project_id = projects.ensure_index(ROOT, CONFIG_PATH)["active"]
+            self.config_path = projects.project_path(ROOT, self.project_id)
+        else:
+            self.project_id = None
+            self.config_path = Path(config_path)
+        self.data_root = ROOT if self.managed else self.config_path.parent
+        # Ajustes que no pertenecen a un proyecto (conteo especializado) siguen
+        # viviendo en config/, no dentro de la carpeta de proyectos.
+        self.settings_root = (ROOT / "config") if self.managed else self.config_path.parent
+        self.config = default_config()
+        self.config_error = None
+        self.read_config_file()
+        self.lock = threading.RLock()
+        self.stop_event = threading.Event()
+        self.pause_event = threading.Event()
+        self.worker = None
+        self.token = secrets.token_urlsafe(32)
+        self.instance = secrets.token_hex(8)
+        self.revision = 0
+        self.runtime_config = None
+        self.frames = {}
+        self.preview_frames = {}
+        self.source_checks = {}
+        self.preview_worker = None
+        self.preview_stop_event = threading.Event()
+        self.preview_pause_event = threading.Event()
+        self.preview_seek_request = None
+        self.preview_touch = 0.
+        self.preview_state = {"camera": None, "playing": False, "t": 0., "duration": 0., "live": False, "error": None}
+        from notifier import Mailer
+        self.mailer = Mailer(self.settings_root)
+        self.sessions = auth.Sesiones()
+        self.notified = set()
+        self.business_error = None
+        self.traffic_buffer = {}
+        self.traffic_flushed = 0.
+        self.audit = deque(maxlen=300)
+        self.state = {"status": "idle", "people": [], "cameras": [], "events": [], "t": 0,
+                      "analytics": {"clusters": [], "zones": [], "heat": [], "mappedCount": 0}, "error": self.config_error}
+
+        # Restaura únicamente agregados finalizados; nunca reactiva una fuente ni IDs en vivo.
+        if not self.config_error:
+            summaries=[]
+            for path in (self.data_root/'data/replays').glob('*/manifest.json'):
+                try:
+                    meta=json.loads(path.read_text(encoding='utf-8'))
+                    if meta.get('projectId') not in (self.project_id, None):continue
+                    if meta.get('module')=='unified' and meta.get('status') in ('ended','stopped') and meta.get('cameraAnalytics') and meta.get('levelAnalytics'):
+                        summaries.append(meta)
+                except (OSError,ValueError):pass
+            if summaries:
+                last=max(summaries,key=lambda value:value['created']);pid=last['config'].get('planId','custom')
+                if any(c['id'] in last['cameraAnalytics'] for c in self.config['cameras']):
+                    analytics=copy.deepcopy(last['levelAnalytics'].get(pid,self.state['analytics']))
+                    analytics.update(clusters=[],mappedCount=0)
+                    for zone in analytics.get('zones',[]):zone.update(count=0,alert=False)
+                    self.state.update(status=last['status'],session=last['session'],mode='yolo',t=last['end'],planId=pid,analytics=analytics,levelAnalytics=last['levelAnalytics'],cameraAnalytics=last['cameraAnalytics'],identityDeleted=True)
+
+    def dispatch_alerts(self, camera_analytics, analytics):
+        """Guarda cada alerta nueva en la bitacora y, si el correo esta
+        configurado, la envia. Nunca interrumpe la sesion: un fallo de disco o
+        de correo se registra pero no corta el seguimiento."""
+        pendientes = []
+        names = {c["id"]: c.get("name", c["id"]) for c in self.config["cameras"]}
+        place = " - ".join(v for v in (self.config.get("airport"), self.config.get("floor")) if v)
+        nota = "Estimacion automatica de AeroTrack: requiere que una persona lo compruebe."
+        for cid, data in (camera_analytics or {}).items():
+            for episode in (data.get("occupancy") or {}).get("episodes", []):
+                key = "aglomeracion:{}:{}".format(cid, episode.get("id"))
+                if key in self.notified:
+                    continue
+                self.notified.add(key)
+                body = [
+                    "Se detecto una concentracion de personas.",
+                    "",
+                    "Lugar: " + place,
+                    "Camara: " + str(names.get(cid, cid)),
+                    "Zona: " + str(episode.get("zone")),
+                    "Personas: " + str(episode.get("peak")),
+                    "Inicio (tiempo de fuente): " + str(episode.get("start")) + " s",
+                    "",
+                    nota,
+                ]
+                pendientes.append({
+                    "key": key, "tipo": "aglomeracion", "zona": episode.get("zone"), "camara": cid,
+                    "inicio": episode.get("start"), "pico": episode.get("peak"),
+                    "duracion": episode.get("duration"),
+                    "detalle": {"camara": names.get(cid, cid), "origen": "camara"},
+                    "asunto": "AeroTrack - Aglomeracion en " + str(episode.get("zone")),
+                    "cuerpo": chr(10).join(body)})
+            for item in ((data.get("luggage") or {}).get("items") or []):
+                if not item.get("alert"):
+                    continue
+                key = "equipaje:{}:{}".format(cid, item.get("id"))
+                if key in self.notified:
+                    continue
+                self.notified.add(key)
+                body = [
+                    "Un bulto lleva " + str(round(item.get("duration", 0))) + " segundos sin moverse.",
+                    "",
+                    "Lugar: " + place,
+                    "Camara: " + str(names.get(cid, cid)),
+                    "Tipo detectado: " + str(item.get("kind")),
+                    "",
+                    "El sistema no determina si es peligroso: avisa para que alguien vaya a revisarlo.",
+                    "Tambien salta con equipaje que un pasajero dejo a su lado mientras espera.",
+                ]
+                pendientes.append({
+                    "key": key, "tipo": "equipaje", "zona": item.get("kind"), "camara": cid,
+                    "inicio": item.get("since"), "pico": None, "duracion": item.get("duration"),
+                    "detalle": {"camara": names.get(cid, cid), "bulto": item.get("id"),
+                                "tipoObjeto": item.get("kind")},
+                    "asunto": "AeroTrack - Equipaje sin custodia en " + str(names.get(cid, cid)),
+                    "cuerpo": chr(10).join(body)})
+        for zone in (analytics or {}).get("zones", []):
+            if not zone.get("alert"):
+                continue
+            key = "zona:{}:{}".format(zone.get("name"), round(self.state.get("t", 0)))
+            if key in self.notified:
+                continue
+            self.notified.add(key)
+            body = [
+                "La zona " + str(zone.get("name")) + " del plano supero su umbral.",
+                "",
+                "Lugar: " + place,
+                "Personas observadas: " + str(zone.get("count")),
+                "Duracion: " + str(round(zone.get("duration", 0))) + " s",
+                "",
+                nota,
+            ]
+            pendientes.append({
+                "key": key, "tipo": "aglomeracion", "zona": zone.get("name"), "camara": None,
+                "inicio": self.state.get("t", 0) - (zone.get("duration") or 0),
+                "pico": zone.get("peak") or zone.get("count"), "duracion": zone.get("duration"),
+                "detalle": {"origen": "plano"},
+                "asunto": "AeroTrack - Alerta en " + str(zone.get("name")),
+                "cuerpo": chr(10).join(body)})
+
+        if not pendientes:
+            return
+        sesion = self.state.get("session", "sin-sesion")
+        conexion = None
+        try:
+            conexion = business_data.connect(self.config_path)
+            for alerta in pendientes:
+                business_data.registrar_incidente(
+                    conexion, f"{sesion}:{alerta['key']}", alerta["tipo"], alerta["zona"],
+                    alerta["camara"], alerta["inicio"] or 0, alerta["pico"], alerta["duracion"],
+                    {**alerta["detalle"], "sesion": sesion})
+            self.business_error = None
+        except (sqlite3.Error, OSError, ValueError) as exc:
+            self.business_error = str(exc)
+        finally:
+            if conexion:
+                conexion.close()
+        if self.mailer.ready():
+            for alerta in pendientes:
+                self.mailer.send(alerta["asunto"], alerta["cuerpo"], key=alerta["key"])
+
+    def record_traffic(self, analytics, live):
+        """Acumula el conteo por zona y lo vuelca cada minuto al historico.
+
+        Solo tiene sentido en sesiones en vivo: el reloj de pared dice cuando
+        se observo. En una grabacion analizada hoy, el trafico pertenece al dia
+        en que se grabo, no a hoy, y atribuirselo a hoy ensuciaria el promedio
+        contra el que despues se comparan las alertas.
+        """
+        if not live:
+            return
+        ahora = datetime.now()
+        clave_tiempo = (ahora.strftime("%Y-%m-%d"), ahora.hour, ahora.weekday())
+        for zone in (analytics or {}).get("zones", []):
+            nombre = zone.get("name")
+            if not nombre:
+                continue
+            clave = (nombre, *clave_tiempo)
+            actual = self.traffic_buffer.get(clave, {"suma": 0, "muestras": 0, "pico": 0})
+            conteo = int(zone.get("count") or 0)
+            actual["suma"] += conteo
+            actual["muestras"] += 1
+            actual["pico"] = max(actual["pico"], conteo)
+            self.traffic_buffer[clave] = actual
+        if time.time() - self.traffic_flushed < 60 or not self.traffic_buffer:
+            return
+        self.flush_traffic()
+
+    def flush_traffic(self):
+        if not self.traffic_buffer:
+            return
+        pendiente, self.traffic_buffer = self.traffic_buffer, {}
+        self.traffic_flushed = time.time()
+        conexion = None
+        try:
+            conexion = business_data.connect(self.config_path)
+            for (zona, fecha, hora, dia_semana), valores in pendiente.items():
+                promedio = round(valores["suma"] / max(1, valores["muestras"]))
+                business_data.registrar_trafico(conexion, zona, fecha, hora, dia_semana, promedio)
+            self.business_error = None
+        except (sqlite3.Error, OSError, ValueError) as exc:
+            self.business_error = str(exc)
+        finally:
+            if conexion:
+                conexion.close()
+
+    def traffic_baseline(self, zona, hora=None, dia_semana=None):
+        ahora = datetime.now()
+        conexion = None
+        try:
+            conexion = business_data.connect(self.config_path)
+            return business_data.promedio_historico(
+                conexion, zona, ahora.hour if hora is None else hora,
+                ahora.weekday() if dia_semana is None else dia_semana,
+                excluir_fecha=ahora.strftime("%Y-%m-%d"))
+        finally:
+            if conexion:
+                conexion.close()
+
+    def update_alert_rules(self, data):
+        """Ajusta solo los umbrales de aglomeracion, sin tocar plano ni camaras.
+
+        Existe aparte de /api/config para que el administrador pueda cambiar
+        cuando le avisan sin tener acceso a la configuracion completa."""
+        with self.lock:
+            config = copy.deepcopy(self.config)
+            for campo, minimo, maximo in (("radius", .01, 1000), ("minPeople", 2, 1000), ("dwell", 0, 3600)):
+                if campo in data:
+                    valor = data[campo]
+                    if not isinstance(valor, (int, float)) or isinstance(valor, bool) or not minimo <= valor <= maximo:
+                        raise ValueError(f"Valor fuera de rango para {campo}.")
+                    config[campo] = valor
+            reglas = data.get("zones")
+            if reglas is not None:
+                if not isinstance(reglas, list):
+                    raise ValueError("Reglas por zona inválidas.")
+                por_nombre = {r.get("name"): r.get("rule") for r in reglas if isinstance(r, dict)}
+                for zona in config["zones"]:
+                    if zona["name"] in por_nombre:
+                        zona["rule"] = por_nombre[zona["name"]]
+        self.configure(config)
+        self.record("Umbrales de alerta actualizados",
+                    f"{config['minPeople']} personas · {config['dwell']} s · radio {config['radius']}")
+
+    def incidents(self, estado=None):
+        conexion = None
+        try:
+            conexion = business_data.connect(self.config_path)
+            return {"incidentes": business_data.listar_incidentes(conexion, estado),
+                    "error": self.business_error}
+        finally:
+            if conexion:
+                conexion.close()
+
+    def update_incident(self, incident_id, estado):
+        conexion = None
+        try:
+            conexion = business_data.connect(self.config_path)
+            business_data.actualizar_estado_incidente(conexion, incident_id, estado)
+            self.record("Incidente actualizado", f"{incident_id} -> {estado}")
+            return {"incidentes": business_data.listar_incidentes(conexion), "error": None}
+        finally:
+            if conexion:
+                conexion.close()
+
+    def preview_snapshot(self):
+        return dict(self.preview_state)
+
+    def preview_stop(self):
+        """Corta la vista en vivo y suelta la cámara.
+
+        Nunca debe llamarse sosteniendo self.lock: espera a que termine el hilo
+        de previsualización, que a su vez necesita ese mismo candado para
+        escribir su última imagen."""
+        worker = self.preview_worker
+        if worker and worker.is_alive():
+            self.preview_stop_event.set()
+            worker.join(timeout=4)
+        with self.lock:
+            self.preview_worker = None
+            self.preview_state = {"camera": None, "playing": False, "t": 0., "duration": 0., "live": False, "error": None}
+
+    def preview_start(self, cid, seconds=0.):
+        with self.lock:
+            if self.worker and self.worker.is_alive():
+                raise ValueError("Finaliza la sesión de seguimiento para usar la vista en vivo.")
+            camera = next((c for c in self.config["cameras"] if c["id"] == cid), None)
+            if not camera:
+                raise ValueError("Cámara desconocida.")
+            if camera.get("source", "") == "":
+                raise ValueError("Configura una fuente antes de ver la cámara.")
+            if not isinstance(seconds, (int, float)) or isinstance(seconds, bool) or not 0 <= seconds <= 86400:
+                raise ValueError("Instante inválido.")
+        self.preview_stop()
+        with self.lock:
+            self.preview_stop_event = threading.Event()
+            self.preview_pause_event = threading.Event()
+            self.preview_seek_request = None
+            self.preview_touch = time.time()
+            self.preview_state = {"camera": cid, "playing": True, "t": float(seconds), "duration": 0., "live": False, "error": None}
+            self.preview_worker = threading.Thread(target=self._preview_loop, args=(copy.deepcopy(camera), float(seconds)), daemon=True)
+            self.preview_worker.start()
+            self.record("Vista en vivo", f"{camera.get('name', cid)} abierta para revisión")
+
+    def preview_control(self, action, seconds=None):
+        with self.lock:
+            if not (self.preview_worker and self.preview_worker.is_alive()):
+                raise ValueError("No hay ninguna vista en vivo abierta.")
+            self.preview_touch = time.time()
+            if action == "pause":
+                self.preview_pause_event.set()
+                self.preview_state["playing"] = False
+            elif action == "resume":
+                self.preview_pause_event.clear()
+                self.preview_state["playing"] = True
+            elif action == "seek":
+                if not isinstance(seconds, (int, float)) or isinstance(seconds, bool) or not 0 <= seconds <= 86400:
+                    raise ValueError("Instante inválido.")
+                self.preview_seek_request = float(seconds)
+                self.preview_pause_event.clear()
+                self.preview_state["playing"] = True
+            elif action == "stop":
+                pass
+            else:
+                raise ValueError("Acción de vista en vivo desconocida.")
+        if action == "stop":
+            self.preview_stop()
+
+    @staticmethod
+    def _preview_jpeg(frame, width=800, quality=72):
+        """Imagen ligera: la vista previa se mira, no se mide."""
+        import cv2
+        if frame.shape[1] > width:
+            frame = cv2.resize(frame, (width, round(frame.shape[0] * width / frame.shape[1])))
+        ok, data = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, quality])
+        if not ok:
+            raise ValueError("No se pudo preparar la imagen de video.")
+        return data.tobytes()
+
+    def _preview_loop(self, camera, seconds):
+        """Refresca imágenes sin correr detección: es solo para ver la cámara."""
+        import cv2
+        cid = camera["id"]
+        source = camera["source"]
+        if isinstance(source, str) and "://" not in source:
+            source = str((ROOT / source).resolve())
+        remote = isinstance(source, str) and "://" in source
+        previous_options = os.environ.get("OPENCV_FFMPEG_CAPTURE_OPTIONS")
+        if remote:
+            # Sin esto FFmpeg acumula segundos de video antes de entregarlo.
+            os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|fflags;nobuffer|flags;low_delay|max_delay;0|reorder_queue_size;0"
+        try:
+            cap = (cv2.VideoCapture(source, cv2.CAP_FFMPEG, [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 8000, cv2.CAP_PROP_READ_TIMEOUT_MSEC, 8000])
+                   if remote else cv2.VideoCapture(source))
+        finally:
+            if remote:
+                if previous_options is None:
+                    os.environ.pop("OPENCV_FFMPEG_CAPTURE_OPTIONS", None)
+                else:
+                    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = previous_options
+        reader = None
+        reader_stop = threading.Event()
+        try:
+            if not cap.isOpened():
+                raise ValueError("No se pudo abrir la cámara. Comprueba la URL y que esté en la misma red.")
+            cap.set(cv2.CAP_PROP_ORIENTATION_AUTO, 1)
+            fps = cap.get(cv2.CAP_PROP_FPS) or 25
+            frames = cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0
+            live = remote or isinstance(source, int) or frames <= 1
+            with self.lock:
+                self.preview_state.update(live=live, duration=0. if live else frames / max(1., fps))
+            if seconds and not live:
+                cap.set(cv2.CAP_PROP_POS_MSEC, seconds * 1000)
+
+            if live:
+                # La cámara manda más cuadros de los que mostramos. Si los
+                # leyéramos al ritmo de la pantalla, la cola de FFmpeg crecería y
+                # la imagen se atrasaría más y más. Este hilo los consume a la
+                # velocidad que llegan y guarda solo el último: así siempre se
+                # muestra el presente, descartando lo que ya quedó viejo.
+                try:
+                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                except cv2.error:
+                    pass
+                newest = {"frame": None, "failed": False}
+
+                def drain():
+                    while not reader_stop.is_set() and not self.preview_stop_event.is_set():
+                        ok, frame = cap.read()
+                        if not ok:
+                            newest["failed"] = True
+                            return
+                        newest["frame"] = frame
+
+                reader = threading.Thread(target=drain, daemon=True)
+                reader.start()
+                started_at = time.monotonic()
+                while not self.preview_stop_event.is_set():
+                    if time.time() - self.preview_touch > 20:
+                        break
+                    if newest["failed"]:
+                        raise ValueError("Se perdió la señal de la cámara.")
+                    if self.preview_pause_event.is_set():
+                        time.sleep(.15)
+                        continue
+                    frame = newest["frame"]
+                    if frame is None:
+                        time.sleep(.05)
+                        continue
+                    encoded = self._preview_jpeg(frame)
+                    with self.lock:
+                        self.frames[cid] = encoded
+                        self.preview_state["t"] = time.monotonic() - started_at
+                    time.sleep(1 / 15)
+            else:
+                while not self.preview_stop_event.is_set():
+                    if time.time() - self.preview_touch > 20:
+                        break
+                    seek = self.preview_seek_request
+                    if seek is not None:
+                        self.preview_seek_request = None
+                        cap.set(cv2.CAP_PROP_POS_MSEC, seek * 1000)
+                    if self.preview_pause_event.is_set():
+                        time.sleep(.15)
+                        continue
+                    started = time.monotonic()
+                    ok, frame = cap.read()
+                    if not ok:
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                        continue
+                    encoded = self._preview_jpeg(frame)
+                    with self.lock:
+                        self.frames[cid] = encoded
+                        self.preview_state["t"] = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
+                    # Una grabación se reproduce a su velocidad real.
+                    time.sleep(max(0., 1 / max(1., min(fps, 30)) - (time.monotonic() - started)))
+        except (ValueError, OSError, RuntimeError) as exc:
+            with self.lock:
+                self.preview_state.update(playing=False, error=str(exc))
+        finally:
+            reader_stop.set()
+            if reader and reader.is_alive():
+                reader.join(timeout=2)
+            cap.release()
+            with self.lock:
+                self.preview_state["playing"] = False
+
+    def read_config_file(self):
         self.config = default_config()
         self.config_error = None
         if self.config_path.exists():
@@ -61,41 +513,69 @@ class Engine:
                 self.config["planLines"] = plan_lines_from_bytes(base64.b64decode(self.config["background"].split(",",1)[1]),self.config["width"])["planLines"]
             except (ValueError, KeyError):
                 self.config["planLines"] = []
-        self.lock = threading.RLock()
-        self.stop_event = threading.Event()
-        self.pause_event = threading.Event()
-        self.worker = None
-        self.token = secrets.token_urlsafe(32)
-        self.instance = secrets.token_hex(8)
-        self.revision = 0
-        self.runtime_config = None
-        self.frames = {}
-        self.preview_frames = {}
-        self.source_checks = {}
-        self.audit = deque(maxlen=300)
-        self.state = {"status": "idle", "people": [], "cameras": [], "events": [], "t": 0,
-                      "analytics": {"clusters": [], "zones": [], "heat": [], "mappedCount": 0}, "error": self.config_error}
 
-        # Restaura únicamente agregados finalizados; nunca reactiva una fuente ni IDs en vivo.
-        if not self.config_error:
-            summaries=[]
-            for path in (self.data_root/'data/replays').glob('*/manifest.json'):
-                try:
-                    meta=json.loads(path.read_text(encoding='utf-8'))
-                    if meta.get('module')=='unified' and meta.get('status') in ('ended','stopped') and meta.get('cameraAnalytics') and meta.get('levelAnalytics'):
-                        summaries.append(meta)
-                except (OSError,ValueError):pass
-            if summaries:
-                last=max(summaries,key=lambda value:value['created']);pid=last['config'].get('planId','custom')
-                if any(c['id'] in last['cameraAnalytics'] for c in self.config['cameras']):
-                    analytics=copy.deepcopy(last['levelAnalytics'].get(pid,self.state['analytics']))
-                    analytics.update(clusters=[],mappedCount=0)
-                    for zone in analytics.get('zones',[]):zone.update(count=0,alert=False)
-                    self.state.update(status=last['status'],session=last['session'],mode='yolo',t=last['end'],planId=pid,analytics=analytics,levelAnalytics=last['levelAnalytics'],cameraAnalytics=last['cameraAnalytics'],identityDeleted=True)
+    def require_managed(self):
+        if not self.managed:
+            raise ValueError("Los proyectos no están disponibles en este modo.")
+        if self.worker and self.worker.is_alive():
+            raise ValueError("Finaliza la sesión antes de cambiar de proyecto.")
+
+    def projects_listing(self):
+        with self.lock:
+            if not self.managed:
+                return {"active": None, "projects": []}
+            return projects.listing(ROOT, self.config, self.project_id)
+
+    def open_project(self, pid):
+        with self.lock:
+            self.require_managed()
+            self.config_path = projects.activate(ROOT, pid)
+            self.project_id = pid
+            self.read_config_file()
+            self.frames = {}
+            self.preview_frames = {}
+            self.source_checks = {}
+            self.revision += 1
+            self.state = {"status": "idle", "people": [], "cameras": [], "events": [], "t": 0,
+                          "analytics": {"clusters": [], "zones": [], "heat": [], "mappedCount": 0}, "error": self.config_error}
+            self.record("Proyecto abierto", projects.entry(projects.read_index(ROOT), pid)["name"])
+            return self.projects_listing()
+
+    def new_project(self, name, copy_current=False):
+        with self.lock:
+            self.require_managed()
+            if not isinstance(name, str) or not name.strip():
+                raise ValueError("Escribe un nombre para el proyecto.")
+            config = copy.deepcopy(self.config) if copy_current else default_config()
+            if not copy_current:
+                config["cameras"] = []
+                config["airport"] = name.strip()
+            config["setupComplete"] = False
+            pid = projects.create(ROOT, name.strip(), config)
+            self.record("Proyecto creado", name.strip())
+            return self.open_project(pid)
+
+    def rename_project(self, pid, name):
+        with self.lock:
+            if not self.managed:
+                raise ValueError("Los proyectos no están disponibles en este modo.")
+            if not isinstance(name, str) or not name.strip():
+                raise ValueError("Escribe un nombre para el proyecto.")
+            projects.rename(ROOT, pid, name.strip())
+            return self.projects_listing()
+
+    def delete_project(self, pid):
+        with self.lock:
+            self.require_managed()
+            remaining = projects.remove(ROOT, pid)
+            self.record("Proyecto eliminado", pid)
+            if pid == self.project_id:
+                return self.open_project(remaining)
+            return self.projects_listing()
 
     def snapshot(self):
         with self.lock:
-            return copy.deepcopy({**self.state, "serverTime": time.time(), "serverInstance": self.instance, "configRevision": self.revision, "sourceChecks":self.source_checks, "audit":list(self.audit)})
+            return copy.deepcopy({**self.state, "serverTime": time.time(), "serverInstance": self.instance, "configRevision": self.revision, "sourceChecks":self.source_checks, "audit":list(self.audit), "preview": self.preview_snapshot()})
 
     def record(self, action, detail):
         self.audit.appendleft({"at":datetime.now(timezone.utc).isoformat(),"action":action,"detail":detail})
@@ -105,10 +585,9 @@ class Engine:
         with self.lock:
             if self.worker and self.worker.is_alive():
                 raise ValueError("Detén la sesión antes de cambiar el plano o la calibración.")
-            self.config_path.parent.mkdir(parents=True,exist_ok=True)
-            tmp = self.config_path.with_suffix(".tmp")
-            tmp.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
-            os.replace(tmp, self.config_path)
+            projects.atomic_write(self.config_path, json.dumps(config, ensure_ascii=False, indent=2))
+            if self.managed and self.project_id:
+                projects.touch(ROOT, self.project_id)
             old_sources = {c["id"]:c["source"] for c in self.config["cameras"]}
             for cid in list(self.source_checks):
                 new_source = next((c["source"] for c in config["cameras"] if c["id"]==cid),None)
@@ -135,6 +614,7 @@ class Engine:
             self.record("Reglas actualizadas",f"Mínimo {draft['minPeople']} · radio {draft['radius']} · permanencia {draft['dwell']} s")
 
     def start(self, request):
+        self.preview_stop()
         with self.lock:
             if getattr(self, "counting", None) and self.counting.active():
                 raise ValueError("Detén el análisis de conteo antes de iniciar tracking.")
@@ -171,6 +651,7 @@ class Engine:
                     raise ValueError("Delimita el área útil de cada cámara para excluir reflejos y áreas externas.")
             self.stop_event.clear()
             self.pause_event.clear()
+            self.notified = set()
             self.frames = {}
             self.preview_frames = {}
             self.state = {"status": "starting", "mode": mode, "people": [], "cameras": [], "events": [], "t": 0,
@@ -212,6 +693,7 @@ class Engine:
         captures = {}
         replay = None
         combined = None
+        luggage = None
         mode = request.get("detector", "yolo")
         try:
             if mode == "demo":
@@ -283,9 +765,11 @@ class Engine:
             identities, occupancy, metrics = IdentityStore(config), Occupancy(config), SessionMetrics()
             if not active[0]["stream"]:
                 from replay import ReplayWriter
-                replay = ReplayWriter(self.data_root,self.state["session"],"unified" if request.get("combined") else "tracking",[{"id":c["id"],"name":c.get("name",c["id"]),"source":c["source"],"offset":c.get("offset",0),"planId":c.get("planId","custom"),"countLines":c.get("countLines",[])} for c in active],{k:v for k,v in config.items() if k != "cameras"})
+                replay = ReplayWriter(self.data_root,self.state["session"],"unified" if request.get("combined") else "tracking",[{"id":c["id"],"name":c.get("name",c["id"]),"source":c["source"],"offset":c.get("offset",0),"planId":c.get("planId","custom"),"countLines":c.get("countLines",[])} for c in active],{k:v for k,v in config.items() if k != "cameras"},self.project_id)
             from following.combined import CombinedAnalysis
+            from following.luggage import LuggageWatch
             combined = CombinedAnalysis(cams, ROOT) if request.get('combined') else None
+            luggage = LuggageWatch(cams, request.get("weights")) if any(LuggageWatch.enabled_for(c) for c in cams) else None
             camera_analytics = {}
             level_configs={pid:config if pid==config.get('planId','custom') else {**config,**config.get('plans',{}).get(pid,{})} for pid in {c.get('planId','custom') for c in cams}}
             level_occupancy={pid:Occupancy(value) for pid,value in level_configs.items()}
@@ -387,6 +871,8 @@ class Engine:
                         group=[p for p in people if p['camera']==c['id']]
                         camera_analytics[c['id']] = combined.observe(c,raw_frames[c['id']],group,t)
                         camera_analytics[c['id']]['map']=camera_maps[c['id']].update(group,t)
+                        if luggage:
+                            camera_analytics[c['id']]['luggage']=luggage.observe(c,raw_frames[c['id']],t)
                 encoded = {}
                 for cid, frame in raw_frames.items():
                     # Operator-only view on a loopback-only server: the operator already
@@ -448,6 +934,8 @@ class Engine:
                             h,w=raw_frames[c["id"]].shape[:2]
                             views.append({"id":c["id"],"t":statuses[c["id"]]["sourceTime"],"analysis":camera_analytics.get(c["id"]),"people":[{"id":p["id"],"box":[p["box"][0]/w,p["box"][1]/h,p["box"][2]/w,p["box"][3]/h] if p["box"] else None,"pixel":[p["pixel"][0]/w,p["pixel"][1]/h],"point":p["point"],"association":p["association"]} for p in people if p["camera"]==c["id"]]})
                         replay.append({"t":t,"cameras":views,"analytics":analytics,"levels":levels})
+                    self.dispatch_alerts(camera_analytics, analytics)
+                    self.record_traffic(analytics, bool(active and active[0].get("stream")))
                     self.state.update(status="paused" if self.pause_event.is_set() else "running", people=people, cameras=list(statuses.values()), events=list(identities.events), t=t,
                                       analytics=analytics, levelAnalytics=levels, cameraAnalytics=camera_analytics, synchronization={"mode":"live" if active[0]["stream"] else "recordings", "contentVerified":config["clocksVerified"], "sampleSkewSeconds":round(skew,5), "commonTime":t}, totals=metrics.update(people,analytics,t), series=list(metrics.series), processingMs=round(elapsed * 1000), updatedAt=time.time())
                 timeline = round(timeline+.2,6)
@@ -456,6 +944,9 @@ class Engine:
             with self.lock:
                 self.state.update(status="error", error=f"{type(exc).__name__}: {exc}", people=[])
         finally:
+            self.flush_traffic()
+            if luggage:
+                luggage.close()
             if combined:
                 final_analytics=combined.close()
                 self.state['cameraAnalytics']=final_analytics
@@ -553,9 +1044,31 @@ class Handler(BaseHTTPRequestHandler):
         if url.path.startswith("/api/counting/"):
             from counting.api import get
             return get(self, url, ROOT)
+        if url.path == "/api/mail":
+            import notifier
+            return self.send_data(200, {**notifier.public(engine.settings_root), "lastError": engine.mailer.error, "sent": engine.mailer.sent})
+        if url.path == "/api/auth":
+            sesion = engine.sessions.leer(self.headers.get("X-LAP-Session", ""))
+            return self.send_data(200, {
+                "configurado": auth.hay_usuarios(engine.settings_root),
+                "usuario": sesion["usuario"] if sesion else None,
+                "rol": sesion["rol"] if sesion else None,
+                "usuarios": auth.listar(engine.settings_root) if sesion and sesion["rol"] == "operador" else [],
+            })
+        if url.path == "/api/incidents":
+            estado = parse_qs(url.query).get("estado", [None])[0]
+            return self.send_data(200, engine.incidents(estado))
+        if url.path == "/api/traffic-baseline":
+            query = parse_qs(url.query)
+            zona = query.get("zona", [""])[0]
+            if not zona:
+                return self.send_data(400, {"error": "Indica la zona."})
+            return self.send_data(200, {"zona": zona, "historico": engine.traffic_baseline(zona)})
+        if url.path == "/api/projects":
+            return self.send_data(200, engine.projects_listing())
         if url.path == "/api/config":
             with engine.lock:
-                return self.send_data(200, {"config": engine.config, "token": engine.token, "revision": engine.revision})
+                return self.send_data(200, {"config": engine.config, "token": engine.token, "revision": engine.revision, "projectId": engine.project_id})
         if url.path == "/api/state":
             return self.send_data(200, engine.snapshot())
         if url.path == "/api/report":
@@ -574,6 +1087,8 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == "/api/frame":
             cid = parse_qs(url.query).get("camera", [""])[0]
             with engine.lock:
+                if engine.preview_state.get("camera") == cid:
+                    engine.preview_touch = time.time()
                 frame = engine.frames.get(cid)
             return self.send_data(200, frame, "image/jpeg") if frame else self.send_data(404, {"error": "Aún no hay imagen."})
         # A production Vite build can be served without a second process.
@@ -589,13 +1104,42 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_data(200, path.read_bytes(), mime)
         self.send_data(404, {"error": "Interfaz no compilada. Usa el servidor Vite en el puerto 5173."})
 
+    # Rutas de configuracion: solo el operador. El administrador entra al
+    # sistema, ve todo y ajusta umbrales de alerta, pero no toca la geometria
+    # ni la calibracion, para no romper por error algo que costo calibrar.
+    SOLO_OPERADOR = ("/api/config", "/api/import-plan", "/api/plan-lines", "/api/upload",
+                     "/api/camera-preview", "/api/calibration-check")
+
+    def reject(self, size, code, message):
+        """Rechaza leyendo primero el cuerpo enviado.
+
+        Si se responde sin consumirlo, el cliente se queda escribiendo contra
+        una conexion que ya se cerro y recibe un error de red en vez del
+        mensaje que explica que paso."""
+        try:
+            remaining = max(0, size)
+            while remaining:
+                chunk = self.rfile.read(min(remaining, 65536))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+        except OSError:
+            pass
+        return self.send_data(code, {"error": message})
+
     def do_POST(self):
         engine = self.server.engine
+        size = int(self.headers.get("Content-Length", "0"))
         if not self.allowed() or not secrets.compare_digest(self.headers.get("X-LAP-Token", ""), engine.token):
-            return self.send_data(403, {"error": "Recarga la interfaz local antes de continuar."})
+            return self.reject(size, 403, "Recarga la interfaz local antes de continuar.")
         try:
-            size = int(self.headers.get("Content-Length", "0"))
             parsed = urlparse(self.path)
+            sesion = engine.sessions.leer(self.headers.get("X-LAP-Session", ""))
+            if parsed.path != "/api/auth" and auth.hay_usuarios(engine.settings_root):
+                if not sesion:
+                    return self.reject(size, 401, "Inicia sesión para continuar.")
+                if sesion["rol"] != "operador" and parsed.path in self.SOLO_OPERADOR:
+                    return self.reject(size, 403, "Tu usuario no puede cambiar la configuración. Pídeselo a un operador.")
             if parsed.path == "/api/import-plan":
                 if not 0 < size <= 16*1024*1024:
                     raise ValueError("El plano debe ocupar como máximo 16 MB.")
@@ -701,7 +1245,83 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_data(200,{"width":w,"height":h,"fps":fps,"duration":cap.get(cv2.CAP_PROP_FRAME_COUNT)/fps})
                 finally:
                     cap.release()
-            if self.path == "/api/config":
+            if self.path == "/api/projects":
+                action = data.get("action")
+                if sesion and sesion["rol"] != "operador" and action != "open":
+                    return self.send_data(403, {"error": "Tu usuario solo puede abrir proyectos existentes."})
+                pid = data.get("id")
+                if action == "create":
+                    return self.send_data(200, engine.new_project(data.get("name",""), bool(data.get("copyCurrent"))))
+                if action == "open":
+                    return self.send_data(200, engine.open_project(pid))
+                if action == "rename":
+                    return self.send_data(200, engine.rename_project(pid, data.get("name","")))
+                if action == "delete":
+                    return self.send_data(200, engine.delete_project(pid))
+                raise ValueError("Acción de proyecto desconocida.")
+            if parsed.path == "/api/auth":
+                accion = data.get("accion")
+                if accion == "login":
+                    rol = auth.verificar(engine.settings_root, data.get("usuario", ""), data.get("clave", ""))
+                    if not rol:
+                        return self.send_data(401, {"error": "Usuario o contraseña incorrectos."})
+                    usuario = str(data.get("usuario", "")).strip().lower()
+                    token = engine.sessions.abrir(usuario, rol)
+                    engine.record("Inicio de sesión", f"{usuario} ({rol})")
+                    return self.send_data(200, {"sesion": token, "usuario": usuario, "rol": rol})
+                if accion == "logout":
+                    engine.sessions.cerrar(self.headers.get("X-LAP-Session", ""))
+                    return self.send_data(200, {"ok": True})
+                primero = not auth.hay_usuarios(engine.settings_root)
+                if primero:
+                    # Sin usuarios todavía, el primero que se crea es el operador
+                    # que después dará de alta a los demás.
+                    usuarios = auth.crear(engine.settings_root, data.get("usuario", ""), data.get("clave", ""), "operador")
+                    engine.record("Primer usuario creado", str(data.get("usuario", "")))
+                    return self.send_data(200, {"usuarios": usuarios})
+                if not sesion or sesion["rol"] != "operador":
+                    return self.send_data(403, {"error": "Solo un operador puede administrar usuarios."})
+                if accion == "crear":
+                    return self.send_data(200, {"usuarios": auth.crear(engine.settings_root, data.get("usuario", ""), data.get("clave", ""), data.get("rol", ""))})
+                if accion == "eliminar":
+                    engine.sessions.cerrar_usuario(str(data.get("usuario", "")).strip().lower())
+                    return self.send_data(200, {"usuarios": auth.eliminar(engine.settings_root, str(data.get("usuario", "")).strip().lower())})
+                if accion == "clave":
+                    auth.cambiar_clave(engine.settings_root, str(data.get("usuario", "")).strip().lower(), data.get("clave", ""))
+                    return self.send_data(200, {"usuarios": auth.listar(engine.settings_root)})
+                raise ValueError("Acción de usuario desconocida.")
+            if parsed.path == "/api/alert-rules":
+                # Umbrales de aglomeración: es lo único de configuración que el
+                # administrador sí puede ajustar, porque define cuándo le avisan.
+                engine.update_alert_rules(data)
+                return self.send_data(200, {"ok": True})
+            if parsed.path == "/api/incidents":
+                return self.send_data(200, engine.update_incident(data.get("id"), data.get("estado")))
+            if self.path == "/api/mail":
+                import notifier
+                if data.get("action") == "test":
+                    engine.mailer.send("AeroTrack · Correo de prueba",
+                                       "Si recibes este mensaje, los avisos de seguridad de AeroTrack están bien configurados.",
+                                       blocking=True)
+                    engine.record("Correo de prueba", "Enviado al personal configurado")
+                    return self.send_data(200, {"ok": True})
+                result = notifier.save(engine.settings_root, data)
+                engine.record("Avisos por correo", "Configuración actualizada")
+                return self.send_data(200, result)
+            if self.path == "/api/preview":
+                action = data.get("action", "start")
+                if action == "start":
+                    engine.preview_start(data.get("camera"), data.get("seconds", 0) or 0)
+                else:
+                    engine.preview_control(action, data.get("seconds"))
+                return self.send_data(200, engine.preview_snapshot())
+            if parsed.path == "/api/config":
+                # El navegador dice a qué proyecto cree que pertenecen los
+                # cambios. Si no es el abierto, se rechazan: son el borrador del
+                # proyecto anterior y sobrescribirían el plano de este.
+                intended = parse_qs(parsed.query).get("project", [None])[0]
+                if intended and engine.project_id and intended != engine.project_id:
+                    raise ValueError("Esos cambios pertenecen a otro proyecto y no se guardaron. Vuelve a abrirlo para editarlo.")
                 engine.configure(data)
             elif self.path == "/api/start":
                 engine.start(data)
@@ -741,6 +1361,7 @@ def main():
         pass
     finally:
         server.engine.stop()
+        server.engine.preview_stop()
         if getattr(server.engine, "counting", None):
             server.engine.counting.stop()
             if server.engine.counting.worker:

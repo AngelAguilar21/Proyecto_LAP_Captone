@@ -13,7 +13,17 @@ export function CameraVideo({ camera, state, connected, onPoint, mode, pending, 
   const [box, setBox] = useState<{ w: number; h: number; x: number; y: number } | null>(null);
   const status = state.cameras.find(c => c.id === camera?.id);
   useEffect(()=>{ setFailed(false); setTick(Date.now()); },[camera?.id,state.session]);
-  useEffect(()=>{if(state.status!=='running'||mode||!connected)return; const id=setInterval(()=>{if(!document.hidden){setTick(Date.now());setFailed(false);}},400);return()=>clearInterval(id);},[state.status,mode,connected]);
+  const previewing=state.preview?.camera===camera?.id&&!!state.preview?.playing;
+  const nextFrame=useRef<number>();
+  // En vista en vivo se pide la siguiente imagen cuando termina de cargar la
+  // anterior: a intervalo fijo se encolarían peticiones y se sumaría retraso.
+  useEffect(()=>{if(mode||!connected)return;
+    if(previewing){setFailed(false);setTick(Date.now());return;}
+    if(state.status!=='running')return;
+    const id=setInterval(()=>{if(!document.hidden){setTick(Date.now());setFailed(false);}},400);
+    return()=>clearInterval(id);},[state.status,mode,connected,previewing]);
+  useEffect(()=>()=>window.clearTimeout(nextFrame.current),[]);
+  const chainFrame=()=>{if(!previewing)return;window.clearTimeout(nextFrame.current);nextFrame.current=window.setTimeout(()=>{if(!document.hidden)setTick(Date.now());},40);};
   const available = state.mode !== 'demo' && status && ['ready','live','paused','stopped','ended'].includes(status.status);
   const current = connected && state.status==='running' && status?.status==='live';
   const ratio = status?.width && status?.height ? status.width / status.height : null;
@@ -38,7 +48,7 @@ export function CameraVideo({ camera, state, connected, onPoint, mode, pending, 
   const drawnZone = zonePoints && zonePoints.length > 0 ? zonePoints : (mode !== 'zone' ? camera?.detectionZone : undefined);
   return <div className="camera-video" ref={ref}>
     <div className="video-frame" style={frameStyle}>
-      {available && !failed ? <img src={`/api/frame?camera=${encodeURIComponent(camera?.id||'')}&v=${tick}`} alt={`Seguimiento de ${camera?.name||camera?.id}`} onError={()=>setFailed(true)} className={mode?'calibration-cursor':''} onClick={e=>{if(!mode||!onPoint)return;const r=e.currentTarget.getBoundingClientRect();if(!r.width||!r.height)return;const clamp=(v:number)=>Math.min(1,Math.max(0,v));onPoint([clamp((e.clientX-r.left)/r.width),clamp((e.clientY-r.top)/r.height)]);}}/> : <div className="video-empty"><Icon name="camera" size={38}/><strong>{!camera?'Añade una cámara':state.mode==='demo'?'Simulación de nodos':status?.status==='error'?'Cámara sin señal':state.status==='starting'?'Conectando con la fuente':'Vista de cámara'}</strong><span>{status?.error || (state.mode==='demo'?'No contiene grabación de personas. Prueba una fuente para ver video.':'Al iniciar una prueba verás el video procesado y los IDs temporales.')}</span></div>}
+      {available && !failed ? <img src={`/api/frame?camera=${encodeURIComponent(camera?.id||'')}&v=${tick}`} alt={`Seguimiento de ${camera?.name||camera?.id}`} onError={()=>setFailed(true)} onLoad={chainFrame} className={mode?'calibration-cursor':''} onClick={e=>{if(!mode||!onPoint)return;const r=e.currentTarget.getBoundingClientRect();if(!r.width||!r.height)return;const clamp=(v:number)=>Math.min(1,Math.max(0,v));onPoint([clamp((e.clientX-r.left)/r.width),clamp((e.clientY-r.top)/r.height)]);}}/> : <div className="video-empty"><Icon name="camera" size={38}/><strong>{!camera?'Añade una cámara':state.mode==='demo'?'Simulación de nodos':status?.status==='error'?'Cámara sin señal':state.status==='starting'?'Conectando con la fuente':'Vista de cámara'}</strong><span>{status?.error || (state.mode==='demo'?'No contiene grabación de personas. Prueba una fuente para ver video.':'Al iniciar una prueba verás el video procesado y los IDs temporales.')}</span></div>}
       {pending && mode==='calibration' && <span className="calibration-marker" style={{left:`${pending[0]*100}%`,top:`${pending[1]*100}%`}}/>}
       {drawnZone && drawnZone.length>0 && <svg className="zone-overlay" viewBox="0 0 100 100" preserveAspectRatio="none">
         {drawnZone.length>1 && <polygon points={drawnZone.map(p=>`${p[0]*100},${p[1]*100}`).join(' ')}/>}

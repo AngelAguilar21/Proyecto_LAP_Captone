@@ -1,9 +1,10 @@
 export type Point = [number, number];
 export type SourceMode = 'recordings' | 'live' | 'demo';
-export type View = 'replay' | 'overview' | 'counting' | 'setup' | 'map' | 'cameras' | 'lab' | 'dashboard' | 'zones' | 'rules' | 'reports' | 'audit';
+export type View = 'replay' | 'overview' | 'counting' | 'setup' | 'map' | 'cameras' | 'lab' | 'dashboard' | 'zones' | 'rules' | 'reports' | 'audit' | 'alerts';
 export interface Camera {
   analysisZones?:{id:string;name:string;points:Point[];threshold:number;dwell:number}[];
   denseCounting?:boolean; denseInterval?:number; crowdThreshold?:number; crowdDwell?:number; illustrative?:boolean;
+  luggageWatch?:boolean; luggageDwell?:number; luggageInterval?:number;
   countLines?:{id:string;name:string;place?:{id:string;name:string;point:Point;planId:string};a:Point;b:Point;entrySide:number;bands?:{negative:Point[];positive:Point[]}}[];
   planId?: string;
   color?: string; active?: boolean; restrictCoverage?: boolean;
@@ -17,6 +18,8 @@ export interface Zone {
   rule?: { enabled: boolean; minPeople: number; dwell: number };
 }
 export interface Plan { width:number; height:number; unit: 'relative'|'meters'; background:string; floor:string; zones:Zone[]; workArea?:Point[]; planLines?:number[][]; mapConfigured?:boolean; mapAsset?:string; planName?:string; }
+export interface ProjectEntry { id:string; name:string; created:number; updated:number; airport:string; floor:string; cameras:number; plans:number; setupComplete:boolean; }
+export interface ProjectListing { active:string|null; projects:ProjectEntry[]; }
 export interface Config {
   planId?:string; plans?:Record<string,Plan>; mapAsset?:string;
   workArea?: Point[]; planLines?: number[][];
@@ -53,6 +56,7 @@ export interface SessionState {
   series?: { t: number; count: number; mapped: number; alerts: number }[];
   audit?: { at: string; action: string; detail: string }[];
   identityDeleted?: boolean;
+  preview?: { camera: string|null; playing: boolean; t: number; duration: number; live: boolean; error: string|null };
   sourceChecks?: Record<string,{source:string|number;valid:boolean;width:number;height:number;fps:number;checkedAt:number}>;
 }
 export const STATUS: Record<string, string> = { idle: 'Sin sesión', starting: 'Conectando', running: 'Procesamiento activo', paused: 'Pausado', stopping: 'Finalizando', stopped: 'Sesión finalizada', ended: 'Grabación finalizada', error: 'Error', live: 'Fuente válida', ready: 'Preparada' };

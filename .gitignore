@@ -76,3 +76,8 @@ proyecto_lap_prototipo/data/replay-map-v1/
 proyecto_lap_prototipo/docs/REVISION_USABILIDAD_MONITOREO.md
 
 .local-validation/
+
+# Credenciales de avisos por correo: nunca al repositorio
+proyecto_lap_prototipo/config/correo.local.json
+proyecto_lap_prototipo/config/projects/
+proyecto_lap_prototipo/config/usuarios.local.json
