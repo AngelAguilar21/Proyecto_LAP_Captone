@@ -44,7 +44,8 @@ El apartado~\ref{sec:arquitectura} presenta los seis componentes que
 organizan el procesamiento de las imágenes. Los apartados siguientes
 documentan los componentes incorporados en la versión actual de la
 consola: la gestión de usuarios por roles, la gestión de proyectos
-independientes y el asistente de configuración en ocho pasos.
+independientes, el asistente de configuración en ocho pasos y las alertas
+de seguridad con aviso por correo.
 
 \subsection{Arquitectura propuesta}
 \label{sec:arquitectura}
@@ -287,3 +288,39 @@ precisión.
 \figuraconsola{aerotrack-17-paso8-revision.png}
   {Paso 8 del asistente: revisión del proyecto antes de abrir el monitoreo.}
   {fig:paso8}
+
+\subsection{Alertas de seguridad con aviso por correo}
+\label{sec:diseno-alertas}
+
+La vista de alertas reúne lo que necesita el personal de seguridad para
+atender una aglomeración (Figura~\ref{fig:alertas-correo}). El apartado
+\enquote{Cuándo avisar} fija los umbrales que definen una aglomeración: el
+número mínimo de personas, la permanencia en segundos y el radio en
+metros; en la captura, 4 personas, 3 segundos y 1,5 metros. Estos
+umbrales se cambian desde la misma vista, sin entrar en la configuración,
+y son el único ajuste que también puede hacer el administrador.
+
+El panel \enquote{Avisar por correo}, desplegado en la captura y todavía
+desactivado, pide la cuenta que envía, su contraseña de aplicación y los
+correos que reciben el aviso, separados por coma, y permite enviar un
+correo de prueba. Una nota aclara que el servicio de correo no acepta la
+contraseña normal de la cuenta, sino una contraseña de aplicación
+generada con la verificación en dos pasos. Debajo, tres contadores
+muestran las alertas activas, el total de la sesión y los incidentes sin
+revisar, y la bitácora de incidentes conserva cada caso aunque la sesión
+termine, para que el personal lo marque cuando alguien haya ido a
+revisarlo. En la captura la bitácora aparece sin registros porque en esta
+fase no se han procesado grabaciones del terminal.
+
+Con el aviso activado, el sistema envía un correo por cada incidente
+nuevo de aglomeración o de equipaje sin custodia, con el lugar, la cámara
+y el motivo del aviso, y la advertencia de que requiere comprobación
+humana; un aviso ya enviado no se reenvía. La contraseña se guarda solo
+en el equipo, fuera de los archivos del proyecto y del control de
+versiones: la interfaz nunca la muestra de vuelta y no se copia al
+duplicar un proyecto.
+
+\figuraconsola{aerotrack-18-alertas-correo.png}
+  {Vista de alertas: umbrales de aglomeración, aviso por correo desplegado,
+   contadores y bitácora de incidentes.}
+  {fig:alertas-correo}
