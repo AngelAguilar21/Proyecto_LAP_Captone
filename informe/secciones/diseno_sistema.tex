@@ -61,10 +61,10 @@ detección: un detector intercambiable (HOG, P2PNet o YOLO) produce
 posiciones en píxeles con una confianza asociada. La elección del
 detector la hace el operador de forma explícita y no el sistema, porque
 ninguno de los tres es adecuado para todos los casos. El tercero es el
-seguimiento dentro de cada cámara, una adaptación de
-ByteTrack~\cite{Zhang_2022_ECCV} a puntos, con filtro de Kalman de
-velocidad constante y asignación húngara en dos etapas según la
-confianza.
+seguimiento dentro de cada cámara. Con los detectores HOG y P2PNet es una
+adaptación de ByteTrack~\cite{Zhang_2022_ECCV} a puntos, con filtro de
+Kalman de velocidad constante y asignación húngara en dos etapas según la
+confianza; con YOLO se sigue la caja completa de cada persona.
 
 El cuarto componente es la calibración y proyección: cada cámara tiene
 una homografía propia hacia el plano, que se valida por consistencia
