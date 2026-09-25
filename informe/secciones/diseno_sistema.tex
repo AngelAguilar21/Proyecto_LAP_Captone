@@ -1,32 +1,326 @@
 % =====================================================================
-% SECCION 6 -- DISENO DEL SISTEMA (esqueleto)
+% SECCION 6 -- DISENO DEL SISTEMA
 % Responsable: no corresponde al frente etico-legal.
 %
 % NOTA PARA EL EQUIPO: las decisiones tecnicas que se documenten aqui son
 % auditadas en la Seccion \ref{sec:auditoria} del marco etico-legal.
 % Cualquier cambio de arquitectura, de dataset o de politica de retencion
 % debe comunicarse al frente etico-legal, porque cambia la auditoria.
-%
-% Los marcadores \pendiente{PLACEHOLDER}{...} que este archivo tenia se
-% retiraron del cuerpo. El encargo consta en PENDIENTES.md, seccion (b).
 % =====================================================================
-% 14/09/2026: el aviso "Seccion en elaboracion ... a cargo de otro
-% integrante" se sustituyo por la frase neutra comun a todos los
-% esqueletos. Reestructuracion al indice del modelo del curso.
-% Recibe el apartado "Arquitectura propuesta" de la antigua Metodologia,
-% sin cambiar sus palabras; el resto de aquella seccion esta en
-% secciones/desarrollo_modelo.tex (Seccion 8).
+% 14/09/2026: reestructuracion al indice del modelo del curso. Recibe el
+% apartado "Arquitectura propuesta" de la antigua Metodologia; el resto de
+% aquella seccion esta en secciones/desarrollo_modelo.tex (Seccion 8).
+%
+% 24/09/2026: la seccion deja de ser esqueleto.
+%   6.1 Los seis componentes de procesamiento se trasladan en prosa desde
+%       la Seccion 6.1 de INFORME_COMPLETO_ANGEL.md (misma sustancia; se
+%       quitan las referencias a casos de uso y a puntos de PENDIENTES.md).
+%   6.2 a 6.4 Componentes nuevos de la consola, documentados con las
+%       capturas de imagenes/aerotrack-01 ... aerotrack-17.
+% Cada figura describe solo lo que se ve en la captura. Las de los pasos
+% 4, 6 y 8 del asistente salen sin video porque aun no hay grabaciones del
+% terminal; el texto lo dice en una sola frase (apartado 6.4).
+%
+% \figuraconsola{archivo}{pie}{etiqueta}
+% Todas las capturas van centradas y al mismo ancho (0,85 del ancho de
+% texto). Para cambiar el ancho de todas a la vez, se cambia aqui.
+% [H] (paquete float, cargado en main.tex) fija cada figura tras su
+% parrafo, para que el recorrido paso a paso se lea en orden.
+\newcommand{\figuraconsola}[3]{%
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{imagenes/#1}
+    \caption{#2}
+    \label{#3}
+  \end{figure}}
+
 \section{Diseño del Sistema}
 \label{sec:diseno}
 \label{sec:metodologia}
 
-Esta sección se completará en la versión final del informe.
+Esta sección describe el diseño del prototipo AeroTrack, la consola con
+la que se configura y opera el sistema de estimación de aglomeraciones.
+El apartado~\ref{sec:arquitectura} presenta los seis componentes que
+organizan el procesamiento de las imágenes. Los apartados siguientes
+documentan los componentes incorporados en la versión actual de la
+consola: la gestión de usuarios por roles, la gestión de proyectos
+independientes, el asistente de configuración en ocho pasos y las alertas
+de seguridad con aviso por correo.
 
 \subsection{Arquitectura propuesta}
 \label{sec:arquitectura}
 
-Este apartado documentará la arquitectura del sistema de visión
-computacional. La Sección~\ref{sec:sintesis-antecedentes} deja planteada
-la elección entre los tres enfoques revisados y, sobre todo, la
-granularidad de la salida, que es la decisión con mayor consecuencia para
-el análisis de proporcionalidad.
+La Sección~\ref{sec:sintesis-antecedentes} deja planteada la elección
+entre los tres enfoques revisados y, sobre todo, la granularidad de la
+salida, que es la decisión con mayor consecuencia para el análisis de
+proporcionalidad. El prototipo organiza el procesamiento en seis
+componentes, cada uno con una responsabilidad única.
+
+El primero es la adquisición, que lee cada fuente de cámara, sea un
+archivo de video, una cámara USB o un flujo RTSP. El segundo es la
+detección: un detector intercambiable (HOG, P2PNet o YOLO) produce
+posiciones en píxeles con una confianza asociada. La elección del
+detector la hace el operador de forma explícita y no el sistema, porque
+ninguno de los tres es adecuado para todos los casos. El tercero es el
+seguimiento dentro de cada cámara. Con los detectores HOG y P2PNet es una
+adaptación de ByteTrack~\cite{Zhang_2022_ECCV} a puntos, con filtro de
+Kalman de velocidad constante y asignación húngara en dos etapas según la
+confianza; con YOLO se sigue la caja completa de cada persona.
+
+El cuarto componente es la calibración y proyección: cada cámara tiene
+una homografía propia hacia el plano, que se valida por consistencia
+geométrica antes de aceptarse. El quinto es la fusión entre cámaras, que
+asocia identidades por proximidad espacio-temporal en el plano compartido
+y solo recurre a un descriptor de apariencia no biométrico como desempate
+de última instancia. El sexto reúne persistencia, analítica y
+presentación: mantiene en memoria el estado agregado de la sesión y lo
+expone en la consola, que ofrece configuración, plano en vivo, video por
+cámara y reportes. Los apartados siguientes describen cómo se presenta
+esa consola al usuario.
+
+\subsection{Gestión de usuarios y roles}
+\label{sec:diseno-usuarios}
+
+El acceso a la consola requiere usuario y contraseña. En la primera
+ejecución el sistema pide crear un primer usuario
+(Figura~\ref{fig:primer-usuario}), que queda con el rol de operador y
+puede dar de alta a los demás. La contraseña debe tener al menos seis
+caracteres y, según indica la propia pantalla, se guarda cifrada en el
+equipo y nunca en texto plano.
+
+\figuraconsola{aerotrack-01-primer-usuario.png}
+  {Creación del primer usuario en la primera ejecución de la consola.}
+  {fig:primer-usuario}
+
+Una vez dentro, la vista general muestra en la cabecera el proyecto
+activo junto al usuario y su rol, y organiza la consola en cinco
+pestañas: Vista general, Alertas, Videos y resultados, Reportes y
+Configuración (Figura~\ref{fig:vista-general}). Desde esta vista se
+filtra por nivel, cámara, zona de imagen y rendimiento, y se inicia el
+monitoreo sobre el plano del nivel. En la captura los contadores de
+cámaras seleccionadas, entradas, salidas y tiempo de análisis están en
+cero porque el proyecto aún no tiene cámaras configuradas.
+
+\figuraconsola{aerotrack-02-vista-general.png}
+  {Vista general de la consola, con el proyecto activo en la cabecera y el
+   plano del nivel 3.}
+  {fig:vista-general}
+
+El sistema distingue dos roles (Figura~\ref{fig:usuarios}). El operador
+configura cámaras y plano; el administrador consulta resultados y ajusta
+los umbrales de alerta, sin acceso a la configuración. El panel de
+usuarios lista las cuentas existentes con su rol, permite eliminarlas y
+permite crear otras indicando nombre, contraseña y rol.
+
+\figuraconsola{aerotrack-03-usuarios.png}
+  {Panel de usuarios del sistema y formulario de alta con selección de rol.}
+  {fig:usuarios}
+
+\subsection{Gestión de proyectos}
+\label{sec:diseno-proyectos}
+
+Un proyecto representa un espacio monitoreado, por ejemplo un nivel de un
+terminal. Cada proyecto guarda por separado su propio plano, sus cámaras
+y su calibración, de modo que la configuración de un espacio no se mezcla
+con la de otro y es posible mantener varios proyectos y cambiar de uno a
+otro cuando haga falta. Al entrar en la configuración, la consola ofrece
+dos acciones: crear un proyecto nuevo, que conduce al asistente descrito
+en el apartado~\ref{sec:diseno-asistente}, o añadir una cámara al
+proyecto abierto (Figura~\ref{fig:crear-proyecto}). Para crear el
+proyecto basta con darle un nombre.
+
+\figuraconsola{aerotrack-04-crear-proyecto.png}
+  {Opciones para crear un proyecto nuevo o añadir una cámara al proyecto
+   abierto.}
+  {fig:crear-proyecto}
+
+Los proyectos guardados se listan con su nombre, el espacio al que
+corresponden, el número de cámaras y de planos, el momento de la última
+edición y su estado (Figura~\ref{fig:proyectos-guardados}). En la captura
+figuran dos proyectos, ambos marcados como incompletos: el proyecto
+principal, sobre el nivel 3 del aeropuerto y con cuatro planos, y el
+proyecto Terminal~A, Nivel~1, con un plano. Desde la lista se abre un
+proyecto, se retoma su configuración en el punto en que quedó, se
+renombra directamente sobre su tarjeta (Figura~\ref{fig:renombrar}) o se
+elimina.
+
+\figuraconsola{aerotrack-05-proyectos-guardados.png}
+  {Lista de proyectos guardados, cada uno con sus cámaras, planos y estado.}
+  {fig:proyectos-guardados}
+
+\figuraconsola{aerotrack-06-renombrar-proyecto.png}
+  {Cambio de nombre de un proyecto sobre su propia tarjeta.}
+  {fig:renombrar}
+
+Al entrar en la consola, una pantalla pregunta en qué proyecto se quiere
+trabajar, muestra para cada uno su espacio, su número de cámaras y el
+estado de su configuración, y señala el último abierto
+(Figura~\ref{fig:selector-proyecto}). Así el usuario elige de forma
+expresa el espacio en el que va a trabajar y no mezcla datos de dos
+lugares distintos.
+
+\figuraconsola{aerotrack-07-selector-proyecto.png}
+  {Selección del proyecto de trabajo al entrar en la consola.}
+  {fig:selector-proyecto}
+
+\subsection{Asistente de configuración}
+\label{sec:diseno-asistente}
+
+La configuración de un proyecto se completa con un asistente de ocho
+pasos: proyecto, plano, conexión, prueba, ubicación, calibración, zonas y
+alertas, y revisión. Una barra superior muestra los pasos, marca los
+completados y lleva la cuenta de cuántos están listos, y una indicación
+en la cabecera confirma que el avance queda guardado, de modo que un
+proyecto incompleto puede retomarse desde la lista de proyectos. Las
+capturas de los pasos 4, 6 y 8 se tomaron sin video, porque en el estado
+actual del prototipo aún no se dispone de grabaciones del terminal.
+
+\subsubsection*{Paso 1: proyecto}
+
+Se identifica el espacio con el nombre del aeropuerto o proyecto y el del
+terminal y nivel, y se elige el tipo de fuente: videos grabados, para
+analizar grabaciones y consultar resultados por periodo, o cámaras en
+vivo, conectadas por USB, RTSP o IP (Figura~\ref{fig:paso1}). Una nota
+lateral recuerda que el análisis es de presencia y recorridos, sin
+reconocimiento facial.
+
+\figuraconsola{aerotrack-08-paso1-proyecto.png}
+  {Paso 1 del asistente: datos del espacio y tipo de fuente.}
+  {fig:paso1}
+
+\subsubsection*{Paso 2: plano}
+
+Se define el plano del espacio: se elige uno de los planos del
+aeropuerto, se importa una imagen o un PDF, o se dibuja el espacio con
+rectángulos, polígonos y líneas. El plano se acompaña de su ancho y su
+alto en metros, y admite marcar un área de trabajo como referencia
+opcional (Figura~\ref{fig:paso2}).
+
+\figuraconsola{aerotrack-09-paso2-plano.png}
+  {Paso 2 del asistente: plano del nivel y sus dimensiones en metros.}
+  {fig:paso2}
+
+\subsubsection*{Paso 3: conexión}
+
+Se añaden las cámaras del proyecto (Figura~\ref{fig:paso3}). Para cada
+una se indica el plano asociado, el nombre visible en el mapa, la
+ubicación, la orientación y la fuente, con la ruta del video o la
+dirección de la cámara, y se fijan el umbral de alerta en personas y el
+tiempo de concentración sostenida (Figura~\ref{fig:paso3-camara}). En el
+mismo paso se marca la zona útil de la imagen, que deja fuera reflejos,
+otras plantas y áreas que no deben analizarse, y, si la cámara ve una
+puerta, un acceso formado por un área exterior y otra interior, entre las
+que se cuenta el paso de personas y no visitantes únicos
+(Figura~\ref{fig:paso3-zona}).
+
+\figuraconsola{aerotrack-10-paso3-conexion.png}
+  {Paso 3 del asistente: lista de cámaras del proyecto, todavía vacía.}
+  {fig:paso3}
+
+\figuraconsola{aerotrack-11-paso3-camara.png}
+  {Paso 3 del asistente: datos de la cámara, fuente y umbrales de alerta.}
+  {fig:paso3-camara}
+
+\figuraconsola{aerotrack-12-paso3-zona-util.png}
+  {Paso 3 del asistente: zona útil de la imagen y acceso de un local.}
+  {fig:paso3-zona}
+
+\subsubsection*{Paso 4: prueba}
+
+Se comprueba la cámara en movimiento para revisar encuadre, luz y
+retardo. El panel muestra el estado de la fuente, su resolución, su
+frecuencia de cuadros y si está calibrada, y permite iniciar una prueba
+de seguimiento que presenta el video procesado con identificadores
+temporales (Figura~\ref{fig:paso4}).
+
+\figuraconsola{aerotrack-13-paso4-prueba.png}
+  {Paso 4 del asistente: prueba de la cámara, con el visor sin señal.}
+  {fig:paso4}
+
+\subsubsection*{Paso 5: ubicación}
+
+Se coloca la cámara sobre el plano en el punto donde está instalada y se
+orienta hacia donde apunta, con su dirección, alcance, altura y ancho de
+cobertura (Figura~\ref{fig:paso5}). Esa cobertura es orientativa: la
+precisión la aporta la calibración del paso siguiente.
+
+\figuraconsola{aerotrack-14-paso5-ubicacion.png}
+  {Paso 5 del asistente: posición y cobertura de la cámara sobre el plano.}
+  {fig:paso5}
+
+\subsubsection*{Paso 6: calibración}
+
+Se relaciona el suelo del video con el plano marcando puntos de
+referencia, como esquinas o cruces de baldosas, primero en la imagen y
+después en el mapa (Figura~\ref{fig:paso6}). Se requieren al menos cuatro
+puntos repartidos; con cinco o más, cada referencia se comprueba además
+dejándola fuera del ajuste.
+
+\figuraconsola{aerotrack-15-paso6-calibracion.png}
+  {Paso 6 del asistente: calibración del suelo del video con el plano.}
+  {fig:paso6}
+
+\subsubsection*{Paso 7: zonas y alertas}
+
+Se dibujan sobre el plano las zonas de interés con polígonos, rectángulos
+o círculos, y se define cuándo avisar de una aglomeración mediante un
+radio en metros, un número mínimo de personas y un tiempo de permanencia
+(Figura~\ref{fig:paso7}). La pantalla advierte que una fila y una
+aglomeración pueden parecerse geométricamente, por lo que los límites
+deben ajustarse al uso de cada zona.
+
+\figuraconsola{aerotrack-16-paso7-zonas.png}
+  {Paso 7 del asistente: trazado de una zona y parámetros de aviso de
+   aglomeración.}
+  {fig:paso7}
+
+\subsubsection*{Paso 8: revisión}
+
+Se revisa el proyecto antes de abrir el monitoreo: una lista indica qué
+está preparado y qué sigue pendiente, y un resumen muestra el número de
+cámaras, zonas dibujadas y fuentes probadas, junto con la escala
+(Figura~\ref{fig:paso8}). En la captura, con la cámara sin probar ni
+calibrar, la opción de guardar y abrir el monitoreo aparece desactivada y
+queda disponible la de continuar las pruebas en laboratorio. La pantalla
+aclara que una verificación completada no sustituye la validación de
+precisión.
+
+\figuraconsola{aerotrack-17-paso8-revision.png}
+  {Paso 8 del asistente: revisión del proyecto antes de abrir el monitoreo.}
+  {fig:paso8}
+
+\subsection{Alertas de seguridad con aviso por correo}
+\label{sec:diseno-alertas}
+
+La vista de alertas reúne lo que necesita el personal de seguridad para
+atender una aglomeración (Figura~\ref{fig:alertas-correo}). El apartado
+\enquote{Cuándo avisar} fija los umbrales que definen una aglomeración: el
+número mínimo de personas, la permanencia en segundos y el radio en
+metros; en la captura, 4 personas, 3 segundos y 1,5 metros. Estos
+umbrales se cambian desde la misma vista, sin entrar en la configuración,
+y son el único ajuste que también puede hacer el administrador.
+
+El panel \enquote{Avisar por correo}, desplegado en la captura y todavía
+desactivado, pide la cuenta que envía, su contraseña de aplicación y los
+correos que reciben el aviso, separados por coma, y permite enviar un
+correo de prueba. Una nota aclara que el servicio de correo no acepta la
+contraseña normal de la cuenta, sino una contraseña de aplicación
+generada con la verificación en dos pasos. Debajo, tres contadores
+muestran las alertas activas, el total de la sesión y los incidentes sin
+revisar, y la bitácora de incidentes conserva cada caso aunque la sesión
+termine, para que el personal lo marque cuando alguien haya ido a
+revisarlo. En la captura la bitácora aparece sin registros porque en esta
+fase no se han procesado grabaciones del terminal.
+
+Con el aviso activado, el sistema envía un correo por cada incidente
+nuevo de aglomeración o de equipaje sin custodia, con el lugar, la cámara
+y el motivo del aviso, y la advertencia de que requiere comprobación
+humana; un aviso ya enviado no se reenvía. La contraseña se guarda solo
+en el equipo, fuera de los archivos del proyecto y del control de
+versiones: la interfaz nunca la muestra de vuelta y no se copia al
+duplicar un proyecto.
+
+\figuraconsola{aerotrack-18-alertas-correo.png}
+  {Vista de alertas: umbrales de aglomeración, aviso por correo desplegado,
+   contadores y bitácora de incidentes.}
+  {fig:alertas-correo}
