@@ -20,6 +20,9 @@ class AutomationService:
         self.interval = interval
         self.thread_factory = thread_factory
         self.store = AutomationStore(engine.settings_root / "automation.sqlite")
+        if tasks is None:
+            from automation_reports import ScheduledReports
+            self.tasks["reports"] = ScheduledReports(engine, self.store)
         self.stop_event = threading.Event()
         self.run_lock = threading.Lock()
         self.lifecycle_lock = threading.Lock()
