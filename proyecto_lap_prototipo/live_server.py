@@ -73,6 +73,7 @@ class Engine:
         self.instance = secrets.token_hex(8)
         self.revision = 0
         self.runtime_config = None
+        self.report_config = None
         self.frames = {}
         self.preview_frames = {}
         self.source_checks = {}
@@ -530,6 +531,7 @@ class Engine:
             self.require_managed()
             self.config_path = projects.activate(ROOT, pid)
             self.project_id = pid
+            self.report_config = None
             self.read_config_file()
             if business_data.path_for(self.config_path).exists():
                 self.notifications.recover(self.config_path)
@@ -577,6 +579,16 @@ class Engine:
     def snapshot(self):
         with self.lock:
             return copy.deepcopy({**self.state, "serverTime": time.time(), "serverInstance": self.instance, "configRevision": self.revision, "sourceChecks":self.source_checks, "audit":list(self.audit), "preview": self.preview_snapshot()})
+
+    def automation_snapshot(self):
+        """Capture one project/session generation, without individual trajectories."""
+        with self.lock:
+            state = {key: self.state[key] for key in
+                     ("session", "status", "mode", "t", "analytics", "cameraAnalytics",
+                      "totals", "series", "cameras") if key in self.state}
+            return copy.deepcopy({"project_id": self.project_id, "config_path": self.config_path,
+                                  "revision": self.revision, "config": self.report_config,
+                                  "state": state})
 
     def record(self, action, detail):
         self.audit.appendleft({"at":datetime.now(timezone.utc).isoformat(),"action":action,"detail":detail})
@@ -668,6 +680,7 @@ class Engine:
                 if pid!=self.config.get("planId","custom"):
                     self.runtime_config.update(copy.deepcopy(self.config.get("plans",{}).get(pid,{})))
             self.worker = threading.Thread(target=self.run, args=(self.runtime_config, dict(request)), daemon=True)
+            self.report_config = copy.deepcopy(self.runtime_config)
             self.worker.start()
             self.record("Sesión iniciada",f"{mode} · {camera_id or 'todas las cámaras'}")
 
@@ -936,8 +949,8 @@ class Engine:
                         replay.append({"t":t,"cameras":views,"analytics":analytics,"levels":levels})
                     self.dispatch_alerts(camera_analytics, analytics)
                     self.record_traffic(analytics, bool(active and active[0].get("stream")))
-                    self.state.update(status="paused" if self.pause_event.is_set() else "running", people=people, cameras=list(statuses.values()), events=list(identities.events), t=t,
-                                      analytics=analytics, levelAnalytics=levels, cameraAnalytics=camera_analytics, synchronization={"mode":"live" if active[0]["stream"] else "recordings", "contentVerified":config["clocksVerified"], "sampleSkewSeconds":round(skew,5), "commonTime":t}, totals=metrics.update(people,analytics,t), series=list(metrics.series), processingMs=round(elapsed * 1000), updatedAt=time.time())
+                    self.state.update(copy.deepcopy(dict(status="paused" if self.pause_event.is_set() else "running", people=people, cameras=list(statuses.values()), events=list(identities.events), t=t,
+                                      analytics=analytics, levelAnalytics=levels, cameraAnalytics=camera_analytics, synchronization={"mode":"live" if active[0]["stream"] else "recordings", "contentVerified":config["clocksVerified"], "sampleSkewSeconds":round(skew,5), "commonTime":t}, totals=metrics.update(people,analytics,t), series=list(metrics.series), processingMs=round(elapsed * 1000), updatedAt=time.time())))
                 timeline = round(timeline+.2,6)
                 self.stop_event.wait(max(0., .2 - elapsed))
         except Exception as exc:
@@ -949,16 +962,19 @@ class Engine:
                 luggage.close()
             if combined:
                 final_analytics=combined.close()
-                self.state['cameraAnalytics']=final_analytics
+                with self.lock:
+                    self.state['cameraAnalytics']=copy.deepcopy(final_analytics)
                 if replay:
                     replay.meta['cameraAnalytics']=final_analytics
-                    replay.meta['levelAnalytics']=self.state.get('levelAnalytics',{})
+                    with self.lock:
+                        replay.meta['levelAnalytics']=copy.deepcopy(self.state.get('levelAnalytics',{}))
                     replay.meta['derivedMapVersion']=2
             if replay:
                 try:
                     replay.finish("error" if self.state["status"]=="error" else "stopped" if self.stop_event.is_set() else "ended")
                 except OSError as exc:
-                    self.state.update(status="error", error=f"No se pudo guardar la reproducción: {exc}")
+                    with self.lock:
+                        self.state.update(status="error", error=f"No se pudo guardar la reproducción: {exc}")
             for cap in captures.values():
                 cap.release()
             with self.lock:
@@ -1001,7 +1017,7 @@ class Engine:
                 people.append({"id": pid, "camera": config["cameras"][i % len(config["cameras"])]["id"], "point": [x, y], "history": list(h), "association": "synthetic", "predicted": False})
             with self.lock:
                 analytics = occupancy.update(people,t)
-                self.state.update(status="paused" if self.pause_event.is_set() else "running", people=people, t=t, analytics=analytics, totals=metrics.update(people,analytics,t), series=list(metrics.series), updatedAt=time.time(), cameras=[])
+                self.state.update(copy.deepcopy(dict(status="paused" if self.pause_event.is_set() else "running", people=people, t=t, analytics=analytics, totals=metrics.update(people,analytics,t), series=list(metrics.series), updatedAt=time.time(), cameras=[])))
             self.stop_event.wait(.2)
             t += .2
 
@@ -1354,12 +1370,16 @@ def main():
     server.engine = Engine(args.config_path)
     from replay import recover_interrupted
     recover_interrupted(server.engine.data_root)
+    from automation import AutomationService
+    automation = AutomationService(server.engine)
     print(f"LAP: http://127.0.0.1:{args.port} — solo equipo local", flush=True)
     try:
+        automation.start()
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
+        automation.stop()
         server.engine.stop()
         if server.engine.worker:
             server.engine.worker.join()

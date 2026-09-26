@@ -81,3 +81,6 @@ proyecto_lap_prototipo/docs/REVISION_USABILIDAD_MONITOREO.md
 proyecto_lap_prototipo/config/correo.local.json
 proyecto_lap_prototipo/config/projects/
 proyecto_lap_prototipo/config/usuarios.local.json
+proyecto_lap_prototipo/config/automation.local.json*
+proyecto_lap_prototipo/config/automation.sqlite*
+proyecto_lap_prototipo/data/reports/
