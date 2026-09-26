@@ -22,7 +22,9 @@ class AutomationService:
         self.store = AutomationStore(engine.settings_root / "automation.sqlite")
         if tasks is None:
             from automation_reports import ScheduledReports
+            from automation_backups import ProjectBackups
             self.tasks["reports"] = ScheduledReports(engine, self.store)
+            self.tasks["backups"] = ProjectBackups(engine, self.store)
         self.stop_event = threading.Event()
         self.run_lock = threading.Lock()
         self.lifecycle_lock = threading.Lock()
