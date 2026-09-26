@@ -52,6 +52,21 @@ CREATE TABLE IF NOT EXISTS incidentes (
 );
 CREATE INDEX IF NOT EXISTS idx_incidentes_estado ON incidentes (estado);
 
+CREATE TABLE IF NOT EXISTS incident_notifications (
+    incident_id TEXT NOT NULL REFERENCES incidentes(id),
+    notification_kind TEXT NOT NULL CHECK(notification_kind IN ('original', 'escalation')),
+    status TEXT NOT NULL CHECK(status IN ('attempting', 'failed', 'sent', 'uncertain')),
+    attempts INTEGER NOT NULL DEFAULT 1,
+    attempted_at REAL NOT NULL,
+    sent_at REAL,
+    last_error TEXT,
+    owner TEXT NOT NULL,
+    PRIMARY KEY (incident_id, notification_kind),
+    CHECK ((status = 'sent' AND sent_at IS NOT NULL) OR
+           (status <> 'sent' AND sent_at IS NULL))
+);
+CREATE INDEX IF NOT EXISTS idx_notification_status ON incident_notifications(status);
+
 CREATE TABLE IF NOT EXISTS trafico_historico (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     zona TEXT NOT NULL,
