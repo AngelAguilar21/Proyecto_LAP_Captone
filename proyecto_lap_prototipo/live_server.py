@@ -197,6 +197,7 @@ class Engine:
             return
         sesion = self.state.get("session", "sin-sesion")
         conexion = None
+        business_data.reference_lock.acquire()
         try:
             conexion = business_data.connect(self.config_path)
             conexion.execute("BEGIN IMMEDIATE")
@@ -219,6 +220,7 @@ class Engine:
         finally:
             if conexion:
                 conexion.close()
+            business_data.reference_lock.release()
         if self.mailer.ready():
             for alerta in pendientes:
                 try:
