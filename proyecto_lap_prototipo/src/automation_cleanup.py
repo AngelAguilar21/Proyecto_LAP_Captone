@@ -9,6 +9,44 @@ from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+import business_data
+
+
+def incident_references(settings_root):
+    """No migrations/writes; old schemas are interpreted conservatively."""
+    documents = []
+    directories = [settings_root, settings_root / "projects"]
+    for directory in directories:
+        plain_path(directory, settings_root)
+        if not directory.exists():
+            continue
+        for path in directory.glob("*.negocios.sqlite"):
+            plain_path(path, settings_root)
+            for suffix in ("-wal", "-shm", "-journal"):
+                plain_path(Path(str(path) + suffix), settings_root)
+            with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=0)) as db:
+                db.execute("PRAGMA query_only=ON")
+                db.execute("BEGIN")
+                tables = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                # A database with an unknown schema cannot establish absence of references.
+                if "incidentes" not in tables:
+                    raise ValueError("unknown_incident_schema")
+                links = {}
+                if "incident_replay_links" in tables:
+                    links = {iid: (resolution, sid) for iid, resolution, sid in
+                             db.execute("SELECT incident_id,resolution,session_id FROM incident_replay_links")}
+                for iid, detail in db.execute("SELECT id,detalle FROM incidentes"):
+                    resolution, sid = links.get(iid, (None, None))
+                    value = json.loads(detail or "{}")
+                    legacy_sid = value.get("sesion") if isinstance(value, dict) else None
+                    if resolution is None:
+                        sid = legacy_sid
+                    elif resolution != "linked" or (legacy_sid is not None and legacy_sid != sid):
+                        raise ValueError("unknown_incident_reference")
+                    if not isinstance(sid, str) or not re.fullmatch(r"[a-f0-9]{8,32}", sid):
+                        raise ValueError("unknown_incident_reference")
+                    documents.append({"session": sid})
+    return documents
 
 
 @dataclass(frozen=True)
@@ -121,6 +159,7 @@ def saved_documents(root, settings_root):
                 if not isinstance(value, dict):
                     raise ValueError("invalid_counting_history")
                 documents.append(value)
+    documents.extend(incident_references(settings_root))
     return documents
 
 
@@ -214,7 +253,7 @@ class RetentionCleanup:
     def __init__(self, engine, store):
         self.engine, self.store = engine, store
 
-    def plan_cleanup(self, now, retention_days):
+    def _capture(self, now, retention_days):
         # Requests register use before opening files or starting background work.
         # Existing requests/active workers cause omission; no waiting for them.
         with self.engine.resource_lock:
@@ -245,44 +284,55 @@ class RetentionCleanup:
                     documents.append(read_json(path, settings))
             except (OSError, ValueError):
                 busy = True
-            return plan_cleanup(root, settings, now, retention_days, documents=documents,
-                                active_sessions=sessions, busy=busy)
+            return dict(root=root, settings_root=settings, now=now, retention_days=retention_days,
+                        documents=documents, active_sessions=sessions, busy=busy)
+
+    def plan_cleanup(self, now, retention_days):
+        with self.engine.resource_lock:
+            captured = self._capture(now, retention_days)
+            with business_data.reference_lock:
+                return plan_cleanup(**captured)
 
     def apply_cleanup(self, plan):
         """Revalidate each candidate under the request gate; never use recursive rm."""
         if plan.root != Path(os.path.abspath(self.engine.data_root)) or plan.settings_root != Path(os.path.abspath(self.engine.settings_root)):
             raise ValueError("Plan belongs to another workspace")
-        outcomes = []
         with self.engine.resource_lock:
-            fresh = {d.path: d for d in self.plan_cleanup(plan.now, plan.retention_days).decisions}
-            for decision in plan.decisions:
-                disposition, reason = decision.disposition, decision.reason
-                if disposition == "candidate":
-                    current = fresh.get(decision.path)
-                    if current != decision:
-                        disposition, reason = "omitted", "plan_changed"
-                    else:
-                        path = plan.root / decision.path
-                        # The plan is data, not authority: constrain even forged paths.
-                        plain_path(path, plan.root / "data" / "replays")
-                        if path.parent != plan.root / "data" / "replays":
-                            raise ValueError("Invalid candidate depth")
-                        self.store.audit("cleanup", json.dumps({"path": decision.path,
-                                         "decision": "delete_planned", "reason": reason}), plan.now)
-                        try:
-                            if replay_fingerprint(path, plan.root) != decision.fingerprint:
-                                raise ValueError("changed_resource")
-                            # Delete manifest last. A partial failure remains identifiable
-                            # and becomes uncertain on the next plan.
-                            (path / "samples.jsonl").unlink()
-                            (path / "manifest.json").unlink()
-                            path.rmdir()
-                            disposition, reason = "deleted", "expired_unreferenced"
-                        except (OSError, ValueError):
-                            disposition, reason = "omitted", "delete_failed_or_changed"
-                result = {"path": decision.path, "decision": disposition, "reason": reason}
-                self.store.audit("cleanup", json.dumps(result), plan.now)
-                outcomes.append(result)
+            captured = self._capture(plan.now, plan.retention_days)
+            with business_data.reference_lock:
+                return self._apply_locked(plan, captured)
+
+    def _apply_locked(self, plan, captured):
+        outcomes = []
+        fresh = {d.path: d for d in plan_cleanup(**captured).decisions}
+        for decision in plan.decisions:
+            disposition, reason = decision.disposition, decision.reason
+            if disposition == "candidate":
+                current = fresh.get(decision.path)
+                if current != decision:
+                    disposition, reason = "omitted", "plan_changed"
+                else:
+                    path = plan.root / decision.path
+                    # The plan is data, not authority: constrain even forged paths.
+                    plain_path(path, plan.root / "data" / "replays")
+                    if path.parent != plan.root / "data" / "replays":
+                        raise ValueError("Invalid candidate depth")
+                    self.store.audit("cleanup", json.dumps({"path": decision.path,
+                                     "decision": "delete_planned", "reason": reason}), plan.now)
+                    try:
+                        if replay_fingerprint(path, plan.root) != decision.fingerprint:
+                            raise ValueError("changed_resource")
+                        # Delete manifest last. A partial failure remains identifiable
+                        # and becomes uncertain on the next plan.
+                        (path / "samples.jsonl").unlink()
+                        (path / "manifest.json").unlink()
+                        path.rmdir()
+                        disposition, reason = "deleted", "expired_unreferenced"
+                    except (OSError, ValueError):
+                        disposition, reason = "omitted", "delete_failed_or_changed"
+            result = {"path": decision.path, "decision": disposition, "reason": reason}
+            self.store.audit("cleanup", json.dumps(result), plan.now)
+            outcomes.append(result)
         return outcomes
 
     def __call__(self, now, settings):
