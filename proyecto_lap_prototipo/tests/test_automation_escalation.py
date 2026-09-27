@@ -1,5 +1,6 @@
 """Escalation uses temporary SQLite/config, controlled clocks and no SMTP."""
 import smtplib
+import json
 import sqlite3
 import sys
 import tempfile
@@ -24,7 +25,11 @@ class EscalationTests(unittest.TestCase):
         directory = tempfile.TemporaryDirectory(prefix="escalation-test-")
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
-        self.path = self.root / "project.json"
+        (self.root / "projects").mkdir()
+        self.path = self.root / "projects" / "p-test.json"
+        self.path.write_text("{}")
+        (self.path.parent / "index.json").write_text(json.dumps(
+            {"active": "p-test", "projects": [{"id": "p-test"}]}))
         self.created = datetime(2026, 9, 26, 10, tzinfo=LIMA)
         self.now = self.created
         self.enterContext(patch.object(business_data, "time", Mock(time=lambda: self.now.timestamp())))
@@ -36,10 +41,12 @@ class EscalationTests(unittest.TestCase):
         notifier.save(self.root, dict(enabled=True, host="smtp.example.invalid", port=465,
                                      user="sender@example.invalid", password="synthetic-secret",
                                      recipients=["normal@example.invalid"]))
-        self.engine = Engine(self.path)
+        self.engine = Engine(self.root / "live.json")
+        self.engine.config_path = self.path
         self.restart_notifications("boot-a")
         self.task = AlertEscalation(self.engine)
-        self.settings = dict(enabled=True, delay_minutes=15, recipients=["supervisor@example.invalid"])
+        self.settings = dict(enabled=True, delay_minutes=15, recipients=["supervisor@example.invalid"],
+                             project_ids=["p-test"])
 
     def restart_notifications(self, owner):
         self.engine.notifications = IncidentNotifications(notifier.Mailer(self.root),
@@ -265,8 +272,41 @@ class EscalationTests(unittest.TestCase):
         self.smtp.assert_called_once()
 
     def test_no_incidents_does_not_create_business_database(self):
-        self.assertEqual(self.tick(), "no_incidents")
+        self.assertEqual(self.tick(), {"candidates": 0, "sent": 0})
         self.assertFalse(business_data.path_for(self.path).exists())
+        self.smtp.assert_not_called()
+
+    def test_supervision_does_not_follow_ui_selection_or_enable_other_projects(self):
+        self.create()
+        other = self.path.parent / "p-other.json"
+        other.write_text("{}")
+        self.create(path=other)
+        (self.path.parent / "index.json").write_text(json.dumps(
+            {"active": "p-other", "projects": [{"id": "p-test"}, {"id": "p-other"}]}))
+        self.engine.config_path = other
+        self.assertEqual(self.tick()["sent"], 1)
+        self.assertEqual(self.notification()["status"], "sent")
+        self.assertIsNone(self.engine.notifications.get(other, "incident", "escalation"))
+
+    def test_missing_supervised_project_is_reported_without_blocking_another(self):
+        self.create()
+        self.settings["project_ids"] = ["p-missing", "p-test"]
+        outcome = self.tick()
+        self.assertEqual(outcome["sent"], 1)
+        self.assertEqual(outcome["errors"], {"p-missing": "ValueError"})
+
+    def test_supervision_must_be_explicit_and_ids_safe(self):
+        self.assertEqual(automation_settings.validate({})["escalation"]["project_ids"], [])
+        for ids in ([], ["../escape"], ["p-test", "p-test"], [None], "p-test"):
+            with self.subTest(ids=ids), self.assertRaises(ValueError):
+                automation_settings.validate({"escalation": {**self.settings, "project_ids": ids}})
+
+    def test_restore_hold_on_supervised_project_prevents_delivery(self):
+        from backup_restore import journal
+        self.create()
+        with journal(self.root) as db:
+            db.execute("INSERT INTO holds(project,reason,restore_id) VALUES ('p-test','unknown','test')")
+        self.assertEqual(self.tick()["sent"], 0)
         self.smtp.assert_not_called()
 
 

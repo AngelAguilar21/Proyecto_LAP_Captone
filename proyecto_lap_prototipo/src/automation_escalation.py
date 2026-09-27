@@ -1,7 +1,10 @@
-"""Escalate pending incidents on the captured active project, without new threads."""
+"""Escalate only explicitly supervised projects, independently of the UI selection."""
 from contextlib import closing
+import json
+import sqlite3
 
 import business_data
+from automation_cleanup import plain_path
 
 
 class AlertEscalation:
@@ -11,8 +14,35 @@ class AlertEscalation:
     def __call__(self, now, settings):
         if not settings["enabled"]:
             return "disabled"
+        ids = tuple(settings.get("project_ids", ()))
+        if not ids:
+            return "no_supervised_projects"
+        root = self.engine.settings_root
         with self.engine.lock:
-            path = self.engine.config_path
+            index_path = plain_path(root / "projects" / "index.json", root)
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+            indexed = {p["id"] for p in index["projects"]}
+        result = {"candidates": 0, "sent": 0}
+        errors = {}
+        for pid in ids:
+            try:
+                if pid not in indexed:
+                    raise ValueError("Supervised project is not indexed")
+                path = plain_path(root / "projects" / (pid + ".json"), root / "projects")
+                if not path.is_file():
+                    raise ValueError("Supervised configuration is missing")
+                plain_path(business_data.path_for(path), root / "projects")
+                outcome = self._project(path, now, settings)
+                if isinstance(outcome, dict):
+                    for key in result:
+                        result[key] += outcome[key]
+            except (OSError, ValueError, sqlite3.Error) as exc:
+                errors[pid] = type(exc).__name__
+        if errors:
+            result["errors"] = errors
+        return result
+
+    def _project(self, path, now, settings):
         # Do not create a business database merely because a task ticked.
         if not business_data.path_for(path).exists():
             return "no_incidents"

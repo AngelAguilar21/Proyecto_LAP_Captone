@@ -10,7 +10,7 @@ DEFAULTS = {
     "timezone": "America/Lima",
     "reports": {"enabled": False, "time": "18:00"},
     "backups": {"enabled": False, "time": "02:00", "retention": 7},
-    "escalation": {"enabled": False, "delay_minutes": 15, "recipients": []},
+    "escalation": {"enabled": False, "delay_minutes": 15, "recipients": [], "project_ids": []},
     "cleanup": {"enabled": False, "retention_days": 30},
 }
 
@@ -43,6 +43,12 @@ def validate(value):
         raise ValueError("Invalid escalation recipients")
     if result["escalation"]["enabled"] and not recipients:
         raise ValueError("Escalation needs recipients")
+    ids = result["escalation"]["project_ids"]
+    if (not isinstance(ids, list) or any(not isinstance(pid, str) or
+            not re.fullmatch(r"[A-Za-z0-9_-]+", pid) for pid in ids) or len(ids) != len(set(ids))):
+        raise ValueError("Invalid supervised project identities")
+    if result["escalation"]["enabled"] and not ids:
+        raise ValueError("Escalation needs explicitly supervised projects")
     return result
 
 
