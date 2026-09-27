@@ -140,13 +140,22 @@ class Mailer:
         self.sent = 0
         self.lock = threading.RLock()
 
-    def ready(self):
+    def _configuration(self, recipients):
         data = load(self.settings_root)
+        if recipients is not None:
+            if (not isinstance(recipients, list) or not 1 <= len(recipients) <= 20 or
+                    any(not isinstance(r, str) or "@" not in r or len(r) > 200 for r in recipients)):
+                raise ValueError("Destinatarios alternativos inválidos.")
+            data["recipients"] = list(recipients)
+        return data
+
+    def ready(self, recipients=None):
+        data = self._configuration(recipients)
         return bool(data.get("enabled") and data.get("password") and data.get("recipients"))
 
-    def send(self, subject, body, key=None, blocking=False):
+    def send(self, subject, body, key=None, blocking=False, recipients=None):
         """key agrupa avisos parecidos para no repetirlos dentro del enfriamiento."""
-        data = load(self.settings_root)
+        data = self._configuration(recipients)
         if not (data.get("enabled") and data.get("password") and data.get("recipients")):
             return False
         with self.lock:

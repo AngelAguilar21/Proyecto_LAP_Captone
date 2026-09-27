@@ -316,6 +316,16 @@ class Engine:
             if conexion:
                 conexion.close()
 
+    def validate_incident_history(self, incident_id, never_attended):
+        """Backend for an explicit human history decision; never run automatically."""
+        with self.lock:
+            conexion = business_data.connect(self.config_path)
+            try:
+                business_data.validar_historial_incidente(conexion, incident_id, never_attended)
+                return {"incidentes": business_data.listar_incidentes(conexion), "error": None}
+            finally:
+                conexion.close()
+
     def preview_snapshot(self):
         return dict(self.preview_state)
 

@@ -36,13 +36,28 @@ class IncidentNotifications:
                              (incident_id, kind)).fetchone()
             return dict(row) if row else None
 
-    def send(self, project_path, incident_id, subject, body, kind="original", blocking=False):
+    def send(self, project_path, incident_id, subject, body, kind="original", blocking=False,
+             recipients=None, escalation_due_before=None):
         if kind not in ("original", "escalation"):
             raise ValueError("Unknown notification kind")
-        if not self.mailer.ready():
+        mail_options = {"recipients": recipients} if recipients is not None else {}
+        if not self.mailer.ready(**mail_options):
             return False
         self.recover(project_path)
         with closing(business_data.connect(project_path)) as db, db:
+            # Selection can become stale while a human reviews an incident.
+            # Serialize eligibility and the durable claim, then release SQLite
+            # before SMTP. A delivery already claimed may finish during review.
+            db.execute("BEGIN IMMEDIATE")
+            if escalation_due_before is not None:
+                if kind != "escalation":
+                    raise ValueError("Eligibility cutoff is only valid for escalation")
+                eligible = db.execute(
+                    "SELECT 1 FROM incidentes WHERE id=? AND estado='pendiente' "
+                    "AND review_history_known=1 AND reviewed_at IS NULL AND creado<=?",
+                    (incident_id, escalation_due_before)).fetchone()
+                if not eligible:
+                    return False
             cursor = db.execute(
                 "INSERT INTO incident_notifications "
                 "(incident_id,notification_kind,status,attempted_at,owner) "
@@ -60,7 +75,7 @@ class IncidentNotifications:
             status, reason = "failed", "not_sent"
             try:
                 key = json.dumps([str(project_path), incident_id, kind])
-                if self.mailer.send(subject, body, key=key, blocking=True):
+                if self.mailer.send(subject, body, key=key, blocking=True, **mail_options):
                     status, reason = "sent", None
             except DeliveryError as exc:
                 status = "uncertain" if exc.uncertain else "failed"
