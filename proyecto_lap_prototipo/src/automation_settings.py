@@ -2,12 +2,14 @@
 import copy
 import json
 import re
+import math
 
 from projects import atomic_write
 
 
 DEFAULTS = {
     "timezone": "America/Lima",
+    "runtime": {"task_timeout_seconds": 120, "shutdown_timeout_seconds": 30},
     "reports": {"enabled": False, "time": "18:00"},
     "backups": {"enabled": False, "time": "02:00", "retention": 7},
     "escalation": {"enabled": False, "delay_minutes": 15, "recipients": []},
@@ -19,6 +21,13 @@ def validate(value):
     if not isinstance(value, dict) or set(value) - set(DEFAULTS):
         raise ValueError("Invalid automation settings")
     result = copy.deepcopy(DEFAULTS)
+    runtime = value.get("runtime", {})
+    if not isinstance(runtime, dict) or set(runtime) - set(result["runtime"]):
+        raise ValueError("Invalid runtime limits")
+    result["runtime"].update(runtime)
+    for number in result["runtime"].values():
+        if type(number) not in (int, float) or not math.isfinite(number) or not 0 < number <= 3600:
+            raise ValueError("Runtime limits must be finite positive seconds up to 3600")
     if value.get("timezone", "America/Lima") != "America/Lima":
         raise ValueError("Only America/Lima is supported")
     for task in ("reports", "backups", "escalation", "cleanup"):

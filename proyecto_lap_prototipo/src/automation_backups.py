@@ -8,12 +8,14 @@ import tempfile
 import zipfile
 from contextlib import closing
 from pathlib import Path
+from task_control import checkpoint
 
 
 def regular_files(root):
     if root.is_symlink() or root.is_junction():
         raise ValueError("Linked project storage is not backed up automatically")
     for path in sorted(root.iterdir()):
+        checkpoint()
         if path.is_symlink() or path.is_junction():
             raise ValueError("Linked project entry")
         if path.is_dir():
@@ -73,6 +75,7 @@ class ProjectBackups:
         return files, databases
 
     def __call__(self, now, settings):
+        checkpoint()
         if now.strftime("%H:%M") < settings["time"]:
             return "not_due"
         date = now.date().isoformat()
@@ -98,10 +101,11 @@ class ProjectBackups:
         with tempfile.TemporaryDirectory(prefix=".projects-", dir=directory) as temporary:
             temporary = Path(temporary)
             for number, (name, source) in enumerate(databases):
+                checkpoint()
                 destination = temporary / f"snapshot-{number}.sqlite"
                 with closing(sqlite3.connect(source.as_uri() + "?mode=ro", uri=True)) as src:
                     with closing(sqlite3.connect(destination)) as dst:
-                        src.backup(dst)
+                        src.backup(dst, pages=128, progress=lambda *args: checkpoint())
                         if dst.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                             raise ValueError("SQLite snapshot failed verification")
                 files[name] = destination.read_bytes()
@@ -109,6 +113,7 @@ class ProjectBackups:
             hashes = {name: hashlib.sha256(data).hexdigest() for name, data in files.items()}
             with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
                 for name, data in files.items():
+                    checkpoint()
                     archive.writestr(name, data)
                 archive.writestr("backup-manifest.json", json.dumps({
                     "format": "aerotrack-projects-v1", "created": now.isoformat(), "sha256": hashes}))
@@ -116,6 +121,7 @@ class ProjectBackups:
                 raise ValueError("ZIP verification failed")
             with archive_path.open("rb+") as output:
                 os.fsync(output.fileno())
+            checkpoint()
             os.replace(archive_path, target)
         self.store.record("backups", "projects", date, "succeeded", now, str(target))
         self.retain(settings["retention"], now)
@@ -127,6 +133,7 @@ class ProjectBackups:
                         if re.fullmatch(r"projects-\d{4}-\d{2}-\d{2}\.zip", p.name)
                         and verify_backup(p)), reverse=True)
         for path in valid[count:]:
+            checkpoint()
             # Only exact, verified final archives inside our backup directory.
             if path.resolve().parent != directory.resolve():
                 continue

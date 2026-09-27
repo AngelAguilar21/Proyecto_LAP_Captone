@@ -162,6 +162,32 @@ class IncidentNotificationTests(unittest.TestCase):
         self.assertEqual(row["status"], "sent")
 
 
+    def test_shutdown_keeps_accepted_blocking_delivery_active_until_persisted(self):
+        entered, release = threading.Event(), threading.Event()
+        write = self.service._write_result
+        result = []
+        def delayed_write(identity, outcome):
+            entered.set()
+            if not release.wait(5):
+                raise AssertionError("Synthetic writer was not released")
+            return write(identity, outcome)
+        with patch.object(self.service, "_write_result", side_effect=delayed_write):
+            worker = threading.Thread(target=lambda: result.append(self.send()))
+            worker.start()
+            try:
+                self.assertTrue(entered.wait(5))
+                self.service.stop_event.set()
+                self.assertTrue(self.service.has_writers())
+                self.assertFalse(self.service.join(timeout=0))
+            finally:
+                release.set()
+                worker.join(5)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(result, [True])
+        self.assertFalse(self.service.has_writers())
+        self.assertEqual(self.service.get(self.path, "session-a:bag:1")["status"], "sent")
+        self.smtp.assert_called_once()
+
     def test_accepted_delivery_retries_persistence_only_and_keeps_acceptance_time(self):
         write = self.service._write_result
         results = []
@@ -235,6 +261,21 @@ class IncidentNotificationTests(unittest.TestCase):
         self.assertEqual(self.service.get(self.path, "session-a:bag:1")["status"], "uncertain")
         self.assertFalse(self.send())
         self.smtp.assert_not_called()
+
+    def test_shutdown_does_not_claim_or_send_new_notification(self):
+        self.service.stop_event.set()
+        self.assertFalse(self.send())
+        self.assertIsNone(self.service.get(self.path, "session-a:bag:1"))
+        self.smtp.assert_not_called()
+
+    def test_notification_join_uses_one_deadline_for_all_workers(self):
+        first, second = Mock(), Mock()
+        first.is_alive.return_value = second.is_alive.return_value = True
+        self.service.workers = [first, second]
+        with patch("incident_notifications.time.monotonic", side_effect=[10., 12., 15.]):
+            self.assertFalse(self.service.join(timeout=5))
+        first.join.assert_called_once_with(3.)
+        second.join.assert_called_once_with(0.)
 
 
 class SMTPOutcomeTests(unittest.TestCase):

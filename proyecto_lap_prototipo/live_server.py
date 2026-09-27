@@ -1103,6 +1103,8 @@ class Handler(BaseHTTPRequestHandler):
         return self.headers.get("Sec-Fetch-Site", "same-origin") != "cross-site"
 
     def do_GET(self):
+        if getattr(self.server, "closing", False):
+            return self.send_data(503, {"error": "Servidor cerrando"})
         with self.server.engine.resource_use():
             return self._do_GET()
 
@@ -1202,6 +1204,8 @@ class Handler(BaseHTTPRequestHandler):
         return self.send_data(code, {"error": message})
 
     def do_POST(self):
+        if getattr(self.server, "closing", False):
+            return self.send_data(503, {"error": "Servidor cerrando"})
         with self.server.engine.resource_use():
             return self._do_POST()
 
@@ -1424,6 +1428,7 @@ def main():
     parser.add_argument("--config-path", type=Path, help="Archivo de configuración alternativo para pruebas aisladas.")
     args = parser.parse_args()
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler, bind_and_activate=False)
+    server.daemon_threads = False  # Track HTTP writers through shutdown.
     if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
         server.allow_reuse_address = False
         server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
@@ -1441,17 +1446,12 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        automation.stop()
-        server.engine.stop()
-        if server.engine.worker:
-            server.engine.worker.join()
-        server.engine.notifications.join()
-        server.engine.preview_stop()
-        if getattr(server.engine, "counting", None):
-            server.engine.counting.stop()
-            if server.engine.counting.worker:
-                server.engine.counting.worker.join(timeout=10)
-        server.server_close()
+        from shutdown_control import stop_server, defer_close
+        if stop_server(server, automation, automation.runtime["shutdown_timeout_seconds"]):
+            server.server_close()
+        else:
+            print("Cierre pendiente: se conservan recursos hasta terminar los escritores.", flush=True)
+            defer_close(server, automation)
 
 
 if __name__ == "__main__":

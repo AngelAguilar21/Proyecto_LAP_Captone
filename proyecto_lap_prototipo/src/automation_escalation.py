@@ -2,6 +2,7 @@
 from contextlib import closing
 
 import business_data
+from task_control import checkpoint
 
 
 class AlertEscalation:
@@ -11,6 +12,7 @@ class AlertEscalation:
     def __call__(self, now, settings):
         if not settings["enabled"]:
             return "disabled"
+        checkpoint()
         with self.engine.lock:
             path = self.engine.config_path
         # Do not create a business database merely because a task ticked.
@@ -28,6 +30,7 @@ class AlertEscalation:
                 (cutoff,)).fetchall()
         sent = 0
         for iid, kind, zone in incidents:
+            checkpoint()
             sent += bool(notifications.send(
                 path, iid, "AeroTrack: incidente pendiente de atención",
                 f"Incidente: {iid}\nTipo: {kind}\nZona: {zone or '-'}\nRequiere revisión humana.",

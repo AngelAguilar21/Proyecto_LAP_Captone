@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 import business_data
+from task_control import checkpoint
 
 
 def incident_references(settings_root):
@@ -67,6 +68,7 @@ class CleanupPlan:
 
 
 def plain_path(path, root):
+    checkpoint()
     """Reject links/reparse points on every component; never traverse them."""
     path, root = Path(os.path.abspath(path)), Path(os.path.abspath(root))
     if not path.is_relative_to(root):
@@ -306,6 +308,7 @@ class RetentionCleanup:
         outcomes = []
         fresh = {d.path: d for d in plan_cleanup(**captured).decisions}
         for decision in plan.decisions:
+            checkpoint()
             disposition, reason = decision.disposition, decision.reason
             if disposition == "candidate":
                 current = fresh.get(decision.path)

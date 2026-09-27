@@ -45,3 +45,14 @@ Si se pierde esa memoria al reiniciar, la reclamación se convierte en uncertain
 con sent_at=NULL y sin reenvío automático. Un almacenamiento inaccesible puede
 impedir incluso escribir uncertain: mientras tanto permanece attempting, bloqueado.
 Original y escalation mantienen registros independientes.
+
+## Cancelación y cierre
+
+runtime.task_timeout_seconds (120 por defecto) y runtime.shutdown_timeout_seconds
+(30) aceptan segundos positivos finitos hasta 3600. Las tareas siguen siendo
+secuenciales y cooperan en checkpoints; no se matan threads ni se publican PDF/ZIP
+después de observar cancelación. Un SMTP ya aceptado termina su persistencia.
+La espera inicial de cierre está acotada; si quedan escritores, un hilo de drenaje
+no daemon conserva el servidor y sus recursos hasta que terminen. El proceso puede
+seguir vivo más allá del plazo si una operación no responde. No existe un lease
+de almacenamiento ni coordinación de restauración entre procesos en esta variante.

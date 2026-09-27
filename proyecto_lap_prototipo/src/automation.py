@@ -1,9 +1,11 @@
 """One optional worker; run_due_tasks is directly usable without threads."""
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 
 import automation_settings
 from automation_store import AutomationStore
+from task_control import budget, Cancelled
 
 # Lima has a fixed UTC-05 offset for the current operational dates. This avoids
 # requiring a system IANA database or an additional tzdata package on Windows.
@@ -33,6 +35,7 @@ class AutomationService:
         self.run_lock = threading.Lock()
         self.lifecycle_lock = threading.Lock()
         self.worker = None
+        self.runtime = dict(automation_settings.DEFAULTS["runtime"])
 
     def run_due_tasks(self, now):
         if now.tzinfo is None or now.utcoffset() is None:
@@ -41,6 +44,7 @@ class AutomationService:
             return {}
         try:
             settings = automation_settings.load(self.engine.settings_root)
+            self.runtime = settings["runtime"]
             outcomes = {}
             for task, callback in self.tasks.items():
                 if self.stop_event.is_set():
@@ -48,7 +52,10 @@ class AutomationService:
                 if not settings[task]["enabled"]:
                     continue
                 try:
-                    outcomes[task] = callback(now.astimezone(LIMA), settings[task])
+                    with budget(self.stop_event, self.runtime["task_timeout_seconds"]):
+                        outcomes[task] = callback(now.astimezone(LIMA), settings[task])
+                except Cancelled:
+                    outcomes[task] = "cancelled"
                 except Exception as exc:
                     outcomes[task] = "failed"
                     self.store.record(task, "service", now.astimezone(LIMA).date().isoformat(),
@@ -76,9 +83,11 @@ class AutomationService:
             self.worker = self.thread_factory(target=self._loop, name="automation", daemon=True)
             self.worker.start()
 
-    def stop(self):
+    def stop(self, timeout=None):
+        deadline = time.monotonic() + (self.runtime["shutdown_timeout_seconds"] if timeout is None else max(0, timeout))
         with self.lifecycle_lock:
             self.stop_event.set()
             worker = self.worker
         if worker:
-            worker.join()
+            worker.join(max(0, deadline - time.monotonic()))
+        return not (worker and worker.is_alive()) and not self.run_lock.locked()
