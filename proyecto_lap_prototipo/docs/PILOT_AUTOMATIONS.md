@@ -44,3 +44,26 @@ mantiene el proceso, los recursos y la exclusión de restauración hasta que ter
 todos los escritores y solicitudes HTTP. No ejecuta tareas nuevas. Por tanto, el
 plazo limita la espera del controlador, no garantiza matar el proceso en ese tiempo.
 No se debe forzar una restauración mientras permanezca ese bloqueo.
+
+## Salud de artefactos
+
+El registro `executions.status='succeeded'` conserva el éxito histórico. La tabla
+aditiva `artifact_health`, consultable con `AutomationStore.health(task, scope, date)`,
+registra por separado `healthy`, `missing`, `corrupt`, `unverifiable`,
+`retention_pending` o `retired`, con fecha de comprobación y motivo. Las transiciones
+quedan en `audit`. Hash SHA-256 y tamaño originales se guardan al publicar el éxito.
+Cada ejecución habilitada y vencida revisa también los éxitos de fechas/proyectos
+anteriores para su tipo de artefacto. No es un monitor en tiempo real.
+
+Los PDF deben tener cierre válido, referencias cruzadas válidas, páginas legibles
+y renderizables mediante PDFium (dependencia ya existente), además de conservar
+su hash. Los ZIP se verifican contra su manifiesto, CRC y hash original externo.
+Los registros antiguos sin huella original se marcan `unverifiable`; validar su
+estructura actual no demuestra que sean el archivo original. No se inventa una
+huella histórica ni se regenera ningún éxito perdido/corrupto. La intervención
+humana debe conservar evidencia y resolver el problema fuera de la ejecución
+automática; no hay API nueva para reemplazar o regenerar artefactos.
+
+La retención autorizada de backups se registra antes de borrar y se distingue de
+una pérdida inesperada. Los archivos sospechosos se conservan para revisión y no
+se cuentan como copias utilizables para decidir qué backups antiguos retirar.

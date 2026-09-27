@@ -6,6 +6,7 @@ from pathlib import Path
 import projects
 from live_reports import business_report_data, business_pdf_bytes
 from task_control import checkpoint
+from automation_artifacts import check_successes, fingerprint, verify_pdf
 
 
 class ScheduledReports:
@@ -16,6 +17,7 @@ class ScheduledReports:
         checkpoint()
         if now.strftime("%H:%M") < settings["time"]:
             return "not_due"
+        health = check_successes(self.store, "reports", self.engine.data_root / "data" / "reports", now, verify_pdf)
         capture = self.engine.automation_snapshot()
         pid = capture["project_id"]
         if pid is None:
@@ -24,13 +26,15 @@ class ScheduledReports:
         date = now.date().isoformat()
         prior = self.store.get("reports", pid, date)
         if prior and prior["status"] == "succeeded":
-            return "already_done"
+            return "already_done" if health[(pid, date)] == "healthy" else "artifact_problem"
         target = self.engine.data_root / "data" / "reports" / pid / f"business-{date}.pdf"
         if target.exists():
             # Reconcile a crash after atomic publication and before DB commit.
-            if not target.read_bytes().startswith(b"%PDF-"):
+            pdf = target.read_bytes()
+            if not verify_pdf(pdf):
+                self.store.set_health("reports", pid, date, "corrupt", now, "invalid_structure")
                 raise ValueError("Existing report is not a valid PDF")
-            self.store.record("reports", pid, date, "succeeded", now, str(target))
+            self.store.record("reports", pid, date, "succeeded", now, str(target), fingerprint=fingerprint(pdf))
             return "recovered"
         state, config = capture["state"], capture["config"]
         if (not config or not state.get("session") or state.get("status") not in
@@ -44,7 +48,7 @@ class ScheduledReports:
         data["generated"] = now.isoformat()
         pdf = self.renderer(data)
         checkpoint()
-        if not isinstance(pdf, bytes) or not pdf.startswith(b"%PDF-"):
+        if not verify_pdf(pdf):
             raise ValueError("Renderer did not produce a PDF")
         target.parent.mkdir(parents=True, exist_ok=True)
         fd, temporary = tempfile.mkstemp(prefix=".business-", suffix=".tmp", dir=target.parent)
@@ -57,5 +61,5 @@ class ScheduledReports:
             os.replace(temporary, target)
         finally:
             Path(temporary).unlink(missing_ok=True)
-        self.store.record("reports", pid, date, "succeeded", now, str(target))
+        self.store.record("reports", pid, date, "succeeded", now, str(target), fingerprint=fingerprint(pdf))
         return "succeeded"
