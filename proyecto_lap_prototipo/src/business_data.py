@@ -127,6 +127,8 @@ def connect(project_path):
             for iid, detail in conexion.execute("SELECT id,detalle FROM incidentes WHERE id NOT IN "
                                                "(SELECT incident_id FROM incident_replay_links)").fetchall():
                 link_incident_replay(conexion, iid, detail)
+        from operational_history import migrate
+        migrate(conexion)
     except Exception:
         conexion.close()
         raise

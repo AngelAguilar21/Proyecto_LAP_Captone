@@ -40,6 +40,9 @@ class IncidentNotifications:
              recipients=None, escalation_due_before=None):
         if kind not in ("original", "escalation"):
             raise ValueError("Unknown notification kind")
+        from restore_guard import blocked
+        if blocked(self.mailer.settings_root, project_path):
+            return False
         mail_options = {"recipients": recipients} if recipients is not None else {}
         if not self.mailer.ready(**mail_options):
             return False

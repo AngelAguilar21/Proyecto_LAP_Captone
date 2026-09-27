@@ -84,3 +84,6 @@ proyecto_lap_prototipo/config/usuarios.local.json
 proyecto_lap_prototipo/config/automation.local.json*
 proyecto_lap_prototipo/config/automation.sqlite*
 proyecto_lap_prototipo/data/reports/
+proyecto_lap_prototipo/config/restore.sqlite*
+proyecto_lap_prototipo/config/restore-work/
+proyecto_lap_prototipo/config/storage.lock

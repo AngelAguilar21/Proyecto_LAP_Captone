@@ -40,6 +40,9 @@ class AutomationService:
         if not self.run_lock.acquire(blocking=False):
             return {}
         try:
+            from restore_guard import blocked
+            if blocked(self.engine.settings_root, maintenance_only=True):
+                return {}
             settings = automation_settings.load(self.engine.settings_root)
             outcomes = {}
             for task, callback in self.tasks.items():

@@ -1422,6 +1422,15 @@ def main():
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--config-path", type=Path, help="Archivo de configuración alternativo para pruebas aisladas.")
     args = parser.parse_args()
+    from restore_guard import storage_lease, blocked
+    settings = args.config_path.resolve().parent if args.config_path else ROOT / "config"
+    with storage_lease(settings):
+        if blocked(settings, maintenance_only=True):
+            raise RuntimeError("Restauración pendiente: completar o cancelar antes de iniciar AeroTrack.")
+        _serve(args)
+
+
+def _serve(args):
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler, bind_and_activate=False)
     if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
         server.allow_reuse_address = False

@@ -97,6 +97,7 @@ class ProjectBackups:
         # All temporary snapshots live beside the destination, not in project data.
         with tempfile.TemporaryDirectory(prefix=".projects-", dir=directory) as temporary:
             temporary = Path(temporary)
+            provenance = {}
             for number, (name, source) in enumerate(databases):
                 destination = temporary / f"snapshot-{number}.sqlite"
                 with closing(sqlite3.connect(source.as_uri() + "?mode=ro", uri=True)) as src:
@@ -104,6 +105,8 @@ class ProjectBackups:
                         src.backup(dst)
                         if dst.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
                             raise ValueError("SQLite snapshot failed verification")
+                        from operational_history import provenance as database_provenance
+                        provenance[name] = database_provenance(dst)
                 files[name] = destination.read_bytes()
             archive_path = temporary / "projects.zip"
             hashes = {name: hashlib.sha256(data).hexdigest() for name, data in files.items()}
@@ -111,7 +114,8 @@ class ProjectBackups:
                 for name, data in files.items():
                     archive.writestr(name, data)
                 archive.writestr("backup-manifest.json", json.dumps({
-                    "format": "aerotrack-projects-v1", "created": now.isoformat(), "sha256": hashes}))
+                    "format": "aerotrack-projects-v1", "created": now.isoformat(), "sha256": hashes,
+                    "schema_version": 2, "database_provenance": provenance}))
             if not verify_backup(archive_path):
                 raise ValueError("ZIP verification failed")
             with archive_path.open("rb+") as output:

@@ -303,6 +303,9 @@ class RetentionCleanup:
                 return self._apply_locked(plan, captured)
 
     def _apply_locked(self, plan, captured):
+        from restore_guard import blocked
+        if blocked(self.engine.settings_root):
+            return [{"path": d.path, "decision": "omitted", "reason": "restore_hold"} for d in plan.decisions]
         outcomes = []
         fresh = {d.path: d for d in plan_cleanup(**captured).decisions}
         for decision in plan.decisions:
