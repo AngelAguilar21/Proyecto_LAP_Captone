@@ -1,4 +1,4 @@
-"""Export observed session data. Optional document engines fail explicitly."""
+"""Export observed session data with dependency-free PDF fallback."""
 import csv
 from datetime import datetime, timezone
 import io
@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import textwrap
 
 
 def report_data(config, state, kind):
@@ -64,7 +65,7 @@ def report_data(config, state, kind):
         title="Trayectorias recientes de la sesión"
     else:
         raise ValueError("Tipo de reporte desconocido.")
-    return {"title":title,"headers":headers,"rows":rows,"airport":config.get("airport","Aeropuerto"),"session":state["session"],"mode":"SIMULACIÓN SINTÉTICA" if state.get("mode")=="demo" else "FUENTE REAL - SIN VALIDACIÓN DE PRECISIÓN", "unit":"metros" if config["unit"]=="meters" else "unidades relativas","seconds":round(state["t"],2),"generated":datetime.now(timezone.utc).isoformat(),"note":"Datos observados; asociaciones estimadas. Ocupación no equivale a rentabilidad. Flujo horario calculado sobre las muestras retenidas (hasta 3600)."}
+    return {"title":title,"headers":headers,"rows":rows,"airport":(config.get("airport") or "Espacio sin nombre"),"session":state["session"],"mode":"SIMULACIÓN SINTÉTICA" if state.get("mode")=="demo" else "FUENTE REAL - SIN VALIDACIÓN DE PRECISIÓN", "unit":"metros" if config["unit"]=="meters" else "unidades relativas","seconds":round(state["t"],2),"generated":datetime.now(timezone.utc).isoformat(),"note":"Datos observados; asociaciones estimadas. Ocupación no equivale a rentabilidad. Flujo horario calculado sobre las muestras retenidas (hasta 3600)."}
 
 
 def _median(values):
@@ -128,7 +129,7 @@ def business_report_data(config, state):
     return {
         "report_kind":"business",
         "title":"Reporte comercial",
-        "airport":config.get("airport","Aeropuerto"),
+        "airport":(config.get("airport") or "Espacio sin nombre"),
         "session":state["session"],
         "mode":"SIMULACIÓN SINTÉTICA" if state.get("mode")=="demo" else "FUENTE REAL - SIN VALIDACIÓN DE PRECISIÓN",
         "unit":"metros" if config["unit"]=="meters" else "unidades relativas",
@@ -409,6 +410,59 @@ def pdf_bytes(data):
     return buffer.getvalue()
 
 
+def simple_pdf_bytes(data):
+    """Genera un PDF textual válido cuando ReportLab no está instalado."""
+    lines = [f"AeroTrack | {data['title']}", f"{data['airport']} | {data['mode']}",
+             f"Sesion {data['session']} | {data['seconds']} segundos | {data['unit']}", ""]
+    if data.get("report_kind") == "business":
+        lines.append("INDICADORES")
+        lines.extend(f"{label}: {value} | {detail}" for label, value, detail in data.get("kpis", []))
+        for title, key in (("RANKING", "ranking"), ("ACCESOS", "crossings"), ("FRANJAS HORARIAS", "hourly")):
+            lines.extend(("", title))
+            lines.extend(" | ".join(map(str, row)) for row in data.get(key, []))
+        lines.extend(("", "RECOMENDACIONES"))
+        lines.extend(data.get("recommendations", []))
+    else:
+        lines.append(" | ".join(map(str, data.get("headers", []))))
+        lines.extend(" | ".join(map(str, row)) for row in data.get("rows", []))
+    lines.extend(("", str(data.get("note", ""))))
+    wrapped = []
+    for line in lines:
+        wrapped.extend(textwrap.wrap(str(line), width=118, replace_whitespace=True,
+                                     drop_whitespace=True) or [""])
+    pages = [wrapped[i:i + 42] for i in range(0, len(wrapped), 42)] or [[""]]
+
+    objects = {
+        1: b"<< /Type /Catalog /Pages 2 0 R >>",
+        3: b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+    }
+    page_ids = []
+    for index, page in enumerate(pages):
+        page_id, content_id = 4 + index * 2, 5 + index * 2
+        page_ids.append(page_id)
+        content = bytearray(b"BT\n/F1 9 Tf\n34 558 Td\n12 TL\n")
+        for line in page:
+            literal = line.encode("cp1252", "replace").replace(b"\\", b"\\\\").replace(b"(", b"\\(").replace(b")", b"\\)")
+            content.extend(b"(" + literal + b") Tj\nT*\n")
+        content.extend(b"ET\n")
+        objects[page_id] = (f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] "
+                            f"/Resources << /Font << /F1 3 0 R >> >> /Contents {content_id} 0 R >>").encode()
+        objects[content_id] = b"<< /Length %d >>\nstream\n" % len(content) + content + b"endstream"
+    kids = " ".join(f"{page_id} 0 R" for page_id in page_ids)
+    objects[2] = f"<< /Type /Pages /Kids [{kids}] /Count {len(page_ids)} >>".encode()
+
+    output = bytearray(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
+    offsets = [0] * (max(objects) + 1)
+    for object_id in range(1, len(offsets)):
+        offsets[object_id] = len(output)
+        output.extend(f"{object_id} 0 obj\n".encode() + objects[object_id] + b"\nendobj\n")
+    xref = len(output)
+    output.extend(f"xref\n0 {len(offsets)}\n0000000000 65535 f \n".encode())
+    output.extend(b"".join(f"{offset:010d} 00000 n \n".encode() for offset in offsets[1:]))
+    output.extend(f"trailer\n<< /Size {len(offsets)} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode())
+    return bytes(output)
+
+
 def export(config,state,kind,format):
     if kind=="business":
         data=business_report_data(config,state)
@@ -424,6 +478,8 @@ def export(config,state,kind,format):
     try:
         result=function(data)
     except ImportError:
+        if format == "pdf":
+            return simple_pdf_bytes(data), "application/pdf"
         runtime=os.environ.get("AEROTRACK_DOCUMENT_PYTHON")
         if not runtime or not Path(runtime).is_file():
             raise ValueError("Este reporte requiere reportlab (PDF) u openpyxl (Excel), o un AEROTRACK_DOCUMENT_PYTHON con esas dependencias.")

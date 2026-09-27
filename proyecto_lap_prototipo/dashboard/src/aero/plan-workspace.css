@@ -1,1 +1,137 @@
-.aero .plan-workspace{background:#ffffff;border:1px solid #e4e0d5;border-radius:12px;overflow:hidden}.aero .cad-head,.aero .cad-tools,.aero .cad-status{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:14px 18px}.aero .cad-head h2{margin:4px 0}.aero .cad-tabs{display:flex;align-items:center;justify-content:flex-start;flex-wrap:wrap;gap:2px;padding:10px 18px;background:#f7f5f0;border-block:1px solid #e4e0d5}.aero .cad-tabs button{border-color:transparent;background:transparent;box-shadow:none;border-radius:8px}.aero .cad-tabs label{margin-left:auto}.aero .cad-tabs .selected,.aero .cad-camera-list .selected{background:#c9790a;border-color:#c9790a;color:#ffffff}.aero .cad-body{display:grid;grid-template-columns:minmax(0,1fr) 235px;min-height:650px}.aero .cad-canvas{min-width:0;background:#ffffff}.aero .cad-inspector{border-left:1px solid #e4e0d5;padding:18px;display:flex;flex-direction:column;gap:12px;background:#f7f5f0}.aero .cad-inspector h3,.aero .cad-inspector p{margin:0}.aero .cad-inspector p,.aero .cad-inspector small{color:#6b6f74;font-size:12px;line-height:1.5}.aero .cad-inspector label{display:flex;flex-direction:column;gap:6px}.aero .cad-inspector label.check{flex-direction:row;align-items:flex-start}.aero .cad-tools{justify-content:flex-start;background:#f7f5f0;min-height:62px}.aero .cad-tools .on{border-color:#c9790a;background:#fdf1de;color:#8a5600}.aero .cad-canvas .map-toolbar{background:none;padding:8px 14px}.aero .cad-canvas .map-toolbar .inline>button:not([title="Restablecer zoom y posición"]):not([title="Mostrar capas del plano"]){display:none}.aero .cad-canvas .map-stage{height:570px;min-height:440px;max-height:none}.aero .cad-canvas .map-stage>svg{width:100%;height:100%;touch-action:none}.aero .cad-canvas .map-caption{display:none}.aero .cad-status{font-size:12px;color:#6b6f74}.aero .cad-camera-list{display:flex;flex-direction:column;gap:6px}.aero .cad-camera-list button,.aero .cad-nodes>div{display:flex;align-items:center;gap:8px}.aero .cad-camera-list small{margin-left:auto}.aero .cad-camera-list i,.aero .cad-nodes i{width:10px;height:10px;border-radius:50%;flex-shrink:0}.aero .cad-nodes{display:flex;flex-direction:column;gap:5px}.aero .cad-nodes span{font-size:12px}.aero .cad-nodes button{margin-left:auto;padding:3px 8px}.aero .cad-body.with-video{grid-template-columns:minmax(0,1fr) minmax(310px,36%)}.aero .cad-inspector .camera-video{height:340px;min-height:340px}.aero .cad-inspector input[type=color]{height:36px;width:100%}.aero .cad-inspector hr{width:100%;border:0;border-top:1px solid #e4e0d5}.aero .cad-head button,.aero .cad-tools button{transition:background .15s,border-color .15s}.aero .setup-body:has(.plan-workspace){padding:0}.aero .setup-body:has(.plan-workspace) .plan-workspace{border:0}.aero .setup-flow:has(.plan-workspace)>.setup-steps{margin-bottom:12px}@media(min-width:1500px){.aero .cad-body{grid-template-columns:minmax(0,1fr) 250px}.aero .cad-canvas .map-stage{height:660px}}@media(max-width:850px){.aero .cad-body,.aero .cad-body.with-video{grid-template-columns:1fr}.aero .cad-inspector{border-left:0;border-top:1px solid #e4e0d5}.aero .cad-canvas .map-stage{height:470px}.aero .cad-tabs label{margin-left:0}}@media(prefers-reduced-motion:reduce){.aero .plan-workspace *{transition:none!important}}
+.aero .plan-workspace {
+  overflow: hidden;
+  border: 1px solid #cbd9e4;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(15, 39, 66, .08);
+}
+
+.aero .cad-head,
+.aero .cad-tools,
+.aero .cad-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+}
+
+.aero .cad-head { min-height: 70px; border-bottom: 1px solid #dce6ed; }
+.aero .cad-head h2 { margin: 3px 0 0; font-size: 22px !important; color: #0f2742; }
+.aero .cad-tabs { display: flex; align-items: center; gap: 5px; padding: 10px 18px; border-bottom: 1px solid #dce6ed; background: #f5f9fc; }
+.aero .cad-tabs button { border-color: transparent; background: transparent; box-shadow: none; }
+.aero .cad-tabs .selected { border-color: #1689e8; background: #e9f4fd; color: #096cbd; }
+
+.aero .calibration-guide {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 64px;
+  padding: 12px 18px;
+  border-bottom: 1px solid #9fd7f2;
+  background: #eaf7fd;
+  color: #123f5c;
+}
+.aero .calibration-guide strong { display: block; font-size: 14px; color: #0d3855; }
+.aero .calibration-guide p { margin: 3px 0 0; font-size: 12px; line-height: 1.4; color: #315f79; }
+
+.aero .cad-body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; min-height: 670px; }
+.aero .cad-body.with-video { grid-template-columns: minmax(0, 1.6fr) minmax(380px, .72fr); }
+.aero .cad-canvas { min-width: 0; background: #edf3f7; }
+.aero .cad-tools {
+  min-height: 62px;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  border-bottom: 1px solid #d9e4ec;
+  background: #fff;
+}
+.aero .cad-tools button { min-height: 38px; border-color: #b9cad7; background: #fff; color: #23445d; box-shadow: none; }
+.aero .cad-tools button:hover:not(:disabled) { border-color: #1689e8; background: #eef7fd; color: #0f6eae; }
+.aero .cad-tools .on { border-color: #1689e8; background: #1689e8; color: #fff; }
+.aero .cad-action-hint { margin-left: auto; color: #45657a; font-size: 12px; font-weight: 600; }
+
+.aero .cad-canvas .map-toolbar { min-height: 48px; padding: 7px 14px; border-bottom: 1px solid #d9e4ec; background: #f7fafc; }
+.aero .cad-canvas .map-toolbar .map-controls > button,
+.aero .cad-canvas .map-orientation { display: none; }
+.aero .cad-canvas .map-toolbar .map-controls > button[title="Acercar plano"],
+.aero .cad-canvas .map-toolbar .map-controls > button[title="Alejar plano"],
+.aero .cad-canvas .map-toolbar .map-controls > button[title="Ajustar el plano a la vista"],
+.aero .cad-canvas .map-toolbar .map-controls > button[title="Pantalla completa"],
+.aero .cad-canvas .map-toolbar .map-controls > button[title="Restablecer zoom y posición"],
+.aero .cad-canvas .map-toolbar .map-controls > .map-layers-toggle { display: inline-flex; }
+.aero .cad-canvas .map-stage { height: 600px; min-height: 500px; max-height: none; background: #dfe8ee; }
+.aero .cad-canvas .map-stage > svg { display: block; width: 100%; height: 100%; touch-action: none; }
+.aero .cad-canvas .map-caption { display: none; }
+.aero .cad-status { min-height: 42px; border-top: 1px solid #d9e4ec; background: #fff; color: #557083; font-size: 11px; }
+
+.aero .cad-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 18px;
+  border-left: 1px solid #d5e1e9;
+  background: #f8fbfd;
+}
+.aero .cad-inspector h3 { margin: 0; color: #102b45; font-size: 19px !important; }
+.aero .cad-inspector p { margin: 0; color: #49677d; font-size: 13px; line-height: 1.5; }
+.aero .cad-inspector small { color: #5d7486; font-size: 11px; line-height: 1.45; }
+.aero .cad-inspector label { display: flex; flex-direction: column; gap: 6px; color: #29465d; font-size: 12px; font-weight: 650; }
+.aero .cad-inspector label.check { flex-direction: row; align-items: center; }
+.aero .cad-inspector input,
+.aero .cad-inspector select { min-height: 42px; border-color: #adc2d2; background: #fff; color: #142f47; }
+.aero .cad-inspector button { min-height: 40px; box-shadow: none; }
+.aero .cad-step-badge { align-self: flex-start; padding: 4px 7px; border-radius: 4px; background: #dff3fb; color: #08739f; font-size: 10px; font-weight: 800; }
+
+.aero .cad-inspector .camera-video { height: 310px; min-height: 310px; border: 1px solid #8fb7cf; border-radius: 8px; background: #03121d; }
+.aero .coverage-state { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 12px; border: 1px solid #f0c879; border-radius: 7px; background: #fff8e8; color: #775413; }
+.aero .coverage-state.ready { border-color: #9bd5bb; background: #edf9f3; color: #12633f; }
+.aero .coverage-state strong { font-size: 12px; }
+.aero .coverage-state span { font-size: 11px; }
+.aero .cad-nodes { display: grid; gap: 6px; }
+.aero .cad-nodes > div { display: grid; grid-template-columns: 10px auto minmax(0, 1fr) 30px; align-items: center; gap: 7px; min-height: 38px; padding: 5px 7px; border: 1px solid #d7e3ea; border-radius: 6px; background: #fff; color: #25455d; font-size: 11px; }
+.aero .cad-nodes i { width: 9px; height: 9px; border-radius: 50%; }
+.aero .cad-nodes span { overflow: hidden; color: #647b8c; text-align: right; text-overflow: ellipsis; white-space: nowrap; }
+.aero .cad-nodes button { min-height: 28px; height: 28px; padding: 0; }
+.aero .camera-source-dialog { width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 40px); border: 1px solid #b9cbd8; border-radius: 8px; }
+.aero .setup-body:has(.plan-workspace) { padding: 0; }
+.aero .setup-body:has(.plan-workspace) .plan-workspace { border: 0; border-radius: 0; box-shadow: none; }
+
+:root[data-theme="dark"] .aero .plan-workspace,
+:root[data-theme="dark"] .aero .cad-tools,
+:root[data-theme="dark"] .aero .cad-status { border-color: #29465b; background: #0d2233; }
+:root[data-theme="dark"] .aero .cad-inspector { border-color: #29465b; background: #10283b; }
+:root[data-theme="dark"] .aero .cad-inspector h3,
+:root[data-theme="dark"] .aero .cad-inspector label { color: #e3eef5; }
+:root[data-theme="dark"] .aero .cad-inspector p,
+:root[data-theme="dark"] .aero .cad-inspector small,
+:root[data-theme="dark"] .aero .cad-status,
+:root[data-theme="dark"] .aero .cad-action-hint { color: #9db4c4; }
+:root[data-theme="dark"] .aero .cad-inspector input,
+:root[data-theme="dark"] .aero .cad-inspector select,
+:root[data-theme="dark"] .aero .cad-nodes > div { border-color: #3b5b70; background: #0a1c2a; color: #e4eef4; }
+:root[data-theme="dark"] .aero .calibration-guide { border-color: #205876; background: #0e3249; color: #c9e6f4; }
+:root[data-theme="dark"] .aero .calibration-guide strong { color: #effaff; }
+:root[data-theme="dark"] .aero .calibration-guide p { color: #a7cadb; }
+
+@media (min-width: 1500px) {
+  .aero .cad-body.with-video { grid-template-columns: minmax(0, 1.75fr) 430px; }
+  .aero .cad-canvas .map-stage { height: 680px; }
+}
+
+@media (max-width: 1050px) {
+  .aero .cad-body,
+  .aero .cad-body.with-video { grid-template-columns: 1fr; }
+  .aero .cad-inspector { border-top: 1px solid #d5e1e9; border-left: 0; }
+  .aero .cad-action-hint { width: 100%; margin-left: 0; }
+}
+
+@media (max-width: 700px) {
+  .aero .cad-tools { padding: 10px; }
+  .aero .cad-tools button { flex: 1 1 42%; }
+  .aero .cad-canvas .map-stage { height: 470px; min-height: 420px; }
+  .aero .cad-status { align-items: flex-start; flex-direction: column; }
+}
+
+@media (prefers-reduced-motion: reduce) { .aero .plan-workspace * { transition: none !important; } }

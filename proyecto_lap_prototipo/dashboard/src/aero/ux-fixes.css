@@ -1,0 +1,224 @@
+/* Ajustes operativos finales: navegación, pisos, plano, cámaras y contraste. */
+.aero .aero-content > .aero-header { justify-content: flex-start; }
+.aero .aero-title { min-width: 190px; }
+.aero .header-project { margin-left: auto !important; }
+
+.aero .sidebar-toggle,
+.aero .sidebar-user .logout {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px !important;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 !important;
+  border: 1px solid rgba(151, 190, 219, .28) !important;
+  border-radius: 9px !important;
+  background: rgba(255, 255, 255, .06) !important;
+  color: #c5d9e7 !important;
+  box-shadow: none !important;
+}
+.aero .sidebar-toggle:hover:not(:disabled),
+.aero .sidebar-user .logout:hover:not(:disabled) {
+  background: rgba(44, 170, 232, .16) !important;
+  border-color: rgba(98, 199, 245, .62) !important;
+  color: #ffffff !important;
+}
+.aero .sidebar-toggle:focus-visible,
+.aero .sidebar-user .logout:focus-visible { outline: 3px solid #65c9f4; outline-offset: 2px; }
+
+/* Selector y creación de pisos dentro del proyecto abierto. */
+.aero .plan-selector-wrap { display: flex; align-items: end; gap: 10px; flex-wrap: wrap; }
+.aero .plan-selector-wrap > .plan-selector { min-width: min(340px, 100%); }
+.aero .floor-create {
+  flex: 1 1 420px;
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-secondary);
+}
+.aero .floor-create label { flex: 1; }
+.aero .floor-create input { width: 100%; }
+
+/* Configuración trabaja sobre el proyecto abierto; Proyectos conserva el portafolio. */
+.aero .config-home { display: grid; gap: 18px; }
+.aero .config-home-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.aero .config-home-head h1 { margin: 0 0 5px; font-size: 28px !important; color: var(--text-primary) !important; }
+.aero .config-home-head p { margin: 0; max-width: 72ch; color: var(--text-secondary) !important; }
+.aero .config-home-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.aero .config-home-primary {
+  min-height: 124px !important;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 16px;
+  padding: 22px !important;
+  text-align: left;
+  border-color: var(--border) !important;
+  background: var(--surface) !important;
+}
+.aero .config-home-primary > svg { padding: 9px; box-sizing: content-box; border-radius: 10px; background: #e4f3fc; color: #0873b5; }
+.aero .config-home-primary span { display: grid; gap: 6px; }
+.aero .config-home-primary strong { color: var(--text-primary); font-size: 17px; }
+.aero .config-home-primary small { color: var(--text-secondary); font-size: 13px; }
+.aero .config-scope { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.aero .config-scope > div { display: grid; gap: 4px; padding: 17px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.aero .config-scope svg { color: var(--primary); }
+.aero .config-scope strong { color: var(--text-primary); }
+.aero .config-scope small { color: var(--text-secondary); }
+
+/* El plano usa toda la superficie disponible; MapCanvas adapta además su viewBox. */
+.overview-v2 .monitor-map-shell { width: 100%; min-height: 430px; overflow: hidden; }
+.overview-v2 .monitor-map-shell .map-stage { min-height: 390px !important; height: clamp(390px, 58vh, 720px) !important; }
+.overview-v2 .monitor-map-shell .map-stage > svg { width: 100% !important; height: 100% !important; min-height: 390px; }
+.overview-v2 .monitor-map-shell .map-toolbar { flex-wrap: wrap; }
+.overview-v2 .monitor-map-shell .map-controls { flex-wrap: wrap; justify-content: flex-end; }
+
+/* Detalle por cámara permanente y configurable. */
+.overview-v2 .camera-detail-section {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.overview-v2 .camera-detail-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.overview-v2 .camera-detail-head h2 { margin: 0; color: var(--text-primary) !important; font-size: 18px !important; }
+.overview-v2 .camera-detail-head p { margin: 3px 0 0; color: var(--text-secondary) !important; }
+.overview-v2 .camera-detail-settings { display: flex; align-items: end; gap: 20px; padding: 13px 15px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-secondary); }
+.overview-v2 .camera-detail-settings fieldset { flex: 1; display: flex; flex-wrap: wrap; gap: 8px 18px; border: 0; padding: 0; }
+.overview-v2 .camera-detail-settings legend { margin-bottom: 8px; color: var(--text-primary); font-weight: 700; }
+.overview-v2 .camera-detail-settings label { display: flex; flex-direction: row; align-items: center; gap: 7px; color: var(--text-primary); }
+.overview-v2 .monitor-camera-grid { display: grid; gap: 14px; overflow-x: auto; }
+.overview-v2 .monitor-camera-card { min-width: 0; background: var(--surface) !important; color: var(--text-primary) !important; }
+.overview-v2 .monitor-camera-card .panel-heading { background: var(--surface-secondary) !important; }
+.overview-v2 .monitor-camera-card p,
+.overview-v2 .monitor-camera-card small { color: var(--text-secondary) !important; }
+.overview-v2 .monitor-camera-card .feed-metrics { background: var(--surface-secondary) !important; color: var(--text-primary) !important; }
+
+/* Reporte comercial: tema claro real con contraste AA, oscuro sin heredar tinta clara. */
+:root[data-theme="light"] .aero .report-dark-page { background: #f4f7fa !important; color: #102844 !important; }
+:root[data-theme="light"] .aero .report-download-bar { background: #ffffff !important; border-color: #c8d7e2 !important; color: #102844 !important; }
+:root[data-theme="light"] .aero .report-download-bar h2,
+:root[data-theme="light"] .aero .report-download-bar p { color: #102844 !important; }
+:root[data-theme="light"] .aero .crb {
+  --ink: #ffffff;
+  --panel: #f3f6f9;
+  --line: #c5d2dc;
+  --amber: #925500;
+  --blue: #00699f;
+  --red: #b4233b;
+  --hi: #102844;
+  --lo: #52677a;
+  background: var(--ink) !important;
+  border-color: var(--line) !important;
+  color: var(--hi) !important;
+}
+:root[data-theme="light"] .aero .crb h1,
+:root[data-theme="light"] .aero .crb h2,
+:root[data-theme="light"] .aero .crb h3,
+:root[data-theme="light"] .aero .crb strong { color: var(--hi) !important; }
+:root[data-theme="light"] .aero .crb p,
+:root[data-theme="light"] .aero .crb small,
+:root[data-theme="light"] .aero .crb span { color: var(--lo); }
+:root[data-theme="light"] .aero .crb .crb-kpi > strong { color: var(--amber) !important; }
+:root[data-theme="light"] .aero .crb .crb-advisory { background: #ffffff; }
+:root[data-theme="light"] .aero .crb .crb-confidence { background: #e5ebf0; }
+
+:root[data-theme="dark"] .overview-v2 .camera-detail-section,
+:root[data-theme="dark"] .overview-v2 .monitor-camera-card { background: #0c2743 !important; border-color: #31516a !important; }
+:root[data-theme="dark"] .overview-v2 .camera-detail-settings,
+:root[data-theme="dark"] .overview-v2 .monitor-camera-card .panel-heading,
+:root[data-theme="dark"] .overview-v2 .monitor-camera-card .feed-metrics { background: #0a1f38 !important; border-color: #31516a !important; }
+:root[data-theme="dark"] .overview-v2 .camera-detail-head h2,
+:root[data-theme="dark"] .overview-v2 .camera-detail-settings label,
+:root[data-theme="dark"] .overview-v2 .camera-detail-settings legend,
+:root[data-theme="dark"] .overview-v2 .monitor-camera-card h2,
+:root[data-theme="dark"] .overview-v2 .monitor-camera-card .feed-metrics { color: #f1f7fb !important; }
+:root[data-theme="dark"] .overview-v2 .camera-detail-head p,
+:root[data-theme="dark"] .overview-v2 .monitor-camera-card p,
+:root[data-theme="dark"] .overview-v2 .monitor-camera-card small { color: #b4c8d7 !important; }
+
+/* Contexto conocido frente a oportunidades inferidas por el sistema. */
+.opportunity-workspace { display: grid; gap: 16px; }
+.opportunity-workspace .page-heading { margin-bottom: 0; }
+.commercial-context > header,
+.business-register > header,
+.system-opportunities > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-secondary);
+}
+.commercial-context header p,
+.system-opportunities header p { margin-top: 4px; color: var(--text-secondary); font-size: 11px; }
+.context-choice { display: flex; gap: 7px; flex-shrink: 0; }
+.commercial-instruction { margin: 0; padding: 13px 18px; color: var(--text-secondary); line-height: 1.6; }
+.opportunity-layout { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(350px, .75fr); gap: 16px; align-items: start; }
+.opportunity-map .map-stage > svg { height: clamp(430px, 62vh, 720px); }
+.business-register { max-height: 720px; overflow: auto; }
+.business-register > header { position: sticky; top: 0; z-index: 2; }
+.business-register > header span,
+.system-opportunities > header > span { color: var(--text-secondary); font-size: 11px; white-space: nowrap; }
+.business-record { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.business-record-head { display: flex; gap: 8px; }
+.business-record-head input { font-weight: 700; color: var(--text-primary); }
+.business-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.business-fields label { color: var(--text-secondary); }
+.business-observation { margin: 12px 0 0; padding: 9px 10px; border-left: 3px solid #2caae8; background: var(--surface-secondary); color: var(--text-secondary); font-size: 10px; }
+.drawing-kind { padding: 7px 10px; border: 1px solid #c8d7e2; border-radius: 7px; background: #eef6fb; color: #31546d !important; }
+.opportunity-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; padding: 16px; }
+.opportunity-cards > article { display: grid; gap: 14px; padding: 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.opportunity-cards > article > div:first-child { display: flex; justify-content: space-between; gap: 12px; }
+.opportunity-cards > article > div:first-child span { color: #925500; font-weight: 700; }
+.opportunity-cards dl { display: grid; grid-template-columns: 1fr 1fr; gap: 9px 14px; margin: 0; }
+.opportunity-cards dl div { display: grid; gap: 2px; }
+.opportunity-cards dt { color: var(--text-secondary); font-size: 10px; }
+.opportunity-cards dd { margin: 0; color: var(--text-primary); font-weight: 700; }
+.saved-opportunities { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px 16px; }
+.saved-opportunities strong { width: 100%; }
+.saved-opportunities span { padding: 6px 9px; border: 1px solid #d3b36f; border-radius: 7px; background: #fff8e8; color: #704300; font-size: 10px; }
+.legacy-zones { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 16px 16px 0; padding: 12px; border: 1px solid #d3b36f; border-radius: 9px; background: #fff8e8; }
+.legacy-zones > div { flex: 1 1 320px; }
+.legacy-zones p { margin: 3px 0 0; color: #704300; font-size: 10px; }
+:root[data-theme="dark"] .drawing-kind { border-color: #31516a; background: #0a2b45; color: #b4d8eb !important; }
+:root[data-theme="dark"] .saved-opportunities span { border-color: #705822; background: #32280e; color: #ffe0a0; }
+:root[data-theme="dark"] .legacy-zones { border-color: #705822; background: #32280e; }
+:root[data-theme="dark"] .legacy-zones p { color: #ffe0a0; }
+
+@media (max-width: 900px) {
+  .aero .config-home-grid, .aero .config-scope { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .overview-v2 .camera-detail-settings { align-items: stretch; flex-direction: column; }
+  .opportunity-layout { grid-template-columns: 1fr; }
+  .business-register { max-height: none; }
+}
+@media (max-width: 620px) {
+  .aero .config-home-head, .overview-v2 .camera-detail-head { align-items: flex-start; flex-direction: column; }
+  .aero .config-home-grid, .aero .config-scope { grid-template-columns: 1fr; }
+  .aero .floor-create { align-items: stretch; flex-direction: column; }
+  .commercial-context > header, .system-opportunities > header { align-items: flex-start; flex-direction: column; }
+  .context-choice { width: 100%; }
+  .context-choice button { flex: 1; }
+  .business-fields, .opportunity-cards dl { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aero .sidebar-toggle, .aero .sidebar-user .logout { transition: none !important; }
+}

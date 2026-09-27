@@ -26,13 +26,15 @@ project_python = project_env / ("Scripts/python.exe" if os.name == "nt" else "bi
 if __name__ == "__main__" and project_python.is_file() and Path(sys.prefix).resolve() != project_env.resolve():
     os.execv(str(project_python), [str(project_python), str(Path(__file__).resolve()), *sys.argv[1:]])
 sys.path.insert(0, str(ROOT / "src"))
-from live_core import IdentityStore, Occupancy, calibration, project, validate_config
+from live_core import (ESTATURA_MEDIA, IdentityStore, Occupancy, body_box, calibration,
+                       ground_point, validate_config)
 from live_metrics import SessionMetrics
 from spatial_scope import accepts
 import projects
 import business_data
 import sqlite3
 import auth
+from counting.source import low_latency_ffmpeg
 
 CONFIG_PATH = ROOT / "config" / "live.local.json"
 
@@ -41,9 +43,13 @@ def default_config():
     legacy = ROOT / "config" / "camaras.json"
     definitions = json.loads(legacy.read_text(encoding="utf-8")).get("camaras",[]) if legacy.exists() else []
     cameras = [{"id": c["id"], "name": f"Cámara {c['id']}", "location": "", "type":"tilted", "source": str((ROOT / c["video_path"]).resolve()), "x": 1+10*(i/max(1,len(definitions)-1)), "y": 1, "offset":0, "links":c.get("vecinos",[]), "pairs":[], "heading":90, "fov":60, "range":4, "height":3, "tilt":45} for i,c in enumerate(definitions)]
-    return {"airport":"Aeropuerto LAP", "floor":"Terminal A · Nivel 1", "sourceMode":"recordings", "mapConfigured":False, "setupComplete":False,
+    # Sin identidad de ningún cliente: el nombre del espacio lo pone cada proyecto.
+    # Antes decía «Aeropuerto LAP / Terminal A · Nivel 1», y un proyecto nuevo heredaba
+    # ese rótulo y lo mostraba como si fuera suyo.
+    return {"airport":"", "floor":"", "sourceMode":"recordings", "mapConfigured":False, "setupComplete":False,
             "width": 12, "height": 8, "unit": "relative", "background": "", "radius": 1.5,
             "minPeople": 4, "dwell": 3, "handoffSeconds": 12, "matchDistance": 1,
+            "personHeight": ESTATURA_MEDIA,
             "clocksVerified": False, "zones": [], "cameras": cameras}
 
 
@@ -69,6 +75,15 @@ class Engine:
         self.stop_event = threading.Event()
         self.pause_event = threading.Event()
         self.worker = None
+        # Cargar los pesos de un detector cuesta varios segundos (medido: ~8 s
+        # para P2PNet en este equipo) y no depende de nada de la sesión que
+        # termina, así que reconstruirlo en cada «Iniciar» es tiempo perdido.
+        # Se conserva mientras el proceso siga vivo y solo se descarta si se
+        # pide otro modelo o pesos distintos.
+        self.detector_cache = None
+        self.detector_cache_key = None
+        self.detector_lock = threading.Lock()
+        self.detector_warmup = None
         self.token = secrets.token_urlsafe(32)
         self.instance = secrets.token_hex(8)
         self.revision = 0
@@ -109,7 +124,7 @@ class Engine:
                     analytics=copy.deepcopy(last['levelAnalytics'].get(pid,self.state['analytics']))
                     analytics.update(clusters=[],mappedCount=0)
                     for zone in analytics.get('zones',[]):zone.update(count=0,alert=False)
-                    self.state.update(status=last['status'],session=last['session'],mode='yolo',t=last['end'],planId=pid,analytics=analytics,levelAnalytics=last['levelAnalytics'],cameraAnalytics=last['cameraAnalytics'],identityDeleted=True)
+                    self.state.update(status=last['status'],session=last['session'],mode='p2pnet',t=last['end'],planId=pid,analytics=analytics,levelAnalytics=last['levelAnalytics'],cameraAnalytics=last['cameraAnalytics'],identityDeleted=True)
 
     def dispatch_alerts(self, camera_analytics, analytics):
         """Guarda cada alerta nueva en la bitacora y, si el correo esta
@@ -142,30 +157,6 @@ class Engine:
                     "duracion": episode.get("duration"),
                     "detalle": {"camara": names.get(cid, cid), "origen": "camara"},
                     "asunto": "AeroTrack - Aglomeracion en " + str(episode.get("zone")),
-                    "cuerpo": chr(10).join(body)})
-            for item in ((data.get("luggage") or {}).get("items") or []):
-                if not item.get("alert"):
-                    continue
-                key = "equipaje:{}:{}".format(cid, item.get("id"))
-                if key in self.notified:
-                    continue
-                self.notified.add(key)
-                body = [
-                    "Un bulto lleva " + str(round(item.get("duration", 0))) + " segundos sin moverse.",
-                    "",
-                    "Lugar: " + place,
-                    "Camara: " + str(names.get(cid, cid)),
-                    "Tipo detectado: " + str(item.get("kind")),
-                    "",
-                    "El sistema no determina si es peligroso: avisa para que alguien vaya a revisarlo.",
-                    "Tambien salta con equipaje que un pasajero dejo a su lado mientras espera.",
-                ]
-                pendientes.append({
-                    "key": key, "tipo": "equipaje", "zona": item.get("kind"), "camara": cid,
-                    "inicio": item.get("since"), "pico": None, "duracion": item.get("duration"),
-                    "detalle": {"camara": names.get(cid, cid), "bulto": item.get("id"),
-                                "tipoObjeto": item.get("kind")},
-                    "asunto": "AeroTrack - Equipaje sin custodia en " + str(names.get(cid, cid)),
                     "cuerpo": chr(10).join(body)})
         for zone in (analytics or {}).get("zones", []):
             if not zone.get("alert"):
@@ -398,19 +389,11 @@ class Engine:
         if isinstance(source, str) and "://" not in source:
             source = str((ROOT / source).resolve())
         remote = isinstance(source, str) and "://" in source
-        previous_options = os.environ.get("OPENCV_FFMPEG_CAPTURE_OPTIONS")
         if remote:
-            # Sin esto FFmpeg acumula segundos de video antes de entregarlo.
-            os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|fflags;nobuffer|flags;low_delay|max_delay;0|reorder_queue_size;0"
-        try:
-            cap = (cv2.VideoCapture(source, cv2.CAP_FFMPEG, [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 8000, cv2.CAP_PROP_READ_TIMEOUT_MSEC, 8000])
-                   if remote else cv2.VideoCapture(source))
-        finally:
-            if remote:
-                if previous_options is None:
-                    os.environ.pop("OPENCV_FFMPEG_CAPTURE_OPTIONS", None)
-                else:
-                    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = previous_options
+            with low_latency_ffmpeg():
+                cap = cv2.VideoCapture(source, cv2.CAP_FFMPEG, [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 8000, cv2.CAP_PROP_READ_TIMEOUT_MSEC, 8000])
+        else:
+            cap = cv2.VideoCapture(source)
         reader = None
         reader_stop = threading.Event()
         try:
@@ -550,6 +533,8 @@ class Engine:
             if not copy_current:
                 config["cameras"] = []
                 config["airport"] = name.strip()
+                # Un proyecto nuevo no hereda el espacio ni el nivel de ningún otro.
+                config["floor"] = ""
             config["setupComplete"] = False
             pid = projects.create(ROOT, name.strip(), config)
             self.record("Proyecto creado", name.strip())
@@ -620,9 +605,11 @@ class Engine:
                 raise ValueError("Detén el análisis de conteo antes de iniciar tracking.")
             if self.worker and self.worker.is_alive():
                 raise ValueError("Ya hay una sesión activa; detenla primero.")
-            mode = request.get("detector", "yolo")
-            if mode not in ("hog", "p2pnet", "yolo", "demo"):
-                raise ValueError("Detector inválido.")
+            mode = request.get("detector", "p2pnet")
+            if mode not in ("p2pnet", "demo"):
+                raise ValueError("AeroTrack opera únicamente con P2PNet.")
+            if mode == "p2pnet" and request.get("inferenceSize", 256) not in (128, 256, 384, 512):
+                raise ValueError("El tamaño de inferencia debe ser 128, 256, 384 o 512 píxeles.")
             if not self.config["cameras"]:
                 raise ValueError("Añade al menos una cámara antes de iniciar.")
             camera_id = request.get("camera")
@@ -636,6 +623,17 @@ class Engine:
                 selected=[c for c in self.config["cameras"] if c["id"] in camera_ids and c.get("active",True)]
             if not selected:
                 raise ValueError("Activa al menos una cámara.")
+            if mode == "p2pnet":
+                if any(c.get("illustrative") for c in selected):
+                    raise ValueError("Las ubicaciones ilustrativas no sirven para medir ocupación comercial.")
+                if any(len(c.get("pairs", [])) < 4 for c in selected):
+                    raise ValueError("Calibra todas las cámaras con al menos cuatro referencias antes de iniciar.")
+                if any(float(c.get("height") or 0) <= float(self.config.get("personHeight") or ESTATURA_MEDIA) for c in selected):
+                    raise ValueError("La altura de cada cámara debe superar la estatura media para proyectar cabezas al suelo.")
+                if any(not c.get("detectionZone") for c in selected):
+                    raise ValueError("Delimita la zona útil de cada cámara para excluir espejos, vidrios y áreas externas.")
+                for camera in selected:
+                    calibration(camera.get("pairs", []))
             if request.get("requireUnified") and mode != "demo":
                 if any(c.get('illustrative') for c in selected):
                     raise ValueError('Las ubicaciones ilustrativas permiten probar el mapa, pero no validar identidades entre cámaras. Usa referencias reales del mismo suelo y tiempos sincronizados.')
@@ -647,8 +645,8 @@ class Engine:
                 import numpy as np
                 if any(cv2.contourArea(cv2.convexHull(np.asarray(c["pairs"],dtype=np.float32)[:,:2].copy()))<.005 for c in selected):
                     raise ValueError("Calibración insuficiente: distribuye las referencias por el suelo, no sobre una sola línea.")
-                if any(not c.get("detectionZone") and not c.get("restrictCoverage") for c in selected):
-                    raise ValueError("Delimita el área útil de cada cámara para excluir reflejos y áreas externas.")
+                if any(not c.get("detectionZone") for c in selected):
+                    raise ValueError("Delimita la zona útil de cada cámara para excluir espejos, vidrios y áreas externas.")
             self.stop_event.clear()
             self.pause_event.clear()
             self.notified = set()
@@ -658,8 +656,18 @@ class Engine:
                           "analytics": {"clusters": [], "zones": [], "heat": [], "mappedCount": 0}, "error": None, "session": secrets.token_hex(4)}
             self.runtime_config = copy.deepcopy(self.config)
             self.runtime_config["cameras"] = copy.deepcopy(selected)
+            selected_ids = {camera['id'] for camera in selected}
             for camera in self.runtime_config['cameras']:
-                camera['links']=[cid for cid in camera.get('links',[]) if cid in {c['id'] for c in selected}]
+                explicit = [cid for cid in camera.get('links', []) if cid in selected_ids]
+                # En la configuración básica no se obliga al operador a dibujar una
+                # red técnica. Sin enlaces explícitos se asocian automáticamente las
+                # cámaras del mismo plano; la homografía, el tiempo y la apariencia
+                # siguen siendo los filtros que deciden cada traspaso.
+                camera['links'] = explicit or [
+                    other['id'] for other in selected
+                    if other['id'] != camera['id']
+                    and other.get('planId', 'custom') == camera.get('planId', 'custom')
+                ]
             self.state["planId"] = selected[0].get("planId","custom")
             if not request.get("requireUnified"):
                 self.runtime_config["clocksVerified"]=False
@@ -667,7 +675,16 @@ class Engine:
                 pid=selected[0].get("planId","custom")
                 if pid!=self.config.get("planId","custom"):
                     self.runtime_config.update(copy.deepcopy(self.config.get("plans",{}).get(pid,{})))
-            self.worker = threading.Thread(target=self.run, args=(self.runtime_config, dict(request)), daemon=True)
+            requested_size = int(request.get("inferenceSize") or 256)
+            runtime_request = {
+                **request,
+                "detector": mode,
+                "weights": None,
+                # El modo operativo prioriza continuidad. P2PNet reescala las
+                # coordenadas al frame original después de inferir.
+                "inferenceSize": min(requested_size, 256) if mode == "p2pnet" else requested_size,
+            }
+            self.worker = threading.Thread(target=self.run, args=(self.runtime_config, runtime_request), daemon=True)
             self.worker.start()
             self.record("Sesión iniciada",f"{mode} · {camera_id or 'todas las cámaras'}")
 
@@ -689,12 +706,51 @@ class Engine:
             if self.worker and self.worker.is_alive():
                 self.state["status"] = "stopping"
 
+    def load_detector(self, mode, request):
+        """Construye el detector o reutiliza el de la sesión anterior.
+
+        Cargar los pesos es lo que de verdad tarda, no el análisis en sí:
+        medido en este equipo, construir P2PNet toma unos 8 s. Ese costo no depende de la
+        sesión que termina, así que pagarlo en cada «Iniciar» — incluida cada
+        prueba rápida de una cámara durante la configuración — es tiempo
+        perdido. Se conserva mientras el proceso siga vivo y solo se
+        reconstruye mientras el proceso siga vivo; lo que sí varía entre
+        sesiones (resolución de análisis) se ajusta sobre la
+        instancia ya cargada, que es barato.
+        """
+        if mode == "p2pnet":
+            key = ("p2pnet",)
+            lado_max = int(request.get("inferenceSize") or 256)
+            if not hasattr(self, "detector_lock"):
+                self.detector_lock = threading.Lock()
+            with self.detector_lock:
+                if self.detector_cache_key != key:
+                    from detection import DetectorP2PNet
+                    self.detector_cache = DetectorP2PNet(str(ROOT / "external" / "P2PNet" / "weights" / "SHTechA.pth"),
+                                                          umbral=.1, lado_max=lado_max)
+                    self.detector_cache_key = key
+                else:
+                    self.detector_cache.lado_max = lado_max
+                return self.detector_cache
+        raise ValueError("AeroTrack opera únicamente con P2PNet.")
+
+    def warm_detector_async(self):
+        """Prepara P2PNet después de comprobar una fuente, antes de pulsar Probar."""
+        if self.detector_cache_key == ("p2pnet",) or (self.detector_warmup and self.detector_warmup.is_alive()):
+            return
+        def warm():
+            try:
+                self.load_detector("p2pnet", {"inferenceSize": 256})
+            except Exception as exc:
+                self.record("Preparación de P2PNet", f"No se pudo anticipar la carga: {exc}")
+        self.detector_warmup = threading.Thread(target=warm, daemon=True, name="p2pnet-warmup")
+        self.detector_warmup.start()
+
     def run(self, config, request):
         captures = {}
         replay = None
         combined = None
-        luggage = None
-        mode = request.get("detector", "yolo")
+        mode = request.get("detector", "p2pnet")
         try:
             if mode == "demo":
                 self.demo(config)
@@ -704,18 +760,9 @@ class Engine:
             from types import SimpleNamespace
             from tracking import ByteTrackPuntos
             from following.appearance import torso_histogram
-            from following.tracker import BoxTracker
             from following.flow import ZoneFlow, FlowField
-            detector = None
-            if mode == "p2pnet":
-                from detection import DetectorP2PNet
-                detector = DetectorP2PNet(str(ROOT / "external" / "P2PNet" / "weights" / "SHTechA.pth"), umbral=.1)
-            elif mode == "yolo":
-                from following.detector import PersonDetector
-                detector = PersonDetector(request.get("weights"), image_size=request.get("inferenceSize",640))
-            else:
-                detector = cv2.HOGDescriptor()
-                detector.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+            person_height = float(config.get("personHeight") or ESTATURA_MEDIA)
+            detector = self.load_detector(mode, request)
             cams = [c for c in config["cameras"] if c.get("active",True) and (not request.get("camera") or c["id"] == request["camera"])]
             statuses = {}
             for c in cams:
@@ -748,9 +795,18 @@ class Engine:
                 if not np.isfinite(fps) or fps <= 0:
                     fps = 25.
                 c.update(cap=cap, fps=fps, stream=stream, duration=cap.get(cv2.CAP_PROP_FRAME_COUNT)/fps if not stream else None, frameIndex=-1,
-                         tracker=BoxTracker() if mode=="yolo" else ByteTrackPuntos(umbral_alto=.6,max_frames_perdido=15),
-                         h=calibration(c.get("pairs", [])))
-                if c.get("restrictCoverage") and (c["h"] is None or mode=="p2pnet"):
+                         tracker=ByteTrackPuntos(umbral_alto=.6,max_frames_perdido=15),
+                         h=calibration(c.get("pairs", [])), headPoints=mode=="p2pnet")
+                # P2PNet marca cabezas: se proyectan al suelo corrigiendo por la altura de la
+                # cámara, que por eso tiene que superar la estatura supuesta.
+                if c["headPoints"] and c["h"] is not None and not float(c.get("height") or 0) > person_height:
+                    raise ValueError(f"{c['id']}: con P2PNet la altura de la cámara debe ser mayor que la estatura media ({person_height:g} m) para poder ubicar a la gente en el plano. Corrige la altura en el paso de ubicación.")
+                c["projects"] = c["h"] is not None and (not c["headPoints"] or ground_point(c, .5, .5, person_height) is not None)
+                try:
+                    c["hInv"] = np.linalg.inv(c["h"]) if c["projects"] and c["headPoints"] else None
+                except np.linalg.LinAlgError:
+                    c["hInv"] = None
+                if c.get("restrictCoverage") and not c["projects"]:
                     raise ValueError(f"{c['id']}: calibra el suelo para limitar por cobertura del plano, o usa solo la zona útil de la imagen.")
                 statuses[c["id"]] = {"id": c["id"], "status": "ready"}
             active = [c for c in cams if "cap" in c]
@@ -767,9 +823,7 @@ class Engine:
                 from replay import ReplayWriter
                 replay = ReplayWriter(self.data_root,self.state["session"],"unified" if request.get("combined") else "tracking",[{"id":c["id"],"name":c.get("name",c["id"]),"source":c["source"],"offset":c.get("offset",0),"planId":c.get("planId","custom"),"countLines":c.get("countLines",[])} for c in active],{k:v for k,v in config.items() if k != "cameras"},self.project_id)
             from following.combined import CombinedAnalysis
-            from following.luggage import LuggageWatch
             combined = CombinedAnalysis(cams, ROOT) if request.get('combined') else None
-            luggage = LuggageWatch(cams, request.get("weights")) if any(LuggageWatch.enabled_for(c) for c in cams) else None
             camera_analytics = {}
             level_configs={pid:config if pid==config.get('planId','custom') else {**config,**config.get('plans',{}).get(pid,{})} for pid in {c.get('planId','custom') for c in cams}}
             level_occupancy={pid:Occupancy(value) for pid,value in level_configs.items()}
@@ -789,14 +843,17 @@ class Engine:
                     self.stop_event.wait(.1)
                     continue
                 start = time.monotonic()
-                t = start - wall_start if active[0]["stream"] else timeline
-                observations, raw_frames = [], {}
+                # Las grabaciones simulan una fuente viva: si la inferencia tarda,
+                # se saltan frames intermedios en vez de reproducir el video en
+                # cámara lenta y acumular segundos de retraso.
+                t = start - wall_start if active[0]["stream"] else max(timeline, start - wall_start)
+                observations, raw_frames, pending = [], {}, []
                 for c in list(active):
                     if self.stop_event.is_set():
                         break
                     cap = c["cap"]
                     if not c["stream"]:
-                        target = int((t + c.get("offset", 0)) * c["fps"])
+                        target = max(0, int((t + c.get("offset", 0)) * c["fps"]))
                         if target < c["frameIndex"]:
                             cap.set(cv2.CAP_PROP_POS_FRAMES, target)
                             c["frameIndex"] = target - 1
@@ -817,62 +874,45 @@ class Engine:
                         frame=cv2.resize(frame,(1280,round(frame.shape[0]*1280/frame.shape[1])))
                     height, width = frame.shape[:2]
                     raw_frames[c["id"]] = frame
-                    detections, boxes = [], []
-                    if mode == "p2pnet":
-                        detections = detector.detectar(frame)
-                    elif mode == "yolo":
-                        detections, boxes = detector.detect(frame)
-                    else:
-                        scale = min(1., 640 / width)
-                        small = cv2.resize(frame, (int(width * scale), int(height * scale)))
-                        if small.shape[0] >= 128 and small.shape[1] >= 64:
-                            rects, scores = detector.detectMultiScale(small, winStride=(8, 8), padding=(8, 8), scale=1.05)
-                            candidates = [[int(x), int(y), int(w), int(h)] for x, y, w, h in rects]
-                            confidence = [float(s) for s in scores]
-                            keep = cv2.dnn.NMSBoxes(candidates, confidence, .3, .4)
-                            for idx in np.asarray(keep).reshape(-1):
-                                x, y, w, h = rects[idx] / scale
-                                boxes.append([x, y, x + w, y + h])
-                                detections.append(SimpleNamespace(x=x + w / 2, y=y + h, confianza=.9))
+                    pending.append((c, frame, height, width))
+                if not active or self.stop_event.is_set():
+                    break
+                detection_batches = (detector.detectar_lote([item[1] for item in pending])
+                                     if hasattr(detector, "detectar_lote")
+                                     else [detector.detectar(item[1]) for item in pending])
+                for (c, frame, height, width), detections in zip(pending, detection_batches):
                     keep = []
                     for i,d in enumerate(detections):
-                        ground = project(c['h'],d.x/width,d.y/height) if c['h'] is not None and mode!='p2pnet' else None
-                        if accepts(c,c["scope"],d.x/width,d.y/height,ground,image_only=c['h'] is None or mode=='p2pnet'):
+                        ground = ground_point(c,d.x/width,d.y/height,person_height) if c["projects"] else None
+                        if accepts(c,c["scope"],d.x/width,d.y/height,ground,image_only=not c["projects"]):
                             keep.append(i)
                     excluded = len(detections)-len(keep)
                     detections = [detections[i] for i in keep]
-                    if boxes:
-                        boxes = [boxes[i] for i in keep]
-                    if mode == "yolo":
-                        tracks = c["tracker"].update(detections, boxes, t, (height, width))
-                    else:
-                        tracks, _, _ = c["tracker"].actualizar(detections, t)
+                    tracks, _, _ = c["tracker"].actualizar(detections, t)
                     for tr in tracks:
                         px, py = tr.posicion
-                        nearest = min(range(len(detections)), key=lambda i: (detections[i].x - px)**2 + (detections[i].y - py)**2) if detections else None
-                        box = tr.box if mode == "yolo" else (boxes[nearest] if boxes and nearest is not None else None)
-                        color = torso_histogram(frame, box)
-                        if not accepts(c,c["scope"],px/width,py/height,project(c["h"],px/width,py/height) if c["h"] is not None and mode!="p2pnet" else None,image_only=c['h'] is None or mode=='p2pnet'):
+                        box = None
+                        point = ground_point(c, px / width, py / height, person_height) if c["projects"] else None
+                        if not accepts(c,c["scope"],px/width,py/height,point,image_only=not c["projects"]):
                             continue
-                        point = None
-                        if c["h"] is not None and mode != "p2pnet":
-                            point = project(c["h"], px / width, py / height)
-                            if point and not (0 <= point[0] <= c["scope"]["width"] and 0 <= point[1] <= c["scope"]["height"]):
-                                point = None
+                        if point and not (0 <= point[0] <= c["scope"]["width"] and 0 <= point[1] <= c["scope"]["height"]):
+                            point = None
+                        # Sin recuadro no hay color de ropa, y sin color la fusión entre cámaras
+                        # nunca pasa su umbral: la misma persona se contaría dos veces. Con
+                        # P2PNet se deriva un recorte solo para muestrear el color; no se
+                        # publica como detección porque es una estimación, no una medición.
+                        sample = box if box is not None else (body_box(c.get("hInv"), px, py, point, width, height) if c["headPoints"] else None)
+                        color = torso_histogram(frame, sample)
                         observations.append({"camera": c["id"], "local": tr.id, "point": point, "pixel": [float(px), float(py)], "box": box, "color": color, "score": tr.score})
-                    statuses[c["id"]] = {"id": c["id"], "status": "live", "width": width, "height": height, "fps":c["fps"], "duration":c.get("duration"), "calibrated": c["h"] is not None and mode != "p2pnet", "count": sum(o["camera"]==c["id"] for o in observations), "excluded":excluded, "timestamp": t, "sourceTime":c["frameIndex"]/c["fps"] if not c["stream"] else None}
+                    statuses[c["id"]] = {"id": c["id"], "status": "live", "width": width, "height": height, "fps":c["fps"], "duration":c.get("duration"), "calibrated": c["projects"], "count": sum(o["camera"]==c["id"] for o in observations), "excluded":excluded, "timestamp": t, "sourceTime":c["frameIndex"]/c["fps"] if not c["stream"] else None}
                     with self.lock:
                         self.source_checks[c["id"]] = {"source":c["source"],"valid":True,"width":width,"height":height,"fps":c["fps"],"checkedAt":time.time()}
-                if not active or self.stop_event.is_set():
-                    break
                 people = identities.update(observations, t)
                 if combined:
                     for c in active:
                         group=[p for p in people if p['camera']==c['id']]
                         camera_analytics[c['id']] = combined.observe(c,raw_frames[c['id']],group,t)
                         camera_analytics[c['id']]['map']=camera_maps[c['id']].update(group,t)
-                        if luggage:
-                            camera_analytics[c['id']]['luggage']=luggage.observe(c,raw_frames[c['id']],t)
                 encoded = {}
                 for cid, frame in raw_frames.items():
                     # Operator-only view on a loopback-only server: the operator already
@@ -932,7 +972,7 @@ class Engine:
                         views=[]
                         for c in active:
                             h,w=raw_frames[c["id"]].shape[:2]
-                            views.append({"id":c["id"],"t":statuses[c["id"]]["sourceTime"],"analysis":camera_analytics.get(c["id"]),"people":[{"id":p["id"],"box":[p["box"][0]/w,p["box"][1]/h,p["box"][2]/w,p["box"][3]/h] if p["box"] else None,"pixel":[p["pixel"][0]/w,p["pixel"][1]/h],"point":p["point"],"association":p["association"]} for p in people if p["camera"]==c["id"]]})
+                            views.append({"id":c["id"],"t":statuses[c["id"]]["sourceTime"],"analysis":camera_analytics.get(c["id"]),"people":[{"id":p["id"],"box":[p["box"][0]/w,p["box"][1]/h,p["box"][2]/w,p["box"][3]/h] if p["box"] else None,"pixel":[p["pixel"][0]/w,p["pixel"][1]/h],"point":p["point"],"association":p["association"],"history":p.get("history",[])[-30:]} for p in people if p["camera"]==c["id"]]})
                         replay.append({"t":t,"cameras":views,"analytics":analytics,"levels":levels})
                     self.dispatch_alerts(camera_analytics, analytics)
                     self.record_traffic(analytics, bool(active and active[0].get("stream")))
@@ -945,8 +985,6 @@ class Engine:
                 self.state.update(status="error", error=f"{type(exc).__name__}: {exc}", people=[])
         finally:
             self.flush_traffic()
-            if luggage:
-                luggage.close()
             if combined:
                 final_analytics=combined.close()
                 self.state['cameraAnalytics']=final_analytics
@@ -1159,7 +1197,10 @@ class Handler(BaseHTTPRequestHandler):
                 width=float(query.get("width",["12"])[0])
                 if not 1<=width<=10000:
                     raise ValueError("Ancho del plano inválido.")
-                result=plan_lines_from_bytes(self.rfile.read(size),width)
+                modo=query.get("mode",["estructuras"])[0]
+                if modo not in ("estructuras","bordes"):
+                    raise ValueError("Modo de trazado inválido.")
+                result=plan_lines_from_bytes(self.rfile.read(size),width,modo)
                 return self.send_data(200,result)
             if parsed.path == "/api/upload":
                 if not 0 < size <= 1024*1024*1024:
@@ -1226,8 +1267,11 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("Fuente inválida.")
                 if isinstance(source,str) and "://" not in source:
                     source=str((ROOT/source).resolve())
-                cap=(cv2.VideoCapture(source,cv2.CAP_FFMPEG,[cv2.CAP_PROP_OPEN_TIMEOUT_MSEC,5000,cv2.CAP_PROP_READ_TIMEOUT_MSEC,5000])
-                     if isinstance(source,str) and "://" in source else cv2.VideoCapture(source))
+                if isinstance(source,str) and "://" in source:
+                    with low_latency_ffmpeg():
+                        cap=cv2.VideoCapture(source,cv2.CAP_FFMPEG,[cv2.CAP_PROP_OPEN_TIMEOUT_MSEC,5000,cv2.CAP_PROP_READ_TIMEOUT_MSEC,5000])
+                else:
+                    cap=cv2.VideoCapture(source)
                 try:
                     if not cap.isOpened(): raise ValueError("No se pudo abrir la cámara.")
                     cap.set(cv2.CAP_PROP_ORIENTATION_AUTO,1)
@@ -1242,13 +1286,15 @@ class Handler(BaseHTTPRequestHandler):
                         engine.frames[cid]=encoded
                         engine.state["cameras"]=[c for c in engine.state["cameras"] if c["id"]!=cid]+[{"id":cid,"status":"ready","width":w,"height":h,"fps":fps,"sourceTime":seconds}]
                         engine.source_checks[cid]={"source":camera["source"],"valid":True,"width":w,"height":h,"fps":fps,"checkedAt":time.time()}
+                    engine.warm_detector_async()
                     return self.send_data(200,{"width":w,"height":h,"fps":fps,"duration":cap.get(cv2.CAP_PROP_FRAME_COUNT)/fps})
                 finally:
                     cap.release()
             if self.path == "/api/projects":
+                # Los dos roles administran proyectos: crear y eliminar es gestión del
+                # espacio de trabajo, no configuración de cámaras ni de plano, que sigue
+                # reservada al operador mediante SOLO_OPERADOR.
                 action = data.get("action")
-                if sesion and sesion["rol"] != "operador" and action != "open":
-                    return self.send_data(403, {"error": "Tu usuario solo puede abrir proyectos existentes."})
                 pid = data.get("id")
                 if action == "create":
                     return self.send_data(200, engine.new_project(data.get("name",""), bool(data.get("copyCurrent"))))
@@ -1352,6 +1398,10 @@ def main():
     server.server_bind()
     server.server_activate()
     server.engine = Engine(args.config_path)
+    # La interfaz y la configuración pueden abrirse mientras P2PNet prepara sus
+    # pesos en segundo plano. Así el primer monitoreo no paga toda la carga del
+    # modelo después de que el operador pulsa «Iniciar».
+    server.engine.warm_detector_async()
     from replay import recover_interrupted
     recover_interrupted(server.engine.data_root)
     print(f"LAP: http://127.0.0.1:{args.port} — solo equipo local", flush=True)

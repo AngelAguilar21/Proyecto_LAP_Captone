@@ -1,10 +1,9 @@
 export type Point = [number, number];
 export type SourceMode = 'recordings' | 'live' | 'demo';
-export type View = 'replay' | 'overview' | 'counting' | 'setup' | 'map' | 'cameras' | 'lab' | 'dashboard' | 'zones' | 'rules' | 'reports' | 'audit' | 'alerts';
+export type View = 'replay' | 'overview' | 'setup' | 'map' | 'cameras' | 'lab' | 'dashboard' | 'zones' | 'rules' | 'reports' | 'audit' | 'alerts' | 'projects';
 export interface Camera {
   analysisZones?:{id:string;name:string;points:Point[];threshold:number;dwell:number}[];
-  denseCounting?:boolean; denseInterval?:number; crowdThreshold?:number; crowdDwell?:number; illustrative?:boolean;
-  luggageWatch?:boolean; luggageDwell?:number; luggageInterval?:number;
+  crowdThreshold?:number; crowdDwell?:number; illustrative?:boolean;
   countLines?:{id:string;name:string;place?:{id:string;name:string;point:Point;planId:string};a:Point;b:Point;entrySide:number;bands?:{negative:Point[];positive:Point[]}}[];
   planId?: string;
   color?: string; active?: boolean; restrictCoverage?: boolean;
@@ -15,17 +14,21 @@ export interface Camera {
 export interface Zone {
   id?: string; name: string; points: Point[]; kind?: 'roi' | 'queue' | 'restricted' | 'room' | 'wall' | 'door' | 'corridor' | 'commercial';
   shape?: 'polygon' | 'circle' | 'rectangle'; color?: string;
+  source?: 'system' | 'operator';
+  business?: { category?: 'retail'|'food'|'service'|'other'; widthM?:number; depthM?:number; areaM2?:number; capacity?:number; entranceWidthM?:number; notes?:string };
   rule?: { enabled: boolean; minPeople: number; dwell: number };
 }
-export interface Plan { width:number; height:number; unit: 'relative'|'meters'; background:string; floor:string; zones:Zone[]; workArea?:Point[]; planLines?:number[][]; mapConfigured?:boolean; mapAsset?:string; planName?:string; }
+export interface CommercialContext { hasBusinesses:boolean; }
+export interface Plan { width:number; height:number; unit: 'relative'|'meters'; background:string; floor:string; zones:Zone[]; commercialContext?:CommercialContext; workArea?:Point[]; planLines?:number[][]; mapConfigured?:boolean; mapAsset?:string; planName?:string; planView?:'image'|'lines'; }
 export interface ProjectEntry { id:string; name:string; created:number; updated:number; airport:string; floor:string; cameras:number; plans:number; setupComplete:boolean; }
 export interface ProjectListing { active:string|null; projects:ProjectEntry[]; }
 export interface Config {
   planId?:string; plans?:Record<string,Plan>; mapAsset?:string;
-  workArea?: Point[]; planLines?: number[][];
+  workArea?: Point[]; planLines?: number[][]; planView?: 'image'|'lines';
   width: number; height: number; unit: 'relative' | 'meters'; background: string; radius: number;
-  minPeople: number; dwell: number; handoffSeconds: number; matchDistance: number; clocksVerified: boolean;
+  minPeople: number; dwell: number; handoffSeconds: number; matchDistance: number; clocksVerified: boolean; personHeight?: number;
   cameras: Camera[]; zones: Zone[]; airport?: string; floor?: string; sourceMode?: SourceMode;
+  commercialContext?:CommercialContext;
   mapConfigured?: boolean; setupComplete?: boolean; planName?: string; importWarnings?: string[];
 }
 export interface Person {
@@ -66,4 +69,4 @@ export const isActive = (s: string) => ['starting', 'running', 'paused', 'stoppi
 export const isStream = (source: string | number) => typeof source === 'number' || /^(rtsp|https?|rtmp):\/\//i.test(source);
 export const formatTime = (value: number) => `${Math.floor(value / 60).toString().padStart(2, '0')}:${Math.floor(value % 60).toString().padStart(2, '0')}`;
 export const labelAssociation = (p: Person) => p.association === 'estimated' ? 'Asociación estimada' : p.association === 'uncertain' ? 'Confianza insuficiente para asociación' : p.association === 'synthetic' ? 'Simulación' : 'ID local confirmado';
-export const freshCamera = (): Camera => ({ id: `C-${crypto.randomUUID().slice(0, 5).toUpperCase()}`, name: 'Nueva cámara', location: '', type: 'tilted', source: '', x: 0, y: 0, offset: 0, links: [], pairs: [], heading: 90, fov: 60, range: 3, height: 3, tilt: 45, coverageShape: 'rectangle', coverageWidth: 2 });
+export const freshCamera = (): Camera => ({ id: `C-${crypto.randomUUID().slice(0, 5).toUpperCase()}`, name: 'Nueva cámara', location: '', type: 'tilted', source: '', x: 0, y: 0, offset: 0, links: [], pairs: [], heading: 90, fov: 60, range: 3, height: 3, tilt: 45, coverageShape: 'free', coveragePolygon: [], coverageWidth: 2 });

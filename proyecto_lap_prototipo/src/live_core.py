@@ -15,6 +15,13 @@ def finite(value, low, high):
     return isinstance(value, (float, int)) and not isinstance(value, bool) and math.isfinite(value) and low <= value <= high
 
 
+def valid_plan_id(value):
+    return (isinstance(value, str) and value in ("custom", "lap-1", "lap-2", "lap-3", "lap-4")) or (
+        isinstance(value, str) and value.startswith("floor-") and 7 < len(value) <= 48
+        and all(char.isalnum() or char in "_-" for char in value)
+    )
+
+
 def validate_config(c):
     if not isinstance(c, dict):
         raise ValueError("La configuración debe ser un objeto.")
@@ -28,6 +35,8 @@ def validate_config(c):
             raise ValueError(f"Valor inválido: {key}.")
     if int(c["minPeople"]) != c["minPeople"]:
         raise ValueError("El mínimo de personas debe ser entero.")
+    if c.get("personHeight") is not None and not finite(c.get("personHeight"), 1.2, 2.2):
+        raise ValueError("La estatura media debe estar entre 1.2 y 2.2 metros.")
     if not isinstance(c.get("clocksVerified"), bool):
         raise ValueError("Indicar si los relojes están verificados.")
     if c.get("workArea"):
@@ -35,15 +44,17 @@ def validate_config(c):
     lines=c.get("planLines",[])
     if not isinstance(lines,list) or len(lines)>6000 or any(not isinstance(line,list) or len(line)!=4 or any(not finite(x,0,1) for x in line) for line in lines):
         raise ValueError("Líneas del plano inválidas.")
+    if c.get("planView") not in (None, "image", "lines"):
+        raise ValueError("Vista del plano inválida.")
     cameras = c.get("cameras")
     plans=c.get("plans",{})
     if not isinstance(plans,dict) or len(plans)>8:
         raise ValueError("Catálogo de planos inválido.")
     for pid, plan in plans.items():
-        if pid not in ("custom","lap-1","lap-2","lap-3","lap-4") or not isinstance(plan,dict):
+        if not valid_plan_id(pid) or not isinstance(plan,dict):
             raise ValueError("Plano desconocido.")
         validate_config({**c,**plan,"plans":{},"cameras":[]})
-    if c.get("planId","custom") not in ("custom","lap-1","lap-2","lap-3","lap-4"):
+    if not valid_plan_id(c.get("planId","custom")):
         raise ValueError("Nivel desconocido.")
     if c.get("mapAsset") and c["mapAsset"] not in [f"/maps/lap/{n}.json" for n in (1,2,3,4)]:
         raise ValueError("Referencia cartográfica inválida.")
@@ -53,6 +64,11 @@ def validate_config(c):
     for cam in cameras:
         if not isinstance(cam, dict):
             raise ValueError("Cámara inválida.")
+        # Campos de módulos retirados (YOLO/equipaje y segunda inferencia densa).
+        # Se limpian al validar para que configuraciones antiguas migren sin
+        # romperse y se guarden de nuevo con el alcance comercial actual.
+        for field in ("denseCounting", "denseInterval", "luggageWatch", "luggageDwell", "luggageInterval"):
+            cam.pop(field, None)
         cid = cam.get("id", "")
         if not isinstance(cid, str) or not cid or len(cid) > 40 or not all(x.isalnum() or x in "_-" for x in cid) or cid in ids:
             raise ValueError("Cada cámara necesita un ID único, sin espacios ni símbolos especiales.")
@@ -63,7 +79,7 @@ def validate_config(c):
         if not finite(cam.get("offset", 0), 0, 86400):
             raise ValueError("Offset debe ser no negativo (segundos que se omiten al inicio).")
         pid=cam.get("planId","custom")
-        if pid not in ("custom","lap-1","lap-2","lap-3","lap-4") or (pid!=c.get("planId","custom") and pid not in plans):
+        if not valid_plan_id(pid) or (pid!=c.get("planId","custom") and pid not in plans):
             raise ValueError(f"Plano de cámara desconocido en {cid}.")
         cam_plan=c if cam.get("planId","custom")==c.get("planId","custom") else plans.get(cam.get("planId","custom"),c)
         for key, maximum in [("x", cam_plan["width"]), ("y", cam_plan["height"])]:
@@ -77,7 +93,7 @@ def validate_config(c):
         for field in ("name", "location"):
             if field in cam and (not isinstance(cam[field], str) or len(cam[field]) > 160):
                 raise ValueError(f"{cid}: {field} inválido.")
-        for field in ("active", "restrictCoverage", "denseCounting", "illustrative", "luggageWatch"):
+        for field in ("active", "restrictCoverage", "illustrative"):
             if field in cam and not isinstance(cam[field],bool):
                 raise ValueError(f"{field}: debe ser booleano.")
         if cam.get("coveragePolygon"):
@@ -96,7 +112,7 @@ def validate_config(c):
                 raise ValueError("Puntos fuera del video o del plano.")
         if len(pairs) >= 4:
             calibration(pairs)
-        for field, lo, hi in [('denseInterval',2,60),('crowdThreshold',1,1000),('crowdDwell',0,3600),('luggageDwell',10,7200),('luggageInterval',2,60)]:
+        for field, lo, hi in [('crowdThreshold',1,1000),('crowdDwell',0,3600)]:
             if field in cam and not finite(cam[field],lo,hi):
                 raise ValueError(f'{cid}: {field} fuera de rango.')
         if cam.get('analysisZones'):
@@ -149,6 +165,9 @@ def validate_config(c):
         if any(not isinstance(link, str) or link not in ids or link == cam["id"] for link in cam.get("links", [])):
             raise ValueError("Enlaces deben referirse a otras cámaras existentes.")
     zones = c.get("zones", [])
+    context = c.get("commercialContext")
+    if context is not None and (not isinstance(context, dict) or not isinstance(context.get("hasBusinesses"), bool)):
+        raise ValueError("Indica si el piso contiene negocios.")
     if not isinstance(zones, list) or len(zones) > 100:
         raise ValueError("Máximo 100 zonas.")
     for z in zones:
@@ -164,6 +183,15 @@ def validate_config(c):
         rule = z.get("rule")
         if rule is not None and (not isinstance(rule, dict) or not isinstance(rule.get("enabled"), bool) or not finite(rule.get("minPeople"),2,1000) or int(rule["minPeople"]) != rule["minPeople"] or not finite(rule.get("dwell"),0,3600)):
             raise ValueError("Regla de zona inválida.")
+        if z.get("source") not in (None, "system", "operator"):
+            raise ValueError("Origen de zona inválido.")
+        business = z.get("business")
+        if business is not None:
+            if not isinstance(business, dict) or business.get("category") not in (None, "retail", "food", "service", "other"):
+                raise ValueError("Información comercial inválida.")
+            for key in ("widthM", "depthM", "areaM2", "capacity", "entranceWidthM"):
+                if business.get(key) is not None and not finite(business[key], 0, 1000000):
+                    raise ValueError(f"Medida comercial inválida: {key}.")
     bg = c.get("background", "")
     if not isinstance(bg, str) or len(bg) > 3000000 or (bg and not bg.startswith(("data:image/png;base64,", "data:image/jpeg;base64,", "data:image/webp;base64,"))):
         raise ValueError("El fondo debe ser una imagen PNG, JPEG o WebP de menos de 2 MB.")
@@ -235,10 +263,88 @@ def project(h, u, v):
     return tuple(map(float, p)) if np.isfinite(p).all() else None
 
 
+ESTATURA_MEDIA = 1.7  # metros; supuesto explícito, configurable con personHeight
+
+
+def head_to_ground(h, u, v, camera_x, camera_y, camera_height, person_height=ESTATURA_MEDIA):
+    """Lleva un punto de cabeza al punto del suelo donde está la persona.
+
+    P2PNet marca la cabeza, no los pies. Pasar la cabeza por la homografía del
+    suelo la deja demasiado lejos de la cámara, porque el rayo que la ve sigue
+    hasta cortar el piso más allá de la persona. Ese corte es G. Como los pies
+    están justo debajo de la cabeza, quedan sobre el segmento que une la base de
+    la cámara con G, a una fracción exacta del camino:
+
+        pies = base + (G - base) * (1 - estatura / altura_de_camara)
+
+    No es una aproximación: sale de intersectar el mismo rayo con z=0 y con
+    z=estatura. Solo depende de que la altura de la cámara supere la estatura
+    supuesta; si no la supera, el rayo nunca vuelve al suelo por delante y la
+    conversión no existe, así que devolvemos None en vez de inventar un punto.
+
+    La fracción es un cociente de alturas reales, así que no cambia si el plano
+    está en metros o en unidades relativas.
+    """
+    if not finite(camera_height, 0, 10000) or camera_height <= person_height:
+        return None
+    g = project(h, u, v)
+    if g is None:
+        return None
+    keep = 1. - person_height / camera_height
+    return (camera_x + (g[0] - camera_x) * keep, camera_y + (g[1] - camera_y) * keep)
+
+
+def body_box(h_inv, head_px, head_py, ground, width, height, ratio=.4):
+    """Recuadro aproximado del cuerpo a partir de un punto de cabeza.
+
+    P2PNet no entrega recuadros, y sin uno no se puede mirar la ropa para
+    distinguir a dos personas vistas por cámaras distintas. Invirtiendo la
+    homografía se sabe en qué píxel caen los pies que ya ubicamos en el suelo, y
+    la distancia cabeza-pies da la altura de la persona en la imagen sin suponer
+    ninguna escala fija. El ancho sí es un supuesto (ratio), tolerable porque el
+    recorte solo se usa para muestrear color, no para medir ni para mostrar.
+    """
+    if h_inv is None or ground is None:
+        return None
+    foot = project(h_inv, ground[0], ground[1])
+    if foot is None:
+        return None
+    foot_py = foot[1] * height
+    tall = foot_py - head_py
+    if not (4 < tall < height * 2):   # los pies han de caer debajo de la cabeza
+        return None
+    half = tall * ratio / 2
+    return [head_px - half, head_py, head_px + half, foot_py]
+
+
+def ground_point(camera, u, v, person_height=ESTATURA_MEDIA):
+    """Punto en el plano de una detección, según lo que marque el detector.
+
+    P2PNet entrega la cabeza y hay que corregirla antes de usar la homografía
+    del suelo. El modo directo se conserva solo para datos geométricos de prueba.
+    """
+    if camera.get("h") is None:
+        return None
+    if camera.get("headPoints"):
+        return head_to_ground(camera["h"], u, v, camera["x"], camera["y"],
+                              camera.get("height"), person_height)
+    return project(camera["h"], u, v)
+
+
 def color_distance(a, b):
     if a is None or b is None:
         return .5
     return float(cv2.compareHist(a, b, cv2.HISTCMP_BHATTACHARYYA))
+
+
+def update_appearance(previous, current, weight=.25):
+    """Suaviza la firma visual para que un reflejo o un frame no cambie el ID."""
+    if current is None:
+        return previous
+    if previous is None or previous.shape != current.shape:
+        return current
+    blended = previous * (1 - weight) + current * weight
+    return cv2.normalize(blended, blended, alpha=1, norm_type=cv2.NORM_L1)
 
 
 class IdentityStore:
@@ -270,11 +376,15 @@ class IdentityStore:
                 other=next(c for c in self.config['cameras'] if c['id']==b['camera'])
                 if cam.get('planId','custom')!=other.get('planId','custom'):continue
                 if self.local[a['camera'],a['local']]==self.local[b['camera'],b['local']]:continue
-                distance=math.dist(a['point'],b['point'])/self.config['matchDistance']
+                # Dos homografías reales rara vez coinciden al centímetro. La
+                # cercanía mutua y sostenida permite absorber ese error sin
+                # fusionar una multitud completa por proximidad.
+                gate=self.config['matchDistance']*1.6
+                distance=math.dist(a['point'],b['point'])/gate
                 appearance=color_distance(a.get('color'),b.get('color'))
-                if distance<=1 and appearance<.25:scores.append((distance+appearance,j))
+                if distance<=1 and (appearance<.6 or distance<=.3):scores.append((distance+appearance*.25,j))
             scores.sort()
-            if scores and (len(scores)==1 or scores[1][0]-scores[0][0]>.25):nearest[i]=scores[0][1]
+            if scores and (len(scores)==1 or scores[1][0]-scores[0][0]>.12):nearest[i]=scores[0][1]
         evidence={}
         for i,j in nearest.items():
             if j<=i or nearest.get(j)!=i:continue
@@ -305,7 +415,7 @@ class IdentityStore:
         for group in grouped.values():
             anchor=group[0]
             for o in group[1:]:
-                if o["camera"]!=anchor["camera"] and math.dist(o["point"],anchor["point"])>cfg["matchDistance"]:
+                if o["camera"]!=anchor["camera"] and math.dist(o["point"],anchor["point"])>cfg["matchDistance"]*1.75:
                     self.local.pop((o["camera"],o["local"]),None)
         observed_keys = {(o["camera"], o["local"]) for o in observations}
         mapped = {self.local[k] for k in observed_keys if k in self.local}
@@ -335,16 +445,16 @@ class IdentityStore:
                     overlap = pid in mapped or dt <= .5
                     if overlap:
                         target = p["point"]
-                        gate = cfg["matchDistance"]
+                        gate = cfg["matchDistance"] * 1.6
                     else:
                         target = (p["point"][0] + p["velocity"][0] * dt, p["point"][1] + p["velocity"][1] * dt)
                         gate = cfg["matchDistance"] * (1 + min(dt, 5) * .15)
                     dist = math.dist(o["point"], target)
                     appearance = color_distance(o.get("color"), p.get("color"))
-                    if dist <= gate and appearance <= .65:
+                    if dist <= gate and (appearance <= .82 or (overlap and dist <= gate*.3)):
                         candidates.append((dist / gate + appearance * .3, pid))
                 candidates.sort()
-                if candidates and (len(candidates) == 1 or candidates[1][0] - candidates[0][0] > .25):
+                if candidates and (len(candidates) == 1 or candidates[1][0] - candidates[0][0] > .12):
                     gid = candidates[0][1]
                     association = "estimated"
                     self.events.appendleft({"type": "handoff", "id": gid, "from": self.people[gid]["camera"], "to": o["camera"], "t": t})
@@ -362,7 +472,8 @@ class IdentityStore:
                 p["velocity"] = tuple(.5 * p["velocity"][i] + .5 * (o["point"][i] - p["point"][i]) / dt for i in (0, 1))
             if association != "local":
                 p["association"] = association
-            p.update(camera=o["camera"], point=o["point"], t=t, color=o.get("color"))
+            appearance = update_appearance(p.get("color"), o.get("color"))
+            p.update(camera=o["camera"], point=o["point"], t=t, color=appearance)
             if o["point"] is not None:
                 if not p["history"] or p["history"][-1][2] != t:
                     p["history"].append([*o["point"], t])

@@ -53,18 +53,18 @@ class WorkspaceTests(unittest.TestCase):
     path=root/f'{cid}.avi';writer=cv2.VideoWriter(str(path),cv2.VideoWriter_fourcc(*'MJPG'),10,(320,240))
     self.assertTrue(writer.isOpened())
     for _ in range(frames):writer.write(np.zeros((240,320,3),dtype=np.uint8))
-    writer.release();cfg['cameras'].append({'id':cid,'source':str(path),'x':1,'y':1,'pairs':[],'links':[],'offset':0})
-   cfg['workArea']=[[7,6],[10,6],[10,7],[7,7]]
+    writer.release();cfg['cameras'].append({'id':cid,'source':str(path),'x':1,'y':1,'pairs':[[0,0,0,0],[1,0,12,0],[1,1,12,8],[0,1,0,8]],'detectionZone':[[0,0],[1,0],[1,1],[0,1]],'height':4,'illustrative':False,'links':[],'offset':0})
+   cfg['workArea']=[[0,0],[12,0],[12,8],[0,8]]
    engine=Engine(root/'config.json');engine.configure(cfg)
-   with patch('cv2.HOGDescriptor') as hog:
-    hog.return_value.detectMultiScale.return_value=(np.array([[50,30,40,140]]),np.array([.9]))
-    engine.start({'detector':'hog','cameraIds':['C','D'],'requireUnified':False});engine.worker.join(15)
+   fake_detector=SimpleNamespace(detectar=lambda frame:[SimpleNamespace(x=100,y=80,confianza=.9)])
+   with patch.object(engine,'load_detector',return_value=fake_detector):
+    engine.start({'detector':'p2pnet','cameraIds':['C','D'],'requireUnified':False});engine.worker.join(15)
     self.assertFalse(engine.worker.is_alive());self.assertEqual(engine.state['status'],'ended')
    self.assertGreaterEqual(engine.state['t'],1.4)
    self.assertTrue((root/'data'/'replays'/engine.state['session']/'manifest.json').is_file())
    samples=[json.loads(line) for line in (root/'data'/'replays'/engine.state['session']/'samples.jsonl').read_text().splitlines()]
    self.assertTrue(any(view['people'] for row in samples for view in row['cameras']))
-   self.assertTrue(all(p['point'] is None for row in samples for view in row['cameras'] for p in view['people']))
+   self.assertTrue(all(p['point'] is not None for row in samples for view in row['cameras'] for p in view['people']))
 
  def test_replay_survives_new_reader_and_hides_paths(self):
   with tempfile.TemporaryDirectory() as tmp:

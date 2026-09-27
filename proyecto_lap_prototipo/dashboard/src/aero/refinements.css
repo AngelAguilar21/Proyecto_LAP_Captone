@@ -28,6 +28,12 @@
   --senal-suave: #fdf3e3;
   --alerta: #bd2c3e;
   --alerta-suave: #fceaec;
+  /* Único verde de la paleta, y a propósito limitado a esto: un indicador de
+     estado operativo (cámara con señal, sesión corriendo, bitácora al día),
+     nunca un color de botón ni de acción. Contraste verificado 5.38:1 sobre
+     superficie blanca. */
+  --exito: #0a7a4d;
+  --exito-suave: #e5f5ee;
 
   --r-control: 8px;
   --r-panel: 14px;
@@ -98,7 +104,8 @@
 .aero .metric-card span { font-size: 11.5px; color: var(--tenue); }
 .aero .metric-card small { font-size: 11px; color: var(--tenue); }
 .aero .text-blue { color: var(--accion); }
-.aero .text-green { color: var(--accion); }
+.aero .text-green { color: var(--exito); }
+.aero .text-muted { color: var(--tenue); }
 .aero .text-amber { color: var(--senal-texto); }
 .aero .text-red { color: var(--alerta); }
 
@@ -160,7 +167,8 @@
 .aero .pill.blue, .aero .pill.good { background: var(--accion-suave); color: var(--accion-oscura); border-color: #cfe1f5; }
 .aero .pill.warn { background: var(--senal-suave); color: #8a5106; border-color: #f2dcb8; }
 .aero .pill.muted { background: var(--superficie-2); color: var(--tenue); border-color: var(--borde); }
-.aero .dot.green, .aero .dot.blue { background: var(--accion); }
+.aero .dot.green { background: var(--exito); }
+.aero .dot.blue { background: var(--accion); }
 .aero .dot.amber { background: var(--senal); }
 .aero .dot.red { background: var(--alerta); }
 
@@ -274,3 +282,157 @@
   .aero .metric-card:hover, .aero .alert-row:hover,
   .aero .project-card:hover, .aero button:active:not(:disabled) { transform: none; }
 }
+
+/* --- Shell con barra lateral ---
+   La navegación horizontal obligaba a repartir todas las secciones en una
+   sola fila, y con más secciones se volvía ilegible. En vertical hay sitio
+   para el nombre completo de cada una, y el contenido gana el ancho entero.
+   Contrastes verificados sobre el azul oscuro: texto activo 17.2:1, inactivo
+   8.8:1, item seleccionado 11.7:1. */
+.aero.aero-shell { display: flex; align-items: stretch; min-height: 100vh; }
+.aero .aero-sidebar {
+  --nav: #0e1c2b;
+  --nav-activo: #123a5e;
+  position: sticky; top: 0; align-self: flex-start;
+  display: flex; flex-direction: column; gap: 6px;
+  width: 236px; height: 100vh; flex: 0 0 236px;
+  padding: 14px 12px; background: var(--nav); color: #ffffff;
+  transition: width var(--t), flex-basis var(--t);
+}
+.aero.sidebar-collapsed .aero-sidebar { width: 68px; flex-basis: 68px; }
+.aero .aero-content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+.aero .sidebar-brand { display: flex; align-items: center; gap: 9px; padding: 6px 8px 14px; }
+.aero .sidebar-brand svg { color: #7fc4ff; flex: 0 0 auto; }
+.aero .sidebar-brand strong {
+  font-family: 'Big Shoulders Display', 'Barlow Semi Condensed', sans-serif;
+  font-size: 23px; font-weight: 800; letter-spacing: .2px; white-space: nowrap;
+}
+.aero .sidebar-toggle { margin-left: auto; padding: 6px; color: #a8bccd; border-color: transparent; background: transparent; }
+.aero .sidebar-toggle:hover:not(:disabled) { background: #ffffff1a; border-color: transparent; color: #ffffff; }
+
+.aero .sidebar-nav { display: grid; gap: 3px; }
+.aero .sidebar-nav button {
+  justify-content: flex-start; gap: 11px; width: 100%;
+  padding: 10px 11px; border: 0; border-radius: 9px;
+  background: transparent; color: #a8bccd; font-size: 13px; font-weight: 500;
+  transition: background var(--t), color var(--t);
+}
+.aero .sidebar-nav button svg { flex: 0 0 auto; }
+.aero .sidebar-nav button span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aero .sidebar-nav button:hover:not(:disabled) { background: #ffffff14; color: #ffffff; border: 0; }
+.aero .sidebar-nav button.active { background: var(--nav-activo); color: #ffffff; font-weight: 600; }
+
+.aero .sidebar-user {
+  display: flex; align-items: center; gap: 9px; margin-top: auto;
+  padding: 10px 11px; border-top: 1px solid #ffffff1f; color: #a8bccd;
+}
+.aero .sidebar-user > svg { flex: 0 0 auto; }
+.aero .sidebar-user span { display: grid; min-width: 0; }
+.aero .sidebar-user strong { font-size: 12.5px; color: #ffffff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aero .sidebar-user small { font-size: 10.5px; color: #93a9bd; }
+.aero .sidebar-user .logout { margin-left: auto; padding: 6px; color: #a8bccd; background: transparent; border-color: transparent; }
+.aero .sidebar-user .logout:hover:not(:disabled) { background: #ffffff1a; color: #ffffff; border-color: transparent; }
+
+/* Plegada: solo iconos. El title de cada botón hace de tooltip nativo. */
+.aero.sidebar-collapsed .sidebar-brand strong,
+.aero.sidebar-collapsed .sidebar-nav button span,
+.aero.sidebar-collapsed .sidebar-user span { display: none; }
+.aero.sidebar-collapsed .sidebar-brand { justify-content: center; padding: 6px 0 14px; }
+.aero.sidebar-collapsed .sidebar-brand .sidebar-toggle { margin: 0; }
+.aero.sidebar-collapsed .sidebar-nav button,
+.aero.sidebar-collapsed .sidebar-user { justify-content: center; padding-left: 0; padding-right: 0; }
+.aero.sidebar-collapsed .sidebar-user .logout { margin-left: 0; }
+
+/* La cabecera ya no lleva el logo: vive en la barra lateral. */
+.aero .aero-content > .aero-header { padding: 13px 26px; gap: 18px; }
+.aero .header-indicators .estado { display: flex; align-items: center; gap: 7px; font-weight: 600; color: var(--tinta); }
+.aero .header-indicators .aviso { color: var(--senal-texto); font-weight: 600; }
+
+@media (max-width: 900px) {
+  .aero.aero-shell { flex-direction: column; }
+  .aero .aero-sidebar,
+  .aero.sidebar-collapsed .aero-sidebar {
+    position: static; width: auto; flex-basis: auto; height: auto;
+    flex-direction: row; align-items: center; gap: 10px; overflow-x: auto; padding: 10px 12px;
+  }
+  .aero .sidebar-brand { padding: 0 6px 0 0; }
+  .aero .sidebar-nav { grid-auto-flow: column; gap: 4px; }
+  .aero .sidebar-user { margin: 0 0 0 auto; border-top: 0; padding: 4px; }
+  .aero .sidebar-toggle { display: none; }
+  .aero.sidebar-collapsed .sidebar-nav button span { display: inline; }
+}
+
+/* Fila de KPI del panel de monitoreo: 5 tarjetas, no 4, así que no calza en
+   la rejilla fija de .metrics-row. auto-fit para que en pantallas angostas
+   las tarjetas bajen de línea en vez de aplastarse. */
+.aero .kpi-row { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+
+/* Zoom semántico: en qué nivel de detalle está el plano ahora mismo. */
+.aero .detail-indicator {
+  position: absolute; bottom: 12px; right: 14px; z-index: 4;
+  display: grid; gap: 1px; padding: 7px 11px;
+  background: var(--superficie); border: 1px solid var(--borde); border-radius: 9px;
+  box-shadow: 0 4px 14px #21374b1f; pointer-events: none; max-width: calc(100% - 28px);
+}
+.aero .detail-indicator strong { font-size: 11px; color: var(--tinta); letter-spacing: -.1px; }
+.aero .detail-indicator span { font-size: 10px; color: var(--tenue); }
+
+/* El grupo de personas responde al puntero; la persona sola ya lo hacía. */
+.aero .map-cluster { transition: opacity .12s; }
+.aero .map-cluster:hover { opacity: .85; }
+
+.aero .layer-auto {
+  display: flex; flex-direction: row; align-items: flex-start; gap: 8px;
+  margin: 2px 0 6px; padding: 8px; border-radius: 8px;
+  background: var(--accion-suave); border: 1px solid #d3e2f2;
+}
+.aero .layer-auto span { font-size: 11px; color: var(--tinta); }
+.aero .layer-auto small { display: block; margin-top: 2px; font-size: 10px; color: #0a4a8a; }
+
+@media (max-width: 640px) {
+  .aero .detail-indicator { bottom: 8px; right: 8px; padding: 5px 8px; }
+  .aero .detail-indicator span { display: none; }
+}
+
+/* Aviso de "iniciando" sobre el video: cubre un cuadro anterior que se quedó
+   pegado en pantalla mientras el servidor abre la fuente y carga el detector.
+   No hay forma honesta de saber cuánto falta (depende de la cámara y del
+   detector elegido), así que la barra es de progreso indeterminado, no un
+   porcentaje inventado. */
+.aero .video-starting {
+  position: absolute; inset: 0; z-index: 2;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  padding: 24px; text-align: center;
+  background: #031212ee;
+  color: #eaf4fb;
+}
+.aero .video-starting strong { font-size: 13px; }
+.aero .video-starting span { font-size: 11px; color: #a8c2ce; max-width: 320px; }
+.aero .video-starting .loader { margin-bottom: 4px; }
+.aero .indeterminate-bar {
+  width: 180px; height: 4px; margin-top: 6px; border-radius: 3px;
+  background: #ffffff1f; overflow: hidden;
+}
+.aero .indeterminate-bar > i {
+  display: block; width: 40%; height: 100%; border-radius: 3px;
+  background: #45b4ff;
+  animation: indeterminate-sweep 1.3s ease-in-out infinite;
+}
+@keyframes indeterminate-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+.aero .loader.small { width: 15px; height: 15px; border-width: 2px; margin: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .aero .indeterminate-bar > i { animation: none; width: 100%; }
+  .aero .video-starting .loader { animation: none; }
+}
+
+/* Proyecto sin cámaras: se dice qué falta en vez de dejar paneles vacíos. */
+.aero .monitor-empty {
+  display: grid; justify-items: start; gap: 10px;
+  padding: 28px 30px; max-width: 640px;
+}
+.aero .monitor-empty h2 { font-size: 19px; }
+.aero .monitor-empty p { color: var(--tinta-2); margin: 0; }

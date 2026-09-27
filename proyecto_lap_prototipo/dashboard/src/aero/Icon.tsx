@@ -25,6 +25,16 @@ export default function Icon({ name, size = 18, rotation=0 }: { name: string; si
     user: 'M16 6A4 4 0 1 1 8 6 4 4 0 0 1 16 6 M3 22V18A9 9 0 0 1 21 18V22Z',
     link: 'M9 15 15 9 M7 14 4 17A4 4 0 0 0 10 22L14 18 M10 6 14 2A4 4 0 0 1 20 8L17 11',
     trash: 'M3 5H21 M9 5V2H15V5 M5 5 6 22H18L19 5 M10 9V18 M14 9V18',
+    sun: 'M12 3V1 M12 23V21 M3 12H1 M23 12H21 M4.2 4.2 2.8 2.8 M21.2 21.2 19.8 19.8 M19.8 4.2 21.2 2.8 M2.8 21.2 4.2 19.8 M17 12A5 5 0 1 1 7 12 5 5 0 0 1 17 12',
+    moon: 'M20.5 15.2A8.5 8.5 0 0 1 8.8 3.5 8.5 8.5 0 1 0 20.5 15.2Z',
+    search: 'M21 21 16.7 16.7 M19 11A8 8 0 1 1 3 11 8 8 0 0 1 19 11',
+    play: 'M7 4 20 12 7 20Z',
+    stop: 'M6 6H18V18H6Z',
+    sliders: 'M4 6H20 M4 12H20 M4 18H20 M8 4V8 M16 10V14 M11 16V20',
+    bell: 'M18 8A6 6 0 0 0 6 8C6 15 3 16 3 18H21C21 16 18 15 18 8 M10 21H14',
+    panelOpen: 'M4 3H20V21H4Z M10 3V21 M14 9 17 12 14 15',
+    panelClose: 'M4 3H20V21H4Z M10 3V21 M17 9 14 12 17 15',
+    logout: 'M10 4H5V20H10 M14 8 18 12 14 16 M8 12H18',
   };
   return <svg style={rotation?{transform:`rotate(${rotation}deg)`}:undefined} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name] || paths.grid}/></svg>;
 }

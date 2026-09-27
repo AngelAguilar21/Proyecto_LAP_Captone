@@ -1,8 +1,40 @@
-from pathlib import Path
+import contextlib
+import os
 import threading
 import time
+from pathlib import Path
 
 import cv2
+
+# Protege la variable de entorno global de FFmpeg mientras se abre una captura.
+# Sin el candado, dos hilos que abren cámaras RTSP a la vez podrían pisarse la
+# configuración de baja latencia entre sí.
+_ffmpeg_lock = threading.Lock()
+
+
+@contextlib.contextmanager
+def low_latency_ffmpeg():
+    """Evita que FFmpeg acumule segundos de video en un stream en vivo.
+
+    Sin estas banderas, el demuxer de FFmpeg guarda varios segundos de cuadros
+    antes de entregarlos, y ese retraso crece sin parar aunque se lea al ritmo
+    que llegan: el problema está dentro de FFmpeg, no en el bucle de lectura.
+    `OPENCV_FFMPEG_CAPTURE_OPTIONS` solo se lee al abrir la captura, así que
+    basta con que estas banderas estén puestas durante el `cv2.VideoCapture(...)`,
+    y se restaura el valor anterior al salir porque es una variable de entorno
+    del proceso, no de esta captura en particular.
+    """
+    with _ffmpeg_lock:
+        clave = "OPENCV_FFMPEG_CAPTURE_OPTIONS"
+        previo = os.environ.get(clave)
+        os.environ[clave] = "rtsp_transport;tcp|fflags;nobuffer|flags;low_delay|max_delay;0|reorder_queue_size;0"
+        try:
+            yield
+        finally:
+            if previo is None:
+                os.environ.pop(clave, None)
+            else:
+                os.environ[clave] = previo
 
 
 class VideoSource:
@@ -15,8 +47,15 @@ class VideoSource:
             self.capture.set(cv2.CAP_PROP_FRAME_WIDTH,1280)
             self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT,720)
         elif self.live:
-            self.capture = cv2.VideoCapture(source, cv2.CAP_FFMPEG,
-                [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000, cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000])
+            with low_latency_ffmpeg():
+                self.capture = cv2.VideoCapture(source, cv2.CAP_FFMPEG,
+                    [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000, cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000])
+            try:
+                # Complementa las banderas de FFmpeg: sin esto OpenCV puede
+                # quedarse con un cuadro más en su propia cola interna.
+                self.capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            except cv2.error:
+                pass
         else:
             path = Path(source)
             path = path if path.is_absolute() else root/path

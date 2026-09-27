@@ -84,8 +84,28 @@ def entry(index, pid):
     return next((p for p in index["projects"] if p["id"] == pid), None)
 
 
+def check_name(index, name, ignore=None):
+    """Cada proyecto es un espacio distinto, así que dos no pueden llamarse igual.
+
+    Con nombres repetidos la lista deja de servir para elegir: no hay forma de
+    saber cuál plano y cuáles cámaras hay detrás de cada uno. Se compara sin
+    distinguir mayúsculas ni espacios de sobra, que es como los lee una persona.
+    """
+    clean = " ".join(name.split())
+    if not clean:
+        raise ValueError("Escribe un nombre para el proyecto.")
+    if len(clean) > 80:
+        raise ValueError("El nombre no puede pasar de 80 caracteres.")
+    taken = next((p for p in index["projects"]
+                  if p["id"] != ignore and " ".join(str(p.get("name", "")).split()).casefold() == clean.casefold()), None)
+    if taken:
+        raise ValueError(f"Ya existe un proyecto llamado «{taken['name']}». Usa otro nombre para distinguirlos.")
+    return clean
+
+
 def create(root, name, config):
     index = read_index(root) or {"active": None, "projects": []}
+    name = check_name(index, name)
     pid = "p-" + secrets.token_hex(4)
     atomic_write(project_path(root, pid), json.dumps(config, ensure_ascii=False, indent=2))
     now = time.time()
@@ -99,7 +119,7 @@ def rename(root, pid, name):
     index = read_index(root)
     if not index or not entry(index, pid):
         raise ValueError("El proyecto no existe.")
-    entry(index, pid)["name"] = name
+    entry(index, pid)["name"] = check_name(index, name, ignore=pid)
     entry(index, pid)["updated"] = time.time()
     write_index(root, index)
 

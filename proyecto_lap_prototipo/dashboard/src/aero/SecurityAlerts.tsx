@@ -13,6 +13,7 @@ type Alert = {
   id: string; at: number; zone: string; camera: string; cameraId?: string;
   people: number; duration: number; threshold: number; dwell: number; open: boolean; origin: 'camera' | 'plan';
 };
+const crowdIncidents = (items: Incidente[] = []) => items.filter(item => item.tipo !== 'equipaje');
 
 function beep() {
   try {
@@ -79,7 +80,7 @@ export default function SecurityAlerts({ session, onOpenCamera }: { session: Ses
   // diferencia de las alertas de arriba, que solo existen mientras corre.
   const loadLog = useCallback(() => {
     void fetch('/api/incidents').then(r => r.json())
-      .then(data => { setLog(data.incidentes || []); setLogError(data.error || ''); })
+      .then(data => { setLog(crowdIncidents(data.incidentes)); setLogError(data.error || ''); })
       .catch(() => setLogError('No se pudo leer la bitácora.'));
   }, []);
   useEffect(() => { loadLog(); }, [loadLog, state.session]);
@@ -88,7 +89,7 @@ export default function SecurityAlerts({ session, onOpenCamera }: { session: Ses
   function markIncident(id: string, estado: string) {
     void session.action(async () => {
       const data = await session.post('incidents', { id, estado });
-      setLog(data.incidentes || []);
+      setLog(crowdIncidents(data.incidentes));
       session.setNotice('Incidente actualizado.');
     });
   }
@@ -110,15 +111,6 @@ export default function SecurityAlerts({ session, onOpenCamera }: { session: Ses
   function toggleSound() {
     setSound(value => { const next = !value; try { localStorage.setItem('aero.alerts.sound', next ? 'on' : 'off'); } catch { /* modo privado */ } if (next) beep(); return next; });
   }
-
-  const luggage = Object.entries(state.cameraAnalytics || {}).flatMap(([cameraId, analytics]) => {
-    const watch = (analytics as any).luggage;
-    if (!watch) return [];
-    const camera = config?.cameras.find(c => c.id === cameraId);
-    return (watch.items || []).filter((item: any) => item.alert).map((item: any) => ({
-      ...item, cameraId, camera: camera?.name || cameraId, dwell: watch.dwell,
-    }));
-  });
 
   const open = alerts.filter(a => a.open).length;
   const pendingLog = log.filter(i => i.estado === 'pendiente').length;
@@ -168,7 +160,7 @@ export default function SecurityAlerts({ session, onOpenCamera }: { session: Ses
               </span>
             </div>
             <div className="alert-what">
-              <strong>{item.tipo === 'equipaje' ? 'Equipaje sin custodia' : `Aglomeración en ${item.zona || 'zona sin nombre'}`}</strong>
+              <strong>Aglomeración en {item.zona || 'zona sin nombre'}</strong>
               <small>{String(item.detalle?.camara || item.camaraId || 'Plano')}</small>
               <p>
                 {item.pico != null && <>Máximo de <b>{Math.round(item.pico)} personas</b>. </>}
@@ -187,21 +179,6 @@ export default function SecurityAlerts({ session, onOpenCamera }: { session: Ses
           </article>)}
         </div>}
     </section>
-
-    {luggage.length > 0 && <section className="aero-panel">
-      <div className="panel-heading"><div><h2>Equipaje sin custodia</h2><p className="subtle">Bultos que llevan quietos más del tiempo configurado. Requiere revisión de una persona: el sistema no distingue una maleta olvidada de una que alguien dejó a su lado mientras espera.</p></div><span className="pill warn">{luggage.length}</span></div>
-      <div className="alert-log">
-        {luggage.map((item: any) => <article className="alert-row open" key={item.cameraId + item.id}>
-          <div className="alert-when"><strong>{formatTime(item.since)}</strong><span className="pill warn">Sin custodia</span></div>
-          <div className="alert-what">
-            <strong>{item.kind ? item.kind[0].toUpperCase() + item.kind.slice(1) : 'Bulto'} {item.id}</strong>
-            <small>{item.camera}</small>
-            <p>Lleva <b>{Math.round(item.duration)} s</b> sin moverse. El aviso salta a partir de {Math.round(item.dwell)} s.</p>
-          </div>
-          <div className="alert-actions"><button onClick={() => onOpenCamera(item.cameraId)}><Icon name="camera" size={14} /> Ver cámara</button></div>
-        </article>)}
-      </div>
-    </section>}
 
     {!alerts.length
       ? <p className="empty-text">Sin alertas de aglomeración en esta sesión. Aparecen cuando una zona supera su umbral de personas durante el tiempo configurado.</p>

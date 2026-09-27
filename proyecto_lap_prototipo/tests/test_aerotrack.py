@@ -1,4 +1,5 @@
 """API, lifecycle and generalized configuration checks without modifying user data."""
+import base64
 import copy
 import io
 import json
@@ -10,6 +11,8 @@ import time
 import unittest
 from urllib.error import HTTPError
 from urllib.request import Request,urlopen
+from types import SimpleNamespace
+from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
@@ -70,6 +73,11 @@ class AeroTrackTests(unittest.TestCase):
         self.engine.configure(config)
         with self.assertRaises(ValueError):
             self.engine.start({"detector":"demo"})
+
+    def test_only_p2pnet_or_demo_can_start(self):
+        for legacy in ("yolo", "hog"):
+            with self.subTest(detector=legacy), self.assertRaisesRegex(ValueError, "P2PNet"):
+                self.engine.start({"detector":legacy})
 
     def test_csrf_blocks_cross_origin_mutations(self):
         with self.assertRaises(HTTPError) as missing:
@@ -156,14 +164,19 @@ class AeroTrackTests(unittest.TestCase):
         writer.release()
         cfg=default_config()
         original=cfg['cameras'][0]
-        cfg['cameras']=[{**copy.deepcopy(original),'id':f'C-{i}','source':str(path),'links':[]} for i in range(3)]
+        pairs=[[0,0,0,0],[1,0,12,0],[1,1,12,8],[0,1,0,8]]
+        zone=[[0,0],[1,0],[1,1],[0,1]]
+        cfg['cameras']=[{**copy.deepcopy(original),'id':f'C-{i}','source':str(path),'links':[],
+                         'pairs':pairs,'detectionZone':zone,'height':4,'illustrative':False} for i in range(3)]
         self.engine.configure(cfg)
-        self.engine.start({'detector':'hog'})
-        self.wait_status('ended',timeout=20)
-        self.assertEqual(len(self.engine.source_checks),3)
-        self.assertEqual(len(self.engine.frames),3)
-        self.assertTrue(all(c['status']=='ended' for c in self.engine.snapshot()['cameras']))
-        self.assertEqual(self.request('/api/frame?camera=C-0').status,200)
+        fake_detector=SimpleNamespace(detectar=lambda frame: [])
+        with patch.object(self.engine,'load_detector',return_value=fake_detector):
+            self.engine.start({'detector':'p2pnet'})
+            self.wait_status('ended',timeout=20)
+            self.assertEqual(len(self.engine.source_checks),3)
+            self.assertEqual(len(self.engine.frames),3)
+            self.assertTrue(all(c['status']=='ended' for c in self.engine.snapshot()['cameras']))
+            self.assertEqual(self.request('/api/frame?camera=C-0').status,200)
 
     def test_plan_image_import_preserves_aspect_and_dxf_maps_geometry(self):
         from PIL import Image
@@ -172,7 +185,15 @@ class AeroTrackTests(unittest.TestCase):
         image.save(buffer,format='PNG')
         result=import_plan(buffer.getvalue(),'plan.png',12)
         self.assertEqual(result['height'],6)
-        self.assertTrue(result['background'].startswith('data:image/jpeg;base64,'))
+        # WebP por defecto, porque un plano es dibujo de linea y ahi JPEG pesa
+        # mucho mas y ademas lo ensucia; JPEG queda como respaldo si Pillow no
+        # trae WebP. El aspecto es lo que no puede cambiar: si no coincidiera con
+        # el de la imagen, el plano se veria deformado o recortado.
+        self.assertTrue(result['background'].startswith(('data:image/webp;base64,','data:image/jpeg;base64,')),result['background'][:32])
+        guardada=Image.open(io.BytesIO(base64.b64decode(result['background'].split(',',1)[1])))
+        self.assertAlmostEqual(guardada.width/guardada.height,result['width']/result['height'],places=6)
+        # una imagen chica no se agranda: el tope solo recorta hacia abajo
+        self.assertEqual((guardada.width,guardada.height),(400,200))
         dxf='0\nSECTION\n2\nENTITIES\n0\nLWPOLYLINE\n8\nSALA\n90\n4\n70\n1\n10\n0\n20\n0\n10\n12\n20\n0\n10\n12\n20\n8\n10\n0\n20\n8\n0\nENDSEC\n0\nEOF\n'
         result=import_plan(dxf.encode(),'plan.dxf',12)
         self.assertEqual(result['height'],8)

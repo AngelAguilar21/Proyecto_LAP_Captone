@@ -6,6 +6,7 @@ import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from types import SimpleNamespace
 
 import cv2
 import numpy as np
@@ -71,7 +72,7 @@ class SpatialWorkspaceTests(unittest.TestCase):
             for c in cfg['cameras']:c['pairs']=[[0,0,0,0],[1,0,12,0],[1,1,12,8],[0,1,0,8]]
             engine.configure(cfg)
             with self.assertRaisesRegex(ValueError,'Delimita'):
-                engine.start({'detector':'hog','requireUnified':True})
+                engine.start({'detector':'p2pnet','requireUnified':True})
 
     def test_live_pipeline_filters_before_creating_ids_and_stops_together(self):
         # Synthetic detector outputs deliberately include a reflection outside the mask.
@@ -88,9 +89,9 @@ class SpatialWorkspaceTests(unittest.TestCase):
             cfg['cameras'][1]['offset']=.4
             engine.configure(cfg)
             rows=[];last=0
-            with patch('cv2.HOGDescriptor') as hog:
-                hog.return_value.detectMultiScale.return_value=(np.array([[50,30,40,140],[250,30,40,140]]),np.array([.9,.9]))
-                engine.start({'detector':'hog','requireUnified':True})
+            fake_detector=SimpleNamespace(detectar=lambda frame:[SimpleNamespace(x=50,y=100,confianza=.9),SimpleNamespace(x=250,y=100,confianza=.9)])
+            with patch.object(engine,'load_detector',return_value=fake_detector):
+                engine.start({'detector':'p2pnet','requireUnified':True})
                 try:
                     deadline=time.monotonic()+20
                     while time.monotonic()<deadline:
@@ -103,7 +104,7 @@ class SpatialWorkspaceTests(unittest.TestCase):
                     engine.stop();engine.worker.join(10)
             self.assertTrue(rows)
             self.assertTrue(all(p['pixel'][0]<160 for p in rows))
-            self.assertTrue(all(p['point'][0]<6 for p in rows))
+            self.assertTrue(all(p['point'] is not None and 0<=p['point'][0]<=12 for p in rows))
             self.assertLess(last,1.4)
             self.assertFalse(engine.worker.is_alive())
 

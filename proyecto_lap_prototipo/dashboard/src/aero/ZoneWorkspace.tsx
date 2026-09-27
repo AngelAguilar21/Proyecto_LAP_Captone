@@ -1,23 +1,103 @@
 import {useEffect,useState} from 'react';
 import type {Session} from './useSession';
 import {EMPTY_STATE,isActive} from './types';
-import type {HeatCell,Point} from './types';
+import type {HeatCell,Point,Zone} from './types';
 import MapCanvas from './MapCanvas';
 import type {MapTool} from './MapCanvas';
 import PlanSelector from './PlanSelector';
 
-function suggestions(heat:HeatCell[]){
- const remaining=[...heat].sort((a,b)=>b.seconds-a.seconds).slice(0,30),groups:HeatCell[][]=[];
- while(remaining.length){const group=[remaining.shift()!];let changed=true;while(changed){changed=false;for(let i=remaining.length-1;i>=0;i--){const c=remaining[i];if(group.some(a=>Math.abs(a.x-c.x)<=Math.max(a.size,c.size)*1.01&&Math.abs(a.y-c.y)<=Math.max(a.size,c.size)*1.01)){group.push(c);remaining.splice(i,1);changed=true;}}}groups.push(group);}
- return groups.sort((a,b)=>b.reduce((n,c)=>n+c.seconds,0)-a.reduce((n,c)=>n+c.seconds,0)).slice(0,5).map(group=>{const x=Math.min(...group.map(c=>c.x)),y=Math.min(...group.map(c=>c.y)),right=Math.max(...group.map(c=>c.x+c.size)),bottom=Math.max(...group.map(c=>c.y+c.size));return {points:[[x,y],[right,y],[right,bottom],[x,bottom]] as Point[],cells:group.length};});
+function inside(point:Point,polygon:Point[]){
+ let hit=false;
+ for(let i=0,j=polygon.length-1;i<polygon.length;j=i++){
+  const [xi,yi]=polygon[i],[xj,yj]=polygon[j];
+  if(((yi>point[1])!==(yj>point[1]))&&(point[0]<(xj-xi)*(point[1]-yi)/(yj-yi)+xi))hit=!hit;
+ }
+ return hit;
 }
+
+function suggestions(heat:HeatCell[],zones:Zone[]){
+ const occupied=zones.filter(zone=>zone.kind==='commercial'||zone.source==='system');
+ const remaining=heat.filter(cell=>!occupied.some(zone=>inside([cell.x+cell.size/2,cell.y+cell.size/2],zone.points)))
+  .sort((a,b)=>(b.seconds+(b.visits||0)*4+b.peak*2)-(a.seconds+(a.visits||0)*4+a.peak*2)).slice(0,40);
+ const groups:HeatCell[][]=[];
+ while(remaining.length){
+  const group=[remaining.shift()!];let changed=true;
+  while(changed){changed=false;for(let i=remaining.length-1;i>=0;i--){const cell=remaining[i];if(group.some(other=>Math.abs(other.x-cell.x)<=Math.max(other.size,cell.size)*1.01&&Math.abs(other.y-cell.y)<=Math.max(other.size,cell.size)*1.01)){group.push(cell);remaining.splice(i,1);changed=true;}}}
+  groups.push(group);
+ }
+ return groups.map(group=>{
+  const x=Math.min(...group.map(cell=>cell.x)),y=Math.min(...group.map(cell=>cell.y));
+  const right=Math.max(...group.map(cell=>cell.x+cell.size)),bottom=Math.max(...group.map(cell=>cell.y+cell.size));
+  const seconds=group.reduce((total,cell)=>total+cell.seconds,0),visits=Math.max(...group.map(cell=>cell.visits||0)),peak=Math.max(...group.map(cell=>cell.peak));
+  return {points:[[x,y],[right,y],[right,bottom],[x,bottom]] as Point[],cells:group.length,seconds,visits,peak,area:(right-x)*(bottom-y),score:seconds+visits*4+peak*2};
+ }).sort((a,b)=>b.score-a.score).slice(0,5);
+}
+
+const categories={retail:'Tienda',food:'Alimentos y bebidas',service:'Servicios',other:'Otro'} as const;
 
 export default function ZoneWorkspace({session}:{session:Session}){
  const config=session.config!,busy=isActive(session.state.status),pid=config.planId||'custom';
  const [tool,setTool]=useState<MapTool>('select'),[selected,setSelected]=useState('');
- const [heat,setHeat]=useState<HeatCell[]>([]),[source,setSource]=useState(''),[loading,setLoading]=useState(false);
- useEffect(()=>{let alive=true;setHeat([]);setSource('');if(busy){setHeat((session.state as any).levelAnalytics?.[pid]?.heat||(session.state.planId===pid?session.state.analytics.heat:[]));setSource('Monitoreo en curso');return;}
-  setLoading(true);void fetch('/api/replay/history').then(r=>r.json()).then(async list=>{const run=list.find((r:any)=>r.end>0&&r.module==='unified'&&r.cameras.some((c:any)=>(c.planId||r.config.planId)===pid));if(!run)return;const response=await fetch(`/api/replay/data?session=${run.session}&projection=current`);if(!response.ok)throw Error();const data=await response.json(),last=data.samples?.[data.samples.length-1];if(alive){setHeat(last?.levels?.[pid]?.heat||(data.config.planId===pid?last?.analytics?.heat:[])||[]);setSource(`Análisis del ${new Date(run.created).toLocaleString('es-PE')}`);}}).catch(()=>{if(alive)setSource('No se pudo cargar el análisis para sugerencias.');}).finally(()=>{if(alive)setLoading(false);});return()=>{alive=false;};
+ const [heat,setHeat]=useState<HeatCell[]>([]),[zoneMetrics,setZoneMetrics]=useState<any[]>([]),[source,setSource]=useState(''),[loading,setLoading]=useState(false);
+ const businesses=config.zones.filter(zone=>zone.kind==='commercial');
+ const recommended=config.zones.filter(zone=>zone.source==='system');
+ const legacyRois=config.zones.filter(zone=>zone.kind==='roi'&&zone.source!=='system');
+ const hasBusinesses=config.commercialContext?.hasBusinesses??businesses.length>0;
+ const opportunities=suggestions(heat,config.zones);
+ const analysisState={...EMPTY_STATE,status:'ended',planId:pid,analytics:{...EMPTY_STATE.analytics,heat}};
+
+ useEffect(()=>{let alive=true;setHeat([]);setZoneMetrics([]);setSource('');if(busy){const analytics=(session.state as any).levelAnalytics?.[pid]||(session.state.planId===pid?session.state.analytics:EMPTY_STATE.analytics);setHeat(analytics.heat||[]);setZoneMetrics(analytics.zones||[]);setSource('Monitoreo en curso');return;}
+  setLoading(true);void fetch('/api/replay/history').then(r=>r.json()).then(async list=>{const run=list.find((row:any)=>row.end>0&&row.module==='unified'&&row.cameras.some((camera:any)=>(camera.planId||row.config.planId)===pid));if(!run)return;const response=await fetch(`/api/replay/data?session=${run.session}&projection=current`);if(!response.ok)throw Error();const data=await response.json(),last=data.samples?.[data.samples.length-1],analytics=last?.levels?.[pid]||(data.config.planId===pid?last?.analytics:EMPTY_STATE.analytics);if(alive){setHeat(analytics?.heat||[]);setZoneMetrics(analytics?.zones||[]);setSource(`Análisis del ${new Date(run.created).toLocaleString('es-PE')}`);}}).catch(()=>{if(alive)setSource('No se pudo cargar el análisis para generar oportunidades.');}).finally(()=>{if(alive)setLoading(false);});return()=>{alive=false;};
  },[pid,busy,session.state.session]);
- return <div className="zone-workspace"><div className="page-heading"><div><h1>Zonas de interés</h1><p>Define ubicaciones para medir su ocupación y detectar concentraciones.</p></div></div><PlanSelector config={config} disabled={busy} onChange={session.setConfig}/><p className="summary-context">Las cámaras calibradas aportan las posiciones que caen dentro de cada zona del plano. Las zonas de imagen, en cambio, delimitan una sola toma. Selecciona «Mover» y toca una zona para editar sus vértices.</p><div className="zones-grid"><section className="aero-panel"><MapCanvas zonesOnly config={config} state={EMPTY_STATE} connected selectedCamera={selected} onCamera={setSelected} editable={!busy} onChange={session.setConfig} tool={tool} onTool={setTool}/></section><section className="aero-panel zone-list"><h2>Zonas de este nivel</h2>{config.zones.map((z,i)=><div className="zone-record" key={z.id||i}><label>Nombre<input disabled={busy} value={z.name} maxLength={80} onChange={e=>session.setConfig({...config,zones:config.zones.map((v,j)=>i===j?{...v,name:e.target.value}:v)})}/></label><label>Uso<select disabled={busy} value={z.kind||'roi'} onChange={e=>session.setConfig({...config,zones:config.zones.map((v,j)=>i===j?{...v,kind:e.target.value as typeof v.kind}:v)})}>{Object.entries({roi:'Observación general',commercial:'Comercio',queue:'Cola',restricted:'Acceso restringido',room:'Sala',corridor:'Pasillo',wall:'Muro',door:'Puerta'}).map(([id,name])=><option value={id} key={id}>{name}</option>)}</select></label><button disabled={busy} onClick={()=>session.setConfig({...config,zones:config.zones.filter((_,j)=>j!==i)})}>Eliminar zona</button><small>{z.points.length} vértices · {z.rule?.enabled?'Alerta configurada':'Sin alerta automática'}</small></div>)}{!config.zones.length&&<p className="empty-text">Usa Polígono o Rectángulo sobre el mapa para crear una zona.</p>}<h3>Sugerencias por presencia</h3><small>{loading?'Consultando resultados…':source}</small>{suggestions(heat).map((s,i)=><div className="suggestion" key={i}><div><strong>Área sugerida {i+1}</strong><small>{s.cells} sectores contiguos con presencia</small></div><button disabled={busy} onClick={()=>{session.setConfig({...config,zones:[...config.zones,{id:crypto.randomUUID(),name:`Área sugerida ${config.zones.length+1}`,kind:'roi',shape:'polygon',points:s.points.map(p=>[Math.max(0,Math.min(config.width,p[0])),Math.max(0,Math.min(config.height,p[1]))])}]});setTool('move');session.setNotice('Zona añadida. Tócala en el mapa para ajustar sus vértices y guarda los cambios.');}}>Añadir y editar</button></div>)}{!loading&&!heat.length&&<p className="subtle">Las sugerencias aparecerán después de procesar cámaras calibradas de este nivel.</p>}<p className="subtle">Las propuestas requieren revisión. Ajusta sus límites y su nombre antes de guardarlas. Configura sus umbrales en Alertas del plano.</p></section></div></div>;
+
+ function updateBusiness(index:number,patch:NonNullable<Zone['business']>){
+  const zone=businesses[index],zoneIndex=config.zones.indexOf(zone);
+  session.setConfig({...config,zones:config.zones.map((item,i)=>i===zoneIndex?{...item,business:{...item.business,...patch}}:item)});
+ }
+ function numberValue(index:number,key:keyof NonNullable<Zone['business']>,value:string){
+  const parsed=value===''?undefined:Math.max(0,Number(value));
+  updateBusiness(index,{[key]:Number.isFinite(parsed)?parsed:undefined});
+ }
+ function accept(points:Point[]){
+  const ordinal=recommended.length+1;
+  session.setConfig({...config,zones:[...config.zones,{id:crypto.randomUUID(),name:`Oportunidad detectada ${ordinal}`,kind:'roi',shape:'polygon',source:'system',points:points.map(point=>[Math.max(0,Math.min(config.width,point[0])),Math.max(0,Math.min(config.height,point[1]))])}]});
+  session.setNotice('Oportunidad guardada desde el análisis. Puedes revisar su posición, pero su origen seguirá identificado como recomendación del sistema.');
+ }
+
+ return <div className="zone-workspace opportunity-workspace">
+  <div className="page-heading"><div><h1>Oportunidades recomendadas</h1><p>AeroTrack encuentra nuevos puntos de interés a partir del flujo observado. Tú solo aportas el contexto comercial conocido.</p></div></div>
+  <PlanSelector config={config} disabled={busy} onChange={session.setConfig}/>
+  <section className="aero-panel commercial-context">
+   <header><div><h2>Contexto comercial del piso</h2><p>Indica si ya existen negocios. Sus medidas ayudan a separar locales actuales de oportunidades nuevas.</p></div><div className="context-choice" role="group" aria-label="¿Este piso tiene negocios?"><button className={!hasBusinesses?'selected':''} disabled={busy} onClick={()=>session.setConfig({...config,commercialContext:{hasBusinesses:false}})}>No hay negocios</button><button className={hasBusinesses?'selected':''} disabled={busy} onClick={()=>session.setConfig({...config,commercialContext:{hasBusinesses:true}})}>Sí hay negocios</button></div></header>
+   {hasBusinesses&&<p className="commercial-instruction">Dibuja únicamente la huella de cada negocio existente con Polígono o Rectángulo. Las zonas ROI no se dibujan aquí: AeroTrack las propone después del análisis.</p>}
+  </section>
+  <div className="opportunity-layout">
+   <section className="aero-panel opportunity-map"><MapCanvas zonesOnly zoneMode="business" config={config} state={analysisState} connected selectedCamera={selected} onCamera={setSelected} editable={!busy&&hasBusinesses} onChange={session.setConfig} tool={tool} onTool={setTool}/></section>
+   <section className="aero-panel business-register">
+    <header><h2>Negocios existentes</h2><span>{businesses.length} registrados</span></header>
+    {!hasBusinesses&&<p className="empty-text">Marcaste que este piso no contiene negocios. El sistema buscará oportunidades usando únicamente el flujo peatonal.</p>}
+    {hasBusinesses&&!businesses.length&&<p className="empty-text">Dibuja el primer negocio sobre el plano. Después completa sus medidas y capacidad.</p>}
+    {businesses.map((zone,index)=>{const measured=zoneMetrics.find(metric=>metric.name===zone.name);return <article className="business-record" key={zone.id||index}>
+     <div className="business-record-head"><input aria-label="Nombre del negocio" value={zone.name} onChange={event=>session.setConfig({...config,zones:config.zones.map(item=>item===zone?{...item,name:event.target.value}:item)})}/><button disabled={busy} onClick={()=>session.setConfig({...config,zones:config.zones.filter(item=>item!==zone)})}>Eliminar</button></div>
+     <div className="business-fields">
+      <label>Tipo<select value={zone.business?.category||'other'} onChange={event=>updateBusiness(index,{category:event.target.value as NonNullable<Zone['business']>['category']})}>{Object.entries(categories).map(([value,label])=><option value={value} key={value}>{label}</option>)}</select></label>
+      <label>Ancho (m)<input type="number" min="0" step="0.1" value={zone.business?.widthM??''} onChange={event=>numberValue(index,'widthM',event.target.value)}/></label>
+      <label>Fondo (m)<input type="number" min="0" step="0.1" value={zone.business?.depthM??''} onChange={event=>numberValue(index,'depthM',event.target.value)}/></label>
+      <label>Área útil (m²)<input type="number" min="0" step="0.1" value={zone.business?.areaM2??''} onChange={event=>numberValue(index,'areaM2',event.target.value)}/></label>
+      <label>Capacidad<input type="number" min="0" step="1" value={zone.business?.capacity??''} onChange={event=>numberValue(index,'capacity',event.target.value)}/></label>
+      <label>Acceso (m)<input type="number" min="0" step="0.1" value={zone.business?.entranceWidthM??''} onChange={event=>numberValue(index,'entranceWidthM',event.target.value)}/></label>
+     </div>
+     <p className="business-observation">{measured?`Flujo observado: ${measured.visits||0} visitas · pico ${measured.peak||0}${zone.business?.capacity?` de ${zone.business.capacity} personas de capacidad`:''}`:'El próximo monitoreo calculará visitas, pico y permanencia dentro de esta huella.'}</p>
+    </article>})}
+   </section>
+  </div>
+  <section className="aero-panel system-opportunities">
+   <header><div><h2>Nuevos puntos sugeridos por AeroTrack</h2><p>{loading?'Analizando resultados…':source||'Aún no hay un análisis compatible.'}</p></div><span>{opportunities.length} propuestas</span></header>
+   {!!legacyRois.length&&<div className="legacy-zones"><div><strong>{legacyRois.length} ROI manuales heredadas</strong><p>No se presentan como recomendaciones de AeroTrack. Puedes retirarlas para trabajar únicamente con hallazgos automáticos.</p></div>{legacyRois.map(zone=><button key={zone.id||zone.name} disabled={busy} onClick={()=>session.setConfig({...config,zones:config.zones.filter(item=>item!==zone)})}>Retirar {zone.name}</button>)}</div>}
+   <div className="opportunity-cards">{opportunities.map((item,index)=><article key={`${item.points[0][0]}-${item.points[0][1]}`}><div><strong>Oportunidad {index+1}</strong><span>Prioridad {index===0?'alta':index<3?'media':'exploratoria'}</span></div><dl><div><dt>Visitas estimadas</dt><dd>{item.visits||'—'}</dd></div><div><dt>Pico observado</dt><dd>{item.peak}</dd></div><div><dt>Presencia acumulada</dt><dd>{Math.round(item.seconds)} persona-s</dd></div><div><dt>Superficie analizada</dt><dd>{item.area.toFixed(1)} {config.unit==='meters'?'m²':'u²'}</dd></div></dl><button className="primary" disabled={busy} onClick={()=>accept(item.points)}>Guardar recomendación</button></article>)}</div>
+   {!loading&&!heat.length&&<p className="empty-text">Procesa las cámaras calibradas de este piso. AeroTrack agrupará automáticamente los sectores con más visitas, permanencia y concentración.</p>}
+   {!loading&&heat.length&&!opportunities.length&&<p className="empty-text">Los sectores con actividad ya pertenecen a negocios u oportunidades guardadas. Se necesitan nuevas observaciones para proponer otro punto.</p>}
+   {!!recommended.length&&<div className="saved-opportunities"><strong>Recomendaciones guardadas</strong>{recommended.map(zone=><span key={zone.id}>{zone.name} · generada por el sistema</span>)}</div>}
+  </section>
+ </div>;
 }

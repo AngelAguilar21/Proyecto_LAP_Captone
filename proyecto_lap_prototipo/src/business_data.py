@@ -67,7 +67,7 @@ CREATE INDEX IF NOT EXISTS idx_trafico_zona_hora_dia ON trafico_historico (zona,
 """
 
 ESTADOS_VALIDOS = {"pendiente", "revisado", "falsa_alarma", "resuelto"}
-TIPOS_VALIDOS = {"aglomeracion", "equipaje"}
+TIPOS_VALIDOS = {"aglomeracion"}
 
 
 def path_for(project_path):

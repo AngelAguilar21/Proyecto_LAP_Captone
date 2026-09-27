@@ -1,0 +1,128 @@
+/* AeroTrack 2.0 — capa final del sistema de diseño (Enterprise SaaS + AI Ops Center).
+   Se carga después de todas las hojas anteriores: es la autoridad de color y
+   tipografía. No toca layout/estructura, solo cierra la brecha entre el tema
+   navy/azul/cian que ya arrancó overview-v2.css y el acento ámbar/dorado que
+   todavía queda vivo en aero.css/operations.css (botones seleccionados,
+   pestañas activas, tarjetas de modo, panel-number, etc.). */
+
+.aero {
+  --navy: #061b33;
+  --background: #f4f7fb;
+  --surface: #ffffff;
+  --surface-secondary: #f8fafc;
+  --border: #e2e8f0;
+  --text-primary: #10243e;
+  --text-secondary: #64748b;
+  --primary: #0088e8;
+  --primary-hover: #0072c4;
+  --cyan: #22d3ee;
+  --success: #16a34a;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --sidebar: #061b33;
+  --sidebar-hover: rgba(255, 255, 255, .07);
+  --sidebar-active: rgba(0, 136, 232, .18);
+}
+:root[data-theme="dark"] .aero {
+  --background: #071223;
+  --surface: #0c2743;
+  --surface-secondary: #0a1f38;
+  --border: #1c3a58;
+  --text-primary: #eaf2fb;
+  --text-secondary: #9fb3c8;
+  --sidebar: #04101f;
+  --sidebar-hover: rgba(255, 255, 255, .06);
+  --sidebar-active: rgba(34, 211, 238, .16);
+}
+
+/* --- Acento de marca: fuera el ámbar/dorado, dentro azul/cian --- */
+.aero button.selected,
+.aero button.on,
+.aero .product-subnav button.selected {
+  background: rgba(0, 136, 232, .12) !important;
+  color: var(--primary) !important;
+  border-color: rgba(0, 136, 232, .35) !important;
+}
+.aero .aero-nav button.active {
+  color: #fff !important;
+  background: linear-gradient(135deg, var(--primary), var(--cyan)) !important;
+  box-shadow: none !important;
+}
+.aero .panel-number { background: var(--primary) !important; }
+.aero .panel-number.green { background: var(--success) !important; }
+.aero .panel-number.amber { background: var(--warning) !important; }
+.aero .panel-number.red { background: var(--danger) !important; }
+.aero .overview-plan > aside button:first-child { background: var(--primary) !important; color: #fff !important; }
+
+.aero .camera-selector-grid button.selected {
+  border-color: var(--primary) !important;
+  background: rgba(0, 136, 232, .1) !important;
+}
+.aero .mode-cards button.selected {
+  background: rgba(0, 136, 232, .1) !important;
+  border-color: var(--primary) !important;
+  box-shadow: inset 0 0 0 1px rgba(0, 136, 232, .3) !important;
+}
+.aero .mode-cards svg { color: var(--primary) !important; }
+.aero .mode-cards i { color: var(--primary-hover) !important; }
+.aero .number-tile { background: var(--primary) !important; color: #fff !important; }
+.aero .step-intro { background: linear-gradient(145deg, var(--surface-secondary), var(--surface-secondary)) !important; }
+.aero .setup-steps > button.current {
+  background: rgba(0, 136, 232, .1) !important;
+  box-shadow: inset 0 -3px var(--primary) !important;
+}
+.aero .setup-steps .current small { color: var(--primary) !important; }
+.aero .eyebrow { color: var(--primary) !important; }
+.aero .setup-banner button { background: var(--primary) !important; border-color: var(--primary-hover) !important; }
+.aero .unsaved { color: var(--warning) !important; }
+.aero .replay-events {
+  border-color: rgba(0, 136, 232, .3) !important;
+  background: rgba(0, 136, 232, .06) !important;
+}
+.aero .replay-events summary,
+.aero .replay-events time { color: var(--primary) !important; }
+.aero .replay-controls > input[type=range] { accent-color: var(--primary) !important; }
+
+/* --- KPIs: un solo tamaño de cifra, en toda resolución --- */
+.aero .metric-card strong {
+  font-size: 30px !important;
+  font-weight: 700 !important;
+  line-height: 1.15 !important;
+  color: var(--text-primary) !important;
+}
+.aero .metric-card span { color: var(--text-secondary) !important; }
+
+/* --- Login: título a la altura del resto del producto --- */
+.aero .login-card h1 { font-size: 32px !important; font-weight: 700 !important; }
+.aero .login-brand-lockup > span { color: var(--text-secondary) !important; }
+
+/* --- Sidebar: indicador activo en cian, sensación de centro de control --- */
+.aero .sidebar-nav button.active::before { background: var(--cyan) !important; }
+.aero .sidebar-nav button.active svg { color: var(--cyan) !important; }
+
+/* Configuración esencial de cámara. */
+.aero .cad-tools button.on { border-color: var(--primary) !important; background: var(--primary) !important; color: #fff !important; }
+.aero .simple-region-editor {
+  margin: 0 !important;
+  padding: 18px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--surface) !important;
+}
+.aero .region-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.aero .region-title h3 { margin: 0; color: var(--text-primary); font-size: 20px !important; }
+.aero .region-title p { max-width: 760px; margin: 4px 0 0; color: var(--text-secondary); font-size: 13px; line-height: 1.45; }
+.aero .mirror-note { display: flex; align-items: center; gap: 9px; margin: 14px 0; border-color: #9bd5e5 !important; background: #edf9fc !important; color: #17556d !important; }
+.aero .region-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.aero .region-actions button { min-height: 40px; box-shadow: none; }
+.aero .drawing-instruction { margin: 8px 0 12px !important; color: #0f6e8d !important; font-weight: 650; }
+.aero .simple-region-editor .region-image { max-width: none; margin: 12px 0; overflow: hidden; border: 1px solid #9eb8c9; border-radius: 8px; background: #061520; box-shadow: 0 6px 18px rgba(15, 39, 66, .1); }
+.aero .simple-region-editor > small { display: block; color: var(--text-secondary); font-size: 11px; }
+
+:root[data-theme="dark"] .aero .mirror-note { border-color: #25647b !important; background: #0c3447 !important; color: #b9e4f2 !important; }
+:root[data-theme="dark"] .aero .simple-region-editor .region-image { border-color: #31566e; }
+
+@media (max-width: 650px) {
+  .aero .region-title { flex-direction: column; }
+  .aero .region-actions button { flex: 1 1 44%; }
+}

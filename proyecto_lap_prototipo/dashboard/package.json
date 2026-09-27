@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:lod": "tsc src/aero/lod.ts src/aero/planLayers.ts --outDir .lodcheck --module esnext --target es2020 --moduleResolution bundler --strict && node scripts/check-lod.mjs && node scripts/check-plano.mjs",
+    "check:aislamiento": "node scripts/check-aislamiento.mjs",
+    "check:seguimiento": "node scripts/check-seguimiento.mjs",
+    "check:kpis": "node scripts/check-kpis.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

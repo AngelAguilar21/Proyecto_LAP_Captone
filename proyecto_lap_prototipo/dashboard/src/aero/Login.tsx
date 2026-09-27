@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import type { Session } from './useSession';
-import Icon from './Icon';
 
 /** Entrada al sistema. Si todavía no hay ningún usuario creado, el primero que
  * se registra queda como operador: es quien después da de alta a los demás. */
@@ -32,7 +31,10 @@ export default function Login({ session }: { session: Session }) {
   }
 
   return <div className="aero connection-screen">
-    <div className="aero-logo"><Icon name="plane" size={38} /><strong>AeroTrack</strong></div>
+    <div className="login-brand-lockup">
+      <img src="/assets/aerotrack-logo.png" alt="AeroTrack" className="login-logo-image" />
+      <span>Inteligencia operacional para el flujo peatonal.</span>
+    </div>
     <form className="login-card" onSubmit={enviar}>
       <h1>{primeraVez ? 'Crea el primer usuario' : 'Entrar al sistema'}</h1>
       <p>{primeraVez

@@ -1,4 +1,4 @@
-import sys, unittest, threading, tempfile, json
+import sys, unittest, tempfile, json
 from pathlib import Path
 from types import SimpleNamespace
 import numpy as np
@@ -27,28 +27,20 @@ class UnifiedTests(unittest.TestCase):
         counter.update([],6)
         self.assertEqual(sample(.5,.4,7)['exits'],1)
 
-    def test_combined_mask_peak_and_bounded_background_worker(self):
-        camera={'id':'C','denseCounting':True,'denseInterval':2,'detectionZone':[[0,0],[.5,0],[.5,1],[0,1]]}
+    def test_combined_reuses_p2pnet_points_without_second_inference(self):
+        camera={'id':'C','detectionZone':[[0,0],[.5,0],[.5,1],[0,1]]}
         camera['analysisZones']=[{'id':'small','name':'Sector','points':[[0,0],[.1,0],[.1,1],[0,1]],'threshold':2,'dwell':1}]
         analysis=CombinedAnalysis([camera],ROOT)
-        started=threading.Event();release=threading.Event();calls=[]
-        def density(cid,frame,t):
-            calls.append(t);started.set();release.wait(3);return cid,{'t':t,'count':9}
-        analysis._density=density
-        try:
-            frame=np.zeros((100,100,3),dtype=np.uint8)
-            people=[{'id':'A','pixel':[25,50]},{'id':'B','pixel':[75,50]}]
-            result=analysis.observe(camera,frame,people,0)
-            self.assertTrue(started.wait(1));self.assertEqual(result['occupancy']['count'],1)
-            self.assertEqual(result['occupancy']['zones'][1]['count'],0)
-            for t in (2,4,6):analysis.observe(camera,frame,[],t)
-            self.assertEqual(len(calls),1)
-            release.set();analysis.pending.result(timeout=2)
-            result=analysis.observe(camera,frame,people,6.2)
-            self.assertEqual(result['dense']['count'],9)
-            self.assertEqual(result['occupancy']['peak'],1)
-        finally:
-            release.set();analysis.close()
+        frame=np.zeros((100,100,3),dtype=np.uint8)
+        people=[{'id':'A','pixel':[25,50]},{'id':'B','pixel':[75,50]}]
+        result=analysis.observe(camera,frame,people,0)
+        self.assertEqual(result['occupancy']['count'],1)
+        self.assertEqual(result['dense']['count'],1)
+        self.assertEqual(result['dense']['points'],[(.25,.5)])
+        self.assertEqual(result['occupancy']['zones'][1]['count'],0)
+        result=analysis.observe(camera,frame,people,2)
+        self.assertEqual(result['occupancy']['peak'],1)
+        self.assertEqual(analysis.close()['C']['dense']['count'],1)
 
     def test_late_identity_requires_sustained_mutual_evidence(self):
         cfg=default_config();cfg['clocksVerified']=False

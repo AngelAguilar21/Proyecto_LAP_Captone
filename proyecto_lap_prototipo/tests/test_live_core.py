@@ -29,6 +29,14 @@ class LiveCoreTests(unittest.TestCase):
         self.assertEqual(rows[1]["association"], "estimated")
         self.assertEqual(Occupancy(self.cfg).update(rows, 0)["mappedCount"], 1)
 
+    def test_overlap_tolerates_moderate_homography_error(self):
+        store = IdentityStore(self.cfg)
+        first = {"camera": "A", "local": 1, "point": (2, 2), "color": None}
+        second = {"camera": "B", "local": 4, "point": (3.2, 2), "color": None}
+        rows = store.update([first, second], 0)
+        self.assertEqual(rows[0]["id"], rows[1]["id"])
+        self.assertEqual(rows[1]["association"], "estimated")
+
     def test_two_simultaneous_people_in_one_camera_do_not_share_id(self):
         store = IdentityStore(self.cfg)
         first = store.update([obs("A", 1, 1, 1)], 0)[0]["id"]
@@ -90,6 +98,18 @@ class LiveCoreTests(unittest.TestCase):
         for patch in ({"radius": float("nan")}, {"width": 0}, {"minPeople": 2.5}, {"background": "javascript:bad"}):
             with self.assertRaises(ValueError):
                 validate_config({**copy.deepcopy(self.cfg), **patch})
+
+    def test_configuration_accepts_created_floors_and_business_context(self):
+        config = copy.deepcopy(self.cfg)
+        config["commercialContext"] = {"hasBusinesses": True}
+        config["zones"] = [{"id":"shop-1","name":"Cafetería","kind":"commercial","source":"operator",
+                            "shape":"rectangle","points":[[1,1],[3,1],[3,2],[1,2]],
+                            "business":{"category":"food","widthM":2,"depthM":1,"areaM2":2,"capacity":8}}]
+        validate_config(config)
+
+        floor = {key: copy.deepcopy(config[key]) for key in ("width","height","unit","background","floor","zones","commercialContext")}
+        config.update(planId="floor-a1b2c3d4", plans={"floor-a1b2c3d4":floor}, cameras=[])
+        validate_config(config)
 
 
 if __name__ == "__main__":

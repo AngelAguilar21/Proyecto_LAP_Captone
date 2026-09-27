@@ -38,7 +38,8 @@ class DeteccionCabeza:
 
 class DetectorP2PNet:
     def __init__(self, ruta_pesos: str, backbone: str = "vgg16_bn", row: int = 2,
-                 line: int = 2, umbral: float = 0.5, device: str = None):
+                 line: int = 2, umbral: float = 0.5, device: str = None,
+                 lado_max: int = None):
         try:
             from models import build_model  # noqa: viene del submodulo external/P2PNet
         except ImportError as exc:
@@ -49,6 +50,11 @@ class DetectorP2PNet:
             ) from exc
 
         self.umbral = umbral
+        # En CPU el costo crece con el area del frame y las camaras se procesan una tras
+        # otra, asi que en vivo conviene acotar el lado mayor. Se limita el lado MAYOR y no
+        # el ancho porque los videos de celular llegan verticales: ahi el lado caro es el
+        # alto. None = resolucion original.
+        self.lado_max = lado_max
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
 
         args = SimpleNamespace(backbone=backbone, row=row, line=line,
@@ -69,29 +75,48 @@ class DetectorP2PNet:
     def _preparar_frame(self, frame_bgr: np.ndarray):
         frame_rgb = frame_bgr[:, :, ::-1]
         alto, ancho = frame_rgb.shape[:2]
-        nuevo_ancho = max(128, ancho // 128 * 128)
-        nuevo_alto = max(128, alto // 128 * 128)
+        objetivo_ancho, objetivo_alto = ancho, alto
+        if self.lado_max and max(ancho, alto) > self.lado_max:
+            escala = self.lado_max / max(ancho, alto)
+            objetivo_ancho = max(1, round(ancho * escala))
+            objetivo_alto = max(1, round(alto * escala))
+        # La red exige lados multiplos de 128; se redondea hacia abajo pero sin bajar de 128.
+        nuevo_ancho = max(128, objetivo_ancho // 128 * 128)
+        nuevo_alto = max(128, objetivo_alto // 128 * 128)
         imagen = Image.fromarray(frame_rgb).resize((nuevo_ancho, nuevo_alto), Image.LANCZOS)
         escala_x = ancho / nuevo_ancho
         escala_y = alto / nuevo_alto
         tensor = self._transformar(imagen).unsqueeze(0).to(self.device)
         return tensor, escala_x, escala_y
 
-    @torch.no_grad()
+    @torch.inference_mode()
+    def detectar_lote(self, frames_bgr):
+        """Procesa juntas las cámaras que terminan con el mismo tamaño de tensor.
+
+        P2PNet acepta lotes. Agrupar aquí evita recorrer la red completa una vez
+        por cámara cuando dos fuentes comparten resolución, que es el caso común
+        del monitoreo sincronizado.
+        """
+        prepared = [self._preparar_frame(frame) for frame in frames_bgr]
+        results = [None] * len(prepared)
+        groups = {}
+        for index, (tensor, scale_x, scale_y) in enumerate(prepared):
+            groups.setdefault(tuple(tensor.shape), []).append((index, tensor, scale_x, scale_y))
+        for group in groups.values():
+            batch = torch.cat([item[1] for item in group], dim=0)
+            output = self.modelo(batch)
+            for batch_index, (result_index, _, scale_x, scale_y) in enumerate(group):
+                probabilities = torch.softmax(output["pred_logits"][batch_index], dim=-1)[:, 1]
+                points = output["pred_points"][batch_index]
+                mask = probabilities > self.umbral
+                valid_points = points[mask].cpu().numpy()
+                confidence = probabilities[mask].cpu().numpy()
+                results[result_index] = [
+                    DeteccionCabeza(x=float(px * scale_x), y=float(py * scale_y), confianza=float(score))
+                    for (px, py), score in zip(valid_points, confidence)
+                ]
+        return results
+
     def detectar(self, frame_bgr: np.ndarray):
-        """frame_bgr: frame de OpenCV (BGR, HxWx3). Devuelve una lista de
-        DeteccionCabeza en coordenadas de pixel del frame original."""
-        tensor, escala_x, escala_y = self._preparar_frame(frame_bgr)
-        salida = self.modelo(tensor)
-
-        probabilidades = torch.softmax(salida["pred_logits"], dim=-1)[0, :, 1]
-        puntos = salida["pred_points"][0]
-
-        mascara = probabilidades > self.umbral
-        puntos_validos = puntos[mascara].cpu().numpy()
-        confianzas = probabilidades[mascara].cpu().numpy()
-
-        return [
-            DeteccionCabeza(x=float(px * escala_x), y=float(py * escala_y), confianza=float(c))
-            for (px, py), c in zip(puntos_validos, confianzas)
-        ]
+        """Devuelve detecciones en píxeles del frame original."""
+        return self.detectar_lote([frame_bgr])[0]
