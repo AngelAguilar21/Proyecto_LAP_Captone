@@ -9,6 +9,7 @@ from collections import deque
 
 import cv2
 import numpy as np
+from zone_episodes import ZoneEpisodes, ensure_zone_ids
 
 
 def finite(value, low, high):
@@ -164,6 +165,7 @@ def validate_config(c):
         rule = z.get("rule")
         if rule is not None and (not isinstance(rule, dict) or not isinstance(rule.get("enabled"), bool) or not finite(rule.get("minPeople"),2,1000) or int(rule["minPeople"]) != rule["minPeople"] or not finite(rule.get("dwell"),0,3600)):
             raise ValueError("Regla de zona inválida.")
+    ensure_zone_ids(c)
     bg = c.get("background", "")
     if not isinstance(bg, str) or len(bg) > 3000000 or (bg and not bg.startswith(("data:image/png;base64,", "data:image/jpeg;base64,", "data:image/webp;base64,"))):
         raise ValueError("El fondo debe ser una imagen PNG, JPEG o WebP de menos de 2 MB.")
@@ -390,12 +392,14 @@ class Occupancy:
     def __init__(self, config):
         self.config = config
         self.cells = {}
+        ensure_zone_ids(config)
+        self.zone_episodes = ZoneEpisodes(config.get("planId", "custom"))
         self.last_t = None
         self.zone_stats = {}
         self.zone_start = {}
         self.cell_visitors = {}
 
-    def update(self, people, t):
+    def update(self, people, t, observation_valid=True):
         cfg = self.config
         # Count one observed global ID once, never extrapolated invisible people.
         unique = {p["id"]: p for p in people if p.get("point") is not None and not p.get("predicted")}
@@ -456,11 +460,13 @@ class Occupancy:
             stats["peak"] = max(stats["peak"],n)
             stats["visitors"].update(members)
             rule = zone.get("rule",{})
-            if rule.get("enabled") and n >= rule["minPeople"]:
-                self.zone_start.setdefault(zkey,t)
-            else:
-                self.zone_start.pop(zkey,None)
-            duration = t-self.zone_start.get(zkey,t)
-            zones.append({"name":zone["name"],"count":n,"seconds":stats["seconds"],"peak":stats["peak"],"visits":len(stats["visitors"]),"duration":duration,"alert":bool(rule.get("enabled") and zkey in self.zone_start and duration >= rule["dwell"])})
+            episode = self.zone_episodes.observe(zone, n, t, observation_valid)
+            duration = episode["duration"] if episode else 0.
+            zones.append({"id": zkey, "scope": self.zone_episodes.scope,
+                          "episodeId": episode["id"] if episode else None,
+                          "since": episode["start"] if episode else None,
+                          "name":zone["name"],"count":n,"seconds":stats["seconds"],"peak":stats["peak"],"visits":len(stats["visitors"]),"duration":duration,"alert":bool(observation_valid and episode and episode["alert"])})
+        for zid in set(self.zone_episodes.active) - {z["id"] for z in zones}:
+            self.zone_episodes.close(zid, t, "zone_removed")
         ranked = sorted(self.cells.items(), key=lambda item: item[1]["seconds"], reverse=True)[:80]
-        return {"clusters": circles, "zones": zones, "heat": [{"x": k[0] * grid_size, "y": k[1] * grid_size, "size": grid_size, **v} for k, v in ranked], "mappedCount": len(unique)}
+        return {"clusters": circles, "zones": zones, "zoneEpisodes": self.zone_episodes.snapshot(), "heat": [{"x": k[0] * grid_size, "y": k[1] * grid_size, "size": grid_size, **v} for k, v in ranked], "mappedCount": len(unique)}
