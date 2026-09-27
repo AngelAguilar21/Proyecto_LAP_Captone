@@ -171,7 +171,9 @@ class Engine:
         for zone in (analytics or {}).get("zones", []):
             if not zone.get("alert"):
                 continue
-            key = "zona:{}:{}".format(zone.get("name"), round(self.state.get("t", 0)))
+            if not zone.get("episodeId") or not zone.get("id"):
+                continue  # Legacy snapshots cannot establish a new episode identity.
+            key = "zone-v2:" + json.dumps([zone.get("scope", "custom"), zone["id"], zone["episodeId"]], separators=(",", ":"))
             body = [
                 "La zona " + str(zone.get("name")) + " del plano supero su umbral.",
                 "",
@@ -183,23 +185,33 @@ class Engine:
             ]
             pendientes.append({
                 "key": key, "tipo": "aglomeracion", "zona": zone.get("name"), "camara": None,
-                "inicio": self.state.get("t", 0) - (zone.get("duration") or 0),
+                "inicio": zone["since"],
                 "pico": zone.get("peak") or zone.get("count"), "duracion": zone.get("duration"),
-                "detalle": {"origen": "plano"},
+                "detalle": {"origen": "plano", "scope": zone.get("scope", "custom"),
+                            "zoneId": zone["id"], "episodeId": zone["episodeId"]},
                 "asunto": "AeroTrack - Alerta en " + str(zone.get("name")),
                 "cuerpo": chr(10).join(body)})
 
-        if not pendientes:
+        episodes = (analytics or {}).get("zoneEpisodes", [])
+        if not pendientes and not episodes:
             return
         sesion = self.state.get("session", "sin-sesion")
         conexion = None
         try:
             conexion = business_data.connect(self.config_path)
+            conexion.execute("BEGIN IMMEDIATE")
+            business_data.registrar_episodios(conexion, sesion, episodes)
             for alerta in pendientes:
                 business_data.registrar_incidente(
                     conexion, f"{sesion}:{alerta['key']}", alerta["tipo"], alerta["zona"],
                     alerta["camara"], alerta["inicio"] or 0, alerta["pico"], alerta["duracion"],
-                    {**alerta["detalle"], "sesion": sesion})
+                    {**alerta["detalle"], "sesion": sesion}, commit=False)
+                detail = alerta["detalle"]
+                if detail.get("episodeId"):
+                    conexion.execute("UPDATE incident_episodes SET incident_id=? WHERE session_id=? "
+                                     "AND scope_id=? AND zone_id=? AND episode_id=?",
+                                     (f"{sesion}:{alerta['key']}", sesion, detail["scope"], detail["zoneId"], detail["episodeId"]))
+            conexion.commit()
             self.business_error = None
         except (sqlite3.Error, OSError, ValueError) as exc:
             self.business_error = str(exc)
@@ -808,7 +820,7 @@ class Engine:
             combined = CombinedAnalysis(cams, ROOT) if request.get('combined') else None
             luggage = LuggageWatch(cams, request.get("weights")) if any(LuggageWatch.enabled_for(c) for c in cams) else None
             camera_analytics = {}
-            level_configs={pid:config if pid==config.get('planId','custom') else {**config,**config.get('plans',{}).get(pid,{})} for pid in {c.get('planId','custom') for c in cams}}
+            level_configs={pid:{**(config if pid==config.get('planId','custom') else {**config,**config.get('plans',{}).get(pid,{})}), "planId":pid} for pid in {c.get('planId','custom') for c in cams}}
             level_occupancy={pid:Occupancy(value) for pid,value in level_configs.items()}
             level_flow={pid:ZoneFlow(value) for pid,value in level_configs.items()}
             flow_fields={pid:FlowField(value) for pid,value in level_configs.items()}
@@ -823,6 +835,9 @@ class Engine:
             timeline = 0.
             while active and not self.stop_event.is_set():
                 if self.pause_event.is_set():
+                    for counter in [occupancy, *level_occupancy.values(), *camera_maps.values()]:
+                        for episode in counter.zone_episodes.active.values():
+                            episode["observed"] = False
                     self.stop_event.wait(.1)
                     continue
                 start = time.monotonic()
@@ -956,12 +971,14 @@ class Engine:
                 trails = {key: value for key, value in trails.items() if key in seen}
                 with self.lock:
                     self.frames.update(encoded)
-                    analytics = occupancy.update(people,t)
+                    valid_map = all(statuses[c['id']].get('status') == 'live' for c in cams)
+                    analytics = occupancy.update(people,t, observation_valid=valid_map)
                     analytics["flow"] = flow.update(people,t)
                     levels={}
                     for pid, counter in level_occupancy.items():
                         group=[p for p in people if camera_levels[p['camera']]==pid]
-                        levels[pid]=counter.update(group,t)
+                        valid_level = all(statuses[c['id']].get('status') == 'live' for c in cams if camera_levels[c['id']] == pid)
+                        levels[pid]=counter.update(group,t, observation_valid=valid_level)
                         levels[pid]['flow']=level_flow[pid].update(group,t)
                         levels[pid]['flowVectors']=flow_fields[pid].update(group,t)
                     analytics=levels.get(config.get('planId','custom'),analytics)
@@ -1002,6 +1019,16 @@ class Engine:
             for cap in captures.values():
                 cap.release()
             with self.lock:
+                if business_data.path_for(self.config_path).exists():
+                    try:
+                        db = business_data.connect(self.config_path)
+                        try:
+                            business_data.cerrar_episodios(db, self.state.get("session"), self.state.get("t", 0),
+                                "interrupted" if self.state["status"] == "error" else "session_ended")
+                        finally:
+                            db.close()
+                    except (OSError, sqlite3.Error):
+                        self.business_error = "episode_close_failed"
                 if self.state["status"] != "error":
                     self.state.update(status="stopped" if self.stop_event.is_set() else "ended", people=[])
                 self.state["analytics"]["clusters"] = []

@@ -67,6 +67,18 @@ CREATE TABLE IF NOT EXISTS incident_notifications (
 );
 CREATE INDEX IF NOT EXISTS idx_notification_status ON incident_notifications(status);
 
+CREATE TABLE IF NOT EXISTS incident_episodes (
+    session_id TEXT NOT NULL,
+    scope_id TEXT NOT NULL,
+    zone_id TEXT NOT NULL,
+    episode_id TEXT NOT NULL,
+    incident_id TEXT UNIQUE REFERENCES incidentes(id),
+    started REAL NOT NULL,
+    ended REAL,
+    end_reason TEXT,
+    PRIMARY KEY(session_id, scope_id, zone_id, episode_id)
+);
+
 CREATE TABLE IF NOT EXISTS trafico_historico (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     zona TEXT NOT NULL,
@@ -176,7 +188,7 @@ def ventas_por_fecha(conexion, negocio_id, fecha):
 # --- Incidentes ---
 
 def registrar_incidente(conexion, id_incidente, tipo, zona, camara_id, inicio,
-                        pico=None, duracion=None, detalle=None):
+                        pico=None, duracion=None, detalle=None, commit=True):
     if tipo not in TIPOS_VALIDOS:
         raise ValueError(f"Tipo de incidente inválido: {tipo}")
     ahora = time.time()
@@ -193,7 +205,26 @@ def registrar_incidente(conexion, id_incidente, tipo, zona, camara_id, inicio,
         "UPDATE incidentes SET pico = ?, duracion = ?, actualizado = ? "
         "WHERE id = ? AND estado = 'pendiente'",
         (pico, duracion, ahora, id_incidente))
-    conexion.commit()
+    if commit:
+        conexion.commit()
+
+
+def registrar_episodios(conexion, session, episodes):
+    for episode in episodes:
+        conexion.execute(
+            "INSERT INTO incident_episodes "
+            "(session_id,scope_id,zone_id,episode_id,started,ended,end_reason) VALUES (?,?,?,?,?,?,?) "
+            "ON CONFLICT(session_id,scope_id,zone_id,episode_id) DO UPDATE SET "
+            "ended=COALESCE(incident_episodes.ended,excluded.ended), "
+            "end_reason=COALESCE(incident_episodes.end_reason,excluded.end_reason)",
+            (session, episode["scope"], episode["zone"], episode["id"], episode["start"],
+             episode["end"], episode["reason"]))
+
+
+def cerrar_episodios(conexion, session, t, reason):
+    with conexion:
+        conexion.execute("UPDATE incident_episodes SET ended=?,end_reason=? "
+                         "WHERE session_id=? AND ended IS NULL", (t, reason, session))
 
 
 def actualizar_estado_incidente(conexion, id_incidente, estado):
