@@ -1,4 +1,5 @@
 import sys
+import io
 import tempfile
 import unittest
 from datetime import datetime, timedelta
@@ -21,7 +22,13 @@ class ReportTests(unittest.TestCase):
         self.engine = Engine(self.root / "project.json")
         self.engine.project_id = "p-test"
         self.store = AutomationStore(self.root / "automation.sqlite")
-        self.render = Mock(return_value=b"%PDF-1.4\nsynthetic\n%%EOF")
+        from reportlab.pdfgen.canvas import Canvas
+        output = io.BytesIO()
+        canvas = Canvas(output, invariant=1)
+        canvas.drawString(20, 50, "Synthetic report")
+        canvas.showPage()
+        canvas.save()
+        self.render = Mock(return_value=output.getvalue())
         self.task = ScheduledReports(self.engine, self.store, self.render)
         self.now = datetime(2026, 9, 25, 18, tzinfo=LIMA)
         self.settings = {"enabled": True, "time": "18:00"}
@@ -79,7 +86,7 @@ class ReportTests(unittest.TestCase):
         def render(data):
             self.assertFalse(self.engine.lock.held)
             self.engine.project_id = "p-other"
-            return b"%PDF-1.4\n%%EOF"
+            return self.render.return_value
         self.render.side_effect = render
         self.task(self.now, self.settings)
         self.assertEqual(self.store.get("reports", "p-test", "2026-09-25")["status"], "succeeded")
@@ -124,6 +131,67 @@ class ReportTests(unittest.TestCase):
         with budget(event, 60), self.assertRaises(Cancelled):
             self.task(self.now, self.settings)
         self.assertEqual(list(self.root.rglob("*.pdf")), [])
+
+    def test_missing_successful_pdf_keeps_history_and_is_not_regenerated(self):
+        self.task(self.now, self.settings)
+        before = self.store.get("reports", "p-test", "2026-09-25")
+        Path(before["artifact"]).unlink()
+        for _ in range(2):
+            self.assertEqual(self.task(self.now, self.settings), "artifact_problem")
+        self.assertEqual(self.store.get("reports", "p-test", "2026-09-25"), before)
+        self.assertEqual(self.store.health("reports", "p-test", "2026-09-25")["status"], "missing")
+        self.render.assert_called_once()
+        self.assertFalse(Path(before["artifact"]).exists())
+
+    def test_corrupt_successful_pdf_is_preserved_for_human_review(self):
+        self.task(self.now, self.settings)
+        row = self.store.get("reports", "p-test", "2026-09-25")
+        bad = b"%PDF-1.4\nsynthetic broken objects\n%%EOF"
+        Path(row["artifact"]).write_bytes(bad)
+        self.assertEqual(self.task(self.now, self.settings), "artifact_problem")
+        self.assertEqual(self.store.health("reports", "p-test", "2026-09-25")["status"], "corrupt")
+        self.assertEqual(Path(row["artifact"]).read_bytes(), bad)
+        self.render.assert_called_once()
+
+    def test_header_and_eof_alone_are_not_a_valid_pdf(self):
+        self.render.return_value = b"%PDF-1.4\n%%EOF"
+        with self.assertRaises(ValueError):
+            self.task(self.now, self.settings)
+        self.assertEqual(list(self.root.rglob("*.pdf")), [])
+
+    def test_valid_but_replaced_pdf_fails_original_fingerprint(self):
+        self.task(self.now, self.settings)
+        row = self.store.get("reports", "p-test", "2026-09-25")
+        from reportlab.pdfgen.canvas import Canvas
+        output = io.BytesIO()
+        canvas = Canvas(output)
+        canvas.drawString(20, 50, "Different valid report")
+        canvas.showPage()
+        canvas.save()
+        Path(row["artifact"]).write_bytes(output.getvalue())
+        self.assertEqual(self.task(self.now, self.settings), "artifact_problem")
+        self.assertEqual(self.store.health("reports", "p-test", "2026-09-25")["error"], "fingerprint_mismatch")
+
+    def test_previous_day_and_other_project_are_checked(self):
+        self.task(self.now, self.settings)
+        old = self.store.get("reports", "p-test", "2026-09-25")
+        Path(old["artifact"]).unlink()
+        self.engine.project_id = "p-new"
+        self.task(self.now + timedelta(days=1), self.settings)
+        self.assertEqual(self.store.health("reports", "p-test", "2026-09-25")["status"], "missing")
+        self.assertEqual(self.store.health("reports", "p-new", "2026-09-26")["status"], "healthy")
+
+    def test_legacy_success_without_fingerprint_is_not_silently_trusted(self):
+        self.task(self.now, self.settings)
+        with self.store.connect() as db:
+            db.execute("DROP TABLE artifact_health")  # Authentic pre-upgrade store shape.
+        for _ in range(2):
+            self.assertEqual(self.task(self.now, self.settings), "artifact_problem")
+        self.assertEqual(self.store.get("reports", "p-test", "2026-09-25")["status"], "succeeded")
+        health = self.store.health("reports", "p-test", "2026-09-25")
+        self.assertEqual(health["status"], "unverifiable")
+        self.assertIsNone(health["sha256"])
+        self.render.assert_called_once()
 
 
 if __name__ == "__main__":

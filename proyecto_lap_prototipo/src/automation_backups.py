@@ -6,9 +6,11 @@ import re
 import sqlite3
 import tempfile
 import zipfile
+import io
 from contextlib import closing
 from pathlib import Path
 from task_control import checkpoint
+from automation_artifacts import check_successes, fingerprint
 
 
 def regular_files(root):
@@ -30,8 +32,17 @@ def verify_backup(path):
     try:
         if path.is_symlink() or path.is_junction():
             return False
-        with zipfile.ZipFile(path) as archive:
+        return verify_backup_bytes(path.read_bytes())
+    except OSError:
+        return False
+
+
+def verify_backup_bytes(data):
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
             manifest = json.loads(archive.read("backup-manifest.json"))
+            if not isinstance(manifest, dict) or manifest.get("schema_version", 1) not in (1, 2):
+                return False
             hashes = manifest["sha256"]
             if manifest.get("format") != "aerotrack-projects-v1" or not isinstance(hashes, dict):
                 return False
@@ -39,9 +50,12 @@ def verify_backup(path):
                 return False
             if len(archive.namelist()) != len(hashes) + 1 or archive.testzip() is not None:
                 return False
-            return all(name.startswith("projects/") and ".." not in name.split("/") and
-                       hashlib.sha256(archive.read(name)).hexdigest() == digest
-                       for name, digest in hashes.items())
+            for name, digest in hashes.items():
+                checkpoint()
+                if (not name.startswith("projects/") or ".." in name.split("/") or "\\" in name or
+                        hashlib.sha256(archive.read(name)).hexdigest() != digest):
+                    return False
+            return True
     except (OSError, ValueError, KeyError, zipfile.BadZipFile):
         return False
 
@@ -79,16 +93,21 @@ class ProjectBackups:
         if now.strftime("%H:%M") < settings["time"]:
             return "not_due"
         date = now.date().isoformat()
+        health = check_successes(self.store, "backups", self.engine.settings_root / "backups", now, verify_backup_bytes)
         previous = self.store.get("backups", "projects", date)
         if previous and previous["status"] == "succeeded":
-            self.retain(settings["retention"], now)
-            return "already_done"
+            if health[("projects", date)] == "healthy":
+                self.retain(settings["retention"], now)
+                return "already_done"
+            return "artifact_problem"
         directory = self.engine.settings_root / "backups"
         target = directory / f"projects-{date}.zip"
         if target.exists():
             if not verify_backup(target):
+                self.store.set_health("backups", "projects", date, "corrupt", now, "invalid_structure")
                 raise ValueError("Existing backup failed verification")
-            self.store.record("backups", "projects", date, "succeeded", now, str(target))
+            self.store.record("backups", "projects", date, "succeeded", now, str(target),
+                              fingerprint=fingerprint(target.read_bytes()))
             self.retain(settings["retention"], now)
             return "recovered"
         captured = self.capture()
@@ -123,20 +142,31 @@ class ProjectBackups:
                 os.fsync(output.fileno())
             checkpoint()
             os.replace(archive_path, target)
-        self.store.record("backups", "projects", date, "succeeded", now, str(target))
+        self.store.record("backups", "projects", date, "succeeded", now, str(target),
+                          fingerprint=fingerprint(target.read_bytes()))
         self.retain(settings["retention"], now)
         return "succeeded"
 
     def retain(self, count, now):
         directory = self.engine.settings_root / "backups"
-        valid = sorted((p for p in directory.glob("projects-*.zip")
-                        if re.fullmatch(r"projects-\d{4}-\d{2}-\d{2}\.zip", p.name)
-                        and verify_backup(p)), reverse=True)
+        valid = []
+        for path in directory.glob("projects-*.zip"):
+            checkpoint()
+            if not re.fullmatch(r"projects-\d{4}-\d{2}-\d{2}\.zip", path.name) or not verify_backup(path):
+                continue
+            health = self.store.health("backups", "projects", path.stem.removeprefix("projects-"))
+            if health and (health["sha256"] is None or fingerprint(path.read_bytes()) != (health["sha256"], health["size"])):
+                continue  # Keep suspect evidence; never count it as a usable backup.
+            valid.append(path)
+        valid.sort(reverse=True)
         for path in valid[count:]:
             checkpoint()
             # Only exact, verified final archives inside our backup directory.
             if path.resolve().parent != directory.resolve():
                 continue
             self.store.audit("backups", "retention_planned:" + path.name, now)
+            date = path.stem.removeprefix("projects-")
+            self.store.set_health("backups", "projects", date, "retention_pending", now, "retention")
             path.unlink()
+            self.store.set_health("backups", "projects", date, "retired", now, "retention")
             self.store.audit("backups", "retention_deleted:" + path.name, now)

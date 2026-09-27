@@ -1,4 +1,5 @@
 import json
+import hashlib
 import sqlite3
 import sys
 import tempfile
@@ -123,6 +124,62 @@ class BackupTests(unittest.TestCase):
             with self.assertRaises(Cancelled):
                 self.task(self.now, self.settings)
         self.assertFalse(self.target().exists())
+
+    def test_missing_successful_backup_keeps_history_without_recreation(self):
+        self.task(self.now, self.settings)
+        before = self.store.get("backups", "projects", "2026-09-25")
+        self.target().unlink()
+        with patch.object(self.task, "capture", side_effect=AssertionError("No regeneration")):
+            self.assertEqual(self.task(self.now, self.settings), "artifact_problem")
+        self.assertEqual(self.store.get("backups", "projects", "2026-09-25"), before)
+        self.assertEqual(self.store.health("backups", "projects", "2026-09-25")["status"], "missing")
+        self.assertFalse(self.target().exists())
+
+    def test_corrupt_successful_backup_is_not_overwritten(self):
+        self.task(self.now, self.settings)
+        self.target().write_bytes(b"broken zip")
+        self.assertEqual(self.task(self.now, self.settings), "artifact_problem")
+        self.assertEqual(self.store.health("backups", "projects", "2026-09-25")["status"], "corrupt")
+        self.assertEqual(self.target().read_bytes(), b"broken zip")
+
+    def test_valid_replacement_zip_is_detected_even_with_matching_internal_hashes(self):
+        self.task(self.now, self.settings)
+        with zipfile.ZipFile(self.target()) as original:
+            entries = {name: original.read(name) for name in original.namelist()}
+        entries["projects/p-test.json"] = b'{"airport":"Replaced"}'
+        manifest = json.loads(entries["backup-manifest.json"])
+        manifest["sha256"]["projects/p-test.json"] = hashlib.sha256(entries["projects/p-test.json"]).hexdigest()
+        entries["backup-manifest.json"] = json.dumps(manifest).encode()
+        with zipfile.ZipFile(self.target(), "w") as modified:
+            for name, data in entries.items():
+                modified.writestr(name, data)
+        self.assertTrue(verify_backup(self.target()))
+        self.assertEqual(self.task(self.now, self.settings), "artifact_problem")
+        self.assertEqual(self.store.health("backups", "projects", "2026-09-25")["error"], "fingerprint_mismatch")
+
+    def test_retention_is_distinguished_from_unexpected_loss_and_keeps_history(self):
+        self.settings["retention"] = 1
+        self.task(self.now, self.settings)
+        original = self.store.get("backups", "projects", "2026-09-25")
+        self.task(self.now + timedelta(days=1), self.settings)
+        self.task(self.now + timedelta(days=1), self.settings)
+        self.assertEqual(self.store.health("backups", "projects", "2026-09-25")["status"], "retired")
+        self.assertEqual(self.store.get("backups", "projects", "2026-09-25"), original)
+
+    def test_old_corruption_is_detected_and_preserved_on_next_day(self):
+        self.task(self.now, self.settings)
+        self.target().write_bytes(b"broken zip")
+        self.settings["retention"] = 1
+        self.task(self.now + timedelta(days=1), self.settings)
+        self.assertEqual(self.store.health("backups", "projects", "2026-09-25")["status"], "corrupt")
+        self.assertTrue(self.target().exists())
+
+    def test_interrupted_retention_reconciles_expected_missing_file(self):
+        self.task(self.now, self.settings)
+        self.store.set_health("backups", "projects", "2026-09-25", "retention_pending", self.now, "retention")
+        self.target().unlink()
+        self.assertEqual(self.task(self.now, self.settings), "artifact_problem")
+        self.assertEqual(self.store.health("backups", "projects", "2026-09-25")["status"], "retired")
 
 
 if __name__ == "__main__":
