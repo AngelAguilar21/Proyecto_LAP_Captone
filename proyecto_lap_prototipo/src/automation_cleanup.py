@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 import business_data
+from uploads import MARKER, metadata_path, completed_fingerprint
 from task_control import checkpoint
 
 
@@ -207,8 +208,20 @@ def plan_cleanup(root, settings_root, now, retention_days, *, documents=(), acti
             try:
                 plain_path(path, root)
                 if kind == "uploads":
-                    # No durable completion marker exists in the upload protocol.
-                    decisions.append(Decision(relative, "omitted", "upload_completion_unknown"))
+                    if path.name.endswith(MARKER) and path.with_name(path.name[:-len(MARKER)]).is_file():
+                        continue  # Evidence belongs to the upload, never a separate candidate.
+                    if not metadata_path(path).exists():
+                        decisions.append(Decision(relative, "omitted", "upload_completion_unknown"))
+                        continue
+                    try:
+                        completed_at, fingerprint = completed_fingerprint(path, root)
+                    except (OSError, ValueError, TypeError, KeyError):
+                        decisions.append(Decision(relative, "omitted", "upload_completion_invalid"))
+                        continue
+                    if completed_at > cutoff:
+                        decisions.append(Decision(relative, "protected", "recent_resource"))
+                    else:
+                        candidates.append(Decision(relative, "candidate", "expired_unreferenced", fingerprint))
                     continue
                 if not re.fullmatch(r"[a-f0-9]{8,32}", path.name):
                     raise ValueError("unknown_session_name")
@@ -317,19 +330,30 @@ class RetentionCleanup:
                 else:
                     path = plan.root / decision.path
                     # The plan is data, not authority: constrain even forged paths.
-                    plain_path(path, plan.root / "data" / "replays")
-                    if path.parent != plan.root / "data" / "replays":
+                    is_upload = path.parent == plan.root / "data" / "uploads"
+                    parent = plan.root / "data" / ("uploads" if is_upload else "replays")
+                    plain_path(path, parent)
+                    if path.parent != parent:
                         raise ValueError("Invalid candidate depth")
                     self.store.audit("cleanup", json.dumps({"path": decision.path,
                                      "decision": "delete_planned", "reason": reason}), plan.now)
                     try:
-                        if replay_fingerprint(path, plan.root) != decision.fingerprint:
-                            raise ValueError("changed_resource")
-                        # Delete manifest last. A partial failure remains identifiable
-                        # and becomes uncertain on the next plan.
-                        (path / "samples.jsonl").unlink()
-                        (path / "manifest.json").unlink()
-                        path.rmdir()
+                        if is_upload:
+                            completed_at, fingerprint = completed_fingerprint(path, plan.root)
+                            if (fingerprint != decision.fingerprint or
+                                    completed_at > plan.now.timestamp() - plan.retention_days * 86400):
+                                raise ValueError("changed_resource")
+                            # Only this exact upload and its evidence; no recursive deletion.
+                            path.unlink()
+                            metadata_path(path).unlink()
+                        else:
+                            if replay_fingerprint(path, plan.root) != decision.fingerprint:
+                                raise ValueError("changed_resource")
+                            # Delete manifest last. A partial failure remains identifiable
+                            # and becomes uncertain on the next plan.
+                            (path / "samples.jsonl").unlink()
+                            (path / "manifest.json").unlink()
+                            path.rmdir()
                         disposition, reason = "deleted", "expired_unreferenced"
                     except (OSError, ValueError):
                         disposition, reason = "omitted", "delete_failed_or_changed"

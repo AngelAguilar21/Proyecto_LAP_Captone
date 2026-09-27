@@ -1250,21 +1250,8 @@ class Handler(BaseHTTPRequestHandler):
                 suffix = Path(filename).suffix.lower()
                 if suffix not in (".mp4",".avi",".mov",".mkv",".webm",".m4v"):
                     raise ValueError("Formato de video no admitido.")
-                directory = ROOT / "data" / "uploads"
-                directory.mkdir(parents=True,exist_ok=True)
-                target = directory / (secrets.token_hex(16)+suffix)
-                try:
-                    remaining = size
-                    with target.open("xb") as output:
-                        while remaining:
-                            chunk = self.rfile.read(min(remaining,1024*1024))
-                            if not chunk:
-                                raise ValueError("La carga quedó incompleta.")
-                            output.write(chunk)
-                            remaining -= len(chunk)
-                except Exception:
-                    target.unlink(missing_ok=True)
-                    raise
+                from uploads import receive
+                target = receive(engine.data_root, self.rfile, size, suffix)
                 with engine.lock:
                     engine.record("Video cargado",f"Archivo de prueba {suffix} · {size} bytes")
                 return self.send_data(200,{"path":str(target)})

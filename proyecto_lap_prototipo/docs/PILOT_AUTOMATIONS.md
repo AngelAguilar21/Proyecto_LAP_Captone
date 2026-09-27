@@ -29,6 +29,20 @@ proyectos huérfanos y registros fuera del límite de la interfaz. Una referenci
 desconocida o ilegible bloquea conservadoramente la purga de candidatos.
 También se protegen recursos activos, referenciados por configuraciones o por
 historial de conteo. Los uploads sin prueba de finalización se omiten.
+Los nuevos uploads se escriben en un temporal exclusivo, verifican Content-Length,
+hacen flush/fsync y publican el video atómicamente. Antes de responder éxito se
+publica una metadata lateral `.completed.json`, también con flush/fsync, con formato
+y versión, nombre relativo, estado completed, completed_at, tamaño esperado/final,
+identidad del archivo y SHA-256. No incluye nombre original, credenciales ni contenido.
+Solo uploads con esa evidencia válida pueden purgarse automáticamente. Los legacy
+y temporales/desconocidos se conservan sin inferir finalización ni inventar fechas:
+es una migración conservadora, no una conversión automática del historial.
+retention_days aplica a replays elegibles y, para uploads, a completed_at. Referencias
+y actividad tienen prioridad sobre antigüedad. Antes de borrar se revalidan contenido,
+metadata y referencias bajo la protección de recursos; se audita antes y después.
+Una interrupción entre publicar video y metadata deja un upload desconocido que se
+omite. Un fallo de borrado puede dejar metadata huérfana; se registra como omitido,
+no como eliminación completa, y no se aplica una política adicional a esos restos.
 No existe una política automática de liberación de evidencia: es una decisión
 pendiente del equipo. La retención no garantiza eliminar todo al cumplir una
 edad ni imponer una cuota de disco; las referencias pueden conservarlo sin plazo.
