@@ -11,6 +11,11 @@ from notifier import DeliveryError
 
 
 PROCESS_ID = uuid.uuid4().hex
+# Shared by service instances in this process, including synchronous deliveries.
+# Values contain delivery facts only, never recipients, message bodies or secrets.
+ATTEMPT_LOCK = threading.RLock()
+ACTIVE = set()
+PENDING = {}
 
 
 class IncidentNotifications:
@@ -20,13 +25,66 @@ class IncidentNotifications:
         self.process_id = process_id
         self.workers = set()
         self.lock = threading.Lock()
+        self.error = None
+
+    def _identity(self, path, incident_id, kind):
+        return (self.process_id, str(business_data.path_for(path).resolve()), incident_id, kind)
+
+    def _write_result(self, identity, result):
+        owner, path, iid, kind = identity
+        status, sent_at, reason = result
+        # The claim already created/migrated this database. Do not create a new
+        # database after a storage loss, or hold migrations during retries.
+        from pathlib import Path
+        with closing(sqlite3.connect(Path(path).as_uri() + "?mode=rw", uri=True, timeout=0.2)) as db, db:
+            cursor = db.execute("UPDATE incident_notifications SET status=?,sent_at=?,last_error=? "
+                "WHERE incident_id=? AND notification_kind=? AND status='attempting' AND owner=?",
+                (status, sent_at, reason, iid, kind, owner))
+            if cursor.rowcount != 1:
+                row = db.execute("SELECT status,sent_at,last_error FROM incident_notifications "
+                                 "WHERE incident_id=? AND notification_kind=? AND owner=?", (iid, kind, owner)).fetchone()
+                if row != result:
+                    raise sqlite3.DatabaseError("Delivery claim no longer matches")
+
+    def _persist(self, identity, result):
+        for _ in range(3):
+            try:
+                self._write_result(identity, result)
+                self.error = None
+                return True
+            except (sqlite3.Error, OSError):
+                self.error = "notification_result_persistence_failed"
+        return False
+
+    def _finish(self, identity, result):
+        with ATTEMPT_LOCK:
+            PENDING[identity] = result
+            ACTIVE.discard(identity)
+            persisted = self._persist(identity, result)
+            if persisted:
+                PENDING.pop(identity, None)
+            return persisted
 
     def recover(self, project_path):
-        """Reconcile another process's attempts; never steal a live local claim."""
-        with closing(business_data.connect(project_path)) as db, db:
-            db.execute("UPDATE incident_notifications SET status='uncertain', "
-                       "last_error='process_interrupted' "
-                       "WHERE status='attempting' AND owner<>?", (self.process_id,))
+        """Persist known outcomes; orphaned claims become uncertain, never resent."""
+        path = str(business_data.path_for(project_path).resolve())
+        with ATTEMPT_LOCK:
+            for identity, result in list(PENDING.items()):
+                if identity[:2] == (self.process_id, path) and self._persist(identity, result):
+                    PENDING.pop(identity, None)
+            with closing(business_data.connect(project_path)) as db, db:
+                for iid, kind, owner in db.execute("SELECT incident_id,notification_kind,owner "
+                                                   "FROM incident_notifications WHERE status='attempting'").fetchall():
+                    identity = (owner, path, iid, kind)
+                    if owner == self.process_id and (identity in ACTIVE or identity in PENDING):
+                        continue
+                    db.execute("UPDATE incident_notifications SET status='uncertain',sent_at=NULL, "
+                               "last_error='process_interrupted' WHERE incident_id=? AND notification_kind=? "
+                               "AND status='attempting'", (iid, kind))
+
+    def diagnostics(self):
+        with ATTEMPT_LOCK:
+            return {"error": self.error, "pending_results": sum(k[0] == self.process_id for k in PENDING)}
 
     def get(self, project_path, incident_id, kind="original"):
         with closing(business_data.connect(project_path)) as db:
@@ -46,7 +104,50 @@ class IncidentNotifications:
         mail_options = {"recipients": recipients} if recipients is not None else {}
         if not self.mailer.ready(**mail_options):
             return False
-        self.recover(project_path)
+        identity = self._identity(project_path, incident_id, kind)
+        with ATTEMPT_LOCK:
+            self.recover(project_path)
+            claimed = self._claim(project_path, incident_id, kind, escalation_due_before)
+            if claimed:
+                ACTIVE.add(identity)
+        if not claimed:
+            return False
+
+        def deliver():
+            status, reason = "failed", "not_sent"
+            accepted_at = None
+            try:
+                key = json.dumps([str(project_path), incident_id, kind])
+                if self.mailer.send(subject, body, key=key, blocking=True, **mail_options):
+                    status, reason = "sent", None
+                    accepted_at = self.clock()
+            except DeliveryError as exc:
+                status = "uncertain" if exc.uncertain else "failed"
+                reason = str(exc)
+            except Exception:
+                status, reason = "uncertain", "delivery_exception"
+            try:
+                persisted = self._finish(identity, (status, accepted_at, reason))
+            finally:
+                with self.lock:
+                    self.workers.discard(threading.current_thread())
+            return persisted and status == "sent"
+
+        if blocking:
+            return deliver()
+        worker = threading.Thread(target=deliver, name="incident-mail", daemon=True)
+        with self.lock:
+            self.workers.add(worker)
+        try:
+            worker.start()
+        except Exception:
+            with self.lock:
+                self.workers.discard(worker)
+            self._finish(identity, ("failed", None, "worker_start_failed"))
+            raise
+        return True
+
+    def _claim(self, project_path, incident_id, kind, escalation_due_before):
         with closing(business_data.connect(project_path)) as db, db:
             # Selection can become stale while a human reviews an incident.
             # Serialize eligibility and the durable claim, then release SQLite
@@ -70,49 +171,7 @@ class IncidentNotifications:
                 "last_error=NULL,owner=excluded.owner "
                 "WHERE incident_notifications.status='failed'",
                 (incident_id, kind, self.clock(), self.process_id))
-            claimed = cursor.rowcount == 1
-        if not claimed:
-            return False
-
-        def deliver():
-            status, reason = "failed", "not_sent"
-            try:
-                key = json.dumps([str(project_path), incident_id, kind])
-                if self.mailer.send(subject, body, key=key, blocking=True, **mail_options):
-                    status, reason = "sent", None
-            except DeliveryError as exc:
-                status = "uncertain" if exc.uncertain else "failed"
-                reason = str(exc)
-            except Exception:
-                status, reason = "uncertain", "delivery_exception"
-            try:
-                with closing(business_data.connect(project_path)) as db, db:
-                    db.execute("UPDATE incident_notifications SET status=?,sent_at=?,last_error=? "
-                               "WHERE incident_id=? AND notification_kind=? AND status='attempting' AND owner=?",
-                               (status, self.clock() if status == "sent" else None, reason,
-                                incident_id, kind, self.process_id))
-            finally:
-                with self.lock:
-                    self.workers.discard(threading.current_thread())
-            return status == "sent"
-
-        if blocking:
-            return deliver()
-        worker = threading.Thread(target=deliver, name="incident-mail", daemon=True)
-        with self.lock:
-            self.workers.add(worker)
-        try:
-            worker.start()
-        except Exception:
-            with self.lock:
-                self.workers.discard(worker)
-            # No SMTP was started. Leave a safe, auditable failed attempt.
-            with closing(business_data.connect(project_path)) as db, db:
-                db.execute("UPDATE incident_notifications SET status='failed',last_error='worker_start_failed' "
-                           "WHERE incident_id=? AND notification_kind=? AND status='attempting' AND owner=?",
-                           (incident_id, kind, self.process_id))
-            raise
-        return True
+            return cursor.rowcount == 1
 
     def join(self):
         with self.lock:
