@@ -28,3 +28,19 @@ La siguiente reconciliación reintenta únicamente guardar ese resultado.
 Si se pierde esa memoria al reiniciar, la reclamación se convierte en `uncertain`,
 con `sent_at=NULL` y sin reenvío automático. Un almacenamiento inaccesible puede
 impedir incluso escribir `uncertain`: mientras tanto permanece `attempting`, bloqueado.
+
+## Cancelación y cierre
+
+`runtime.task_timeout_seconds` (120 por defecto) y
+`runtime.shutdown_timeout_seconds` (30 por defecto) aceptan segundos positivos,
+finitos, hasta 3600. Las tareas siguen siendo secuenciales. Comprueban cancelación
+entre elementos y antes de publicar o borrar; SQLite Backup también la comprueba
+durante la copia. Una operación nativa ya iniciada puede exceder su presupuesto:
+no se matan hilos ni se interrumpe el registro de un resultado SMTP aceptado.
+
+El cierre solicita parar todos los componentes antes de esperar y comparte un
+único plazo global. Si vence, informa cierre pendiente. Un guardián de cierre
+mantiene el proceso, los recursos y la exclusión de restauración hasta que terminen
+todos los escritores y solicitudes HTTP. No ejecuta tareas nuevas. Por tanto, el
+plazo limita la espera del controlador, no garantiza matar el proceso en ese tiempo.
+No se debe forzar una restauración mientras permanezca ese bloqueo.

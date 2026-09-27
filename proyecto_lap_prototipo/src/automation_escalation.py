@@ -5,6 +5,7 @@ import sqlite3
 
 import business_data
 from automation_cleanup import plain_path
+from task_control import checkpoint
 
 
 class AlertEscalation:
@@ -25,6 +26,7 @@ class AlertEscalation:
         result = {"candidates": 0, "sent": 0}
         errors = {}
         for pid in ids:
+            checkpoint()
             try:
                 if pid not in indexed:
                     raise ValueError("Supervised project is not indexed")
@@ -58,6 +60,7 @@ class AlertEscalation:
                 (cutoff,)).fetchall()
         sent = 0
         for iid, kind, zone in incidents:
+            checkpoint()
             sent += bool(notifications.send(
                 path, iid, "AeroTrack: incidente pendiente de atención",
                 f"Incidente: {iid}\nTipo: {kind}\nZona: {zone or '-'}\nRequiere revisión humana.",

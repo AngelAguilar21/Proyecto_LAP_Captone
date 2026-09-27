@@ -26,6 +26,7 @@ class IncidentNotifications:
         self.workers = set()
         self.lock = threading.Lock()
         self.error = None
+        self.stop_event = threading.Event()
 
     def _identity(self, path, incident_id, kind):
         return (self.process_id, str(business_data.path_for(path).resolve()), incident_id, kind)
@@ -96,6 +97,8 @@ class IncidentNotifications:
 
     def send(self, project_path, incident_id, subject, body, kind="original", blocking=False,
              recipients=None, escalation_due_before=None):
+        if self.stop_event.is_set():
+            return False
         if kind not in ("original", "escalation"):
             raise ValueError("Unknown notification kind")
         from restore_guard import blocked
@@ -106,6 +109,8 @@ class IncidentNotifications:
             return False
         identity = self._identity(project_path, incident_id, kind)
         with ATTEMPT_LOCK:
+            if self.stop_event.is_set():
+                return False
             self.recover(project_path)
             claimed = self._claim(project_path, incident_id, kind, escalation_due_before)
             if claimed:
@@ -118,7 +123,9 @@ class IncidentNotifications:
             accepted_at = None
             try:
                 key = json.dumps([str(project_path), incident_id, kind])
-                if self.mailer.send(subject, body, key=key, blocking=True, **mail_options):
+                if self.stop_event.is_set():
+                    reason = "cancelled_before_smtp"
+                elif self.mailer.send(subject, body, key=key, blocking=True, **mail_options):
                     status, reason = "sent", None
                     accepted_at = self.clock()
             except DeliveryError as exc:
@@ -173,8 +180,14 @@ class IncidentNotifications:
                 (incident_id, kind, self.clock(), self.process_id))
             return cursor.rowcount == 1
 
-    def join(self):
+    def has_writers(self):
+        # Snapshot without waiting behind a database write during bounded shutdown.
+        return any(k[0] == self.process_id for k in tuple(ACTIVE)) or any(w.is_alive() for w in tuple(self.workers))
+
+    def join(self, timeout=30):
+        deadline = time.monotonic() + max(0, timeout)
         with self.lock:
             workers = list(self.workers)
         for worker in workers:
-            worker.join()
+            worker.join(max(0, deadline - time.monotonic()))
+        return not self.has_writers()

@@ -1103,6 +1103,8 @@ class Handler(BaseHTTPRequestHandler):
         return self.headers.get("Sec-Fetch-Site", "same-origin") != "cross-site"
 
     def do_GET(self):
+        if getattr(self.server, "closing", False):
+            return self.send_data(503, {"error": "Servidor cerrando"})
         with self.server.engine.resource_use():
             return self._do_GET()
 
@@ -1202,6 +1204,8 @@ class Handler(BaseHTTPRequestHandler):
         return self.send_data(code, {"error": message})
 
     def do_POST(self):
+        if getattr(self.server, "closing", False):
+            return self.send_data(503, {"error": "Servidor cerrando"})
         with self.server.engine.resource_use():
             return self._do_POST()
 
@@ -1425,14 +1429,15 @@ def main():
     args = parser.parse_args()
     from restore_guard import storage_lease, blocked
     settings = args.config_path.resolve().parent if args.config_path else ROOT / "config"
-    with storage_lease(settings):
+    with storage_lease(settings) as lease:
         if blocked(settings, maintenance_only=True):
             raise RuntimeError("Restauración pendiente: completar o cancelar antes de iniciar AeroTrack.")
-        _serve(args)
+        _serve(args, lease)
 
 
-def _serve(args):
+def _serve(args, lease):
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler, bind_and_activate=False)
+    server.daemon_threads = False  # Track every HTTP writer until it has finished.
     if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
         server.allow_reuse_address = False
         server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
@@ -1450,17 +1455,12 @@ def _serve(args):
     except KeyboardInterrupt:
         pass
     finally:
-        automation.stop()
-        server.engine.stop()
-        if server.engine.worker:
-            server.engine.worker.join()
-        server.engine.notifications.join()
-        server.engine.preview_stop()
-        if getattr(server.engine, "counting", None):
-            server.engine.counting.stop()
-            if server.engine.counting.worker:
-                server.engine.counting.worker.join(timeout=10)
-        server.server_close()
+        from shutdown_control import stop_server, quiescent
+        if stop_server(server, automation, automation.runtime["shutdown_timeout_seconds"]):
+            server.server_close()
+        else:
+            print("Cierre pendiente: escritores activos; almacenamiento y recursos siguen bloqueados.", flush=True)
+            lease.defer_until(lambda: quiescent(server, automation), server.server_close)
 
 
 if __name__ == "__main__":

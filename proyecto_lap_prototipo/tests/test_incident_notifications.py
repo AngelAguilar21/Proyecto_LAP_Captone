@@ -236,6 +236,21 @@ class IncidentNotificationTests(unittest.TestCase):
         self.assertFalse(self.send())
         self.smtp.assert_not_called()
 
+    def test_shutdown_does_not_claim_or_send_new_notification(self):
+        self.service.stop_event.set()
+        self.assertFalse(self.send())
+        self.assertIsNone(self.service.get(self.path, "session-a:bag:1"))
+        self.smtp.assert_not_called()
+
+    def test_notification_join_uses_one_deadline_for_all_workers(self):
+        first, second = Mock(), Mock()
+        first.is_alive.return_value = second.is_alive.return_value = True
+        self.service.workers = [first, second]
+        with patch("incident_notifications.time.monotonic", side_effect=[10., 12., 15.]):
+            self.assertFalse(self.service.join(timeout=5))
+        first.join.assert_called_once_with(3.)
+        second.join.assert_called_once_with(0.)
+
 
 class SMTPOutcomeTests(unittest.TestCase):
     def setUp(self):

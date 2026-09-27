@@ -1,6 +1,7 @@
 """Persistent maintenance/restore holds outside the replaceable projects tree."""
 import os
 import sqlite3
+import threading
 from contextlib import closing, contextmanager
 from pathlib import Path
 
@@ -23,6 +24,16 @@ def blocked(root, project=None, maintenance_only=False):
         return True  # Corrupt/locked metadata is never permission to send or delete.
 
 
+class LeaseDrain:
+    def __init__(self):
+        self.pending = None
+        self.worker = None
+
+    def defer_until(self, ready, cleanup):
+        """Called only after the bounded shutdown deadline; starts no new work."""
+        self.pending = (ready, cleanup)
+
+
 @contextmanager
 def storage_lease(root):
     """Offline restore and the server are mutually exclusive, including on Windows."""
@@ -30,6 +41,17 @@ def storage_lease(root):
     root.mkdir(parents=True, exist_ok=True)
     stream = (root / "storage.lock").open("a+b")
     locked = False
+    drain = LeaseDrain()
+    def release():
+        if locked:
+            stream.seek(0)
+            if os.name == "nt":
+                import msvcrt
+                msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(stream, fcntl.LOCK_UN)
+        stream.close()
     try:
         if stream.seek(0, 2) == 0:
             stream.write(b"0")
@@ -42,14 +64,24 @@ def storage_lease(root):
             import fcntl
             fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
         locked = True
-        yield
+        yield drain
     finally:
-        if locked:
-            stream.seek(0)
-            if os.name == "nt":
-                import msvcrt
-                msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
-            else:
-                import fcntl
-                fcntl.flock(stream, fcntl.LOCK_UN)
-        stream.close()
+        if drain.pending:
+            ready, cleanup = drain.pending
+            def finish():
+                wait = threading.Event().wait
+                while not ready():
+                    wait(0.05)
+                try:
+                    cleanup()
+                finally:
+                    release()
+            # A still-active writer must keep the process and storage lease alive.
+            drain.worker = threading.Thread(target=finish, name="shutdown-drain", daemon=False)
+            try:
+                drain.worker.start()
+            except Exception:
+                finish()  # Never release early even if no drain thread can start.
+                raise
+        else:
+            release()

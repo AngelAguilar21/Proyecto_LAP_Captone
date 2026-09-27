@@ -111,6 +111,19 @@ class BackupTests(unittest.TestCase):
                 self.task(self.now, self.settings)
         self.assertEqual(self.task(self.now, self.settings), "recovered")
 
+    def test_cancel_during_archive_creation_never_publishes(self):
+        from task_control import budget, Cancelled
+        event = threading.Event()
+        write = zipfile.ZipFile.writestr
+        def cancelled(archive, *args, **kwargs):
+            result = write(archive, *args, **kwargs)
+            event.set()
+            return result
+        with budget(event, 60), patch.object(zipfile.ZipFile, "writestr", cancelled):
+            with self.assertRaises(Cancelled):
+                self.task(self.now, self.settings)
+        self.assertFalse(self.target().exists())
+
 
 if __name__ == "__main__":
     unittest.main()

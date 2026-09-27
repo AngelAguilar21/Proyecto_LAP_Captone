@@ -113,6 +113,18 @@ class ReportTests(unittest.TestCase):
         row = self.store.get("reports", "p-test", "2026-09-25")
         self.assertTrue(Path(row["artifact"]).read_bytes().startswith(b"%PDF-"))
 
+    def test_cancel_after_render_never_publishes(self):
+        from task_control import budget, Cancelled
+        import threading
+        event = threading.Event()
+        def render(data):
+            event.set()
+            return self.render.return_value
+        self.render.side_effect = render
+        with budget(event, 60), self.assertRaises(Cancelled):
+            self.task(self.now, self.settings)
+        self.assertEqual(list(self.root.rglob("*.pdf")), [])
+
 
 if __name__ == "__main__":
     unittest.main()

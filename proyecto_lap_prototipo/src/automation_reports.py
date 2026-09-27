@@ -5,6 +5,7 @@ from pathlib import Path
 
 import projects
 from live_reports import business_report_data, business_pdf_bytes
+from task_control import checkpoint
 
 
 class ScheduledReports:
@@ -12,6 +13,7 @@ class ScheduledReports:
         self.engine, self.store, self.renderer = engine, store, renderer
 
     def __call__(self, now, settings):
+        checkpoint()
         if now.strftime("%H:%M") < settings["time"]:
             return "not_due"
         capture = self.engine.automation_snapshot()
@@ -41,6 +43,7 @@ class ScheduledReports:
         data = business_report_data(config, state)
         data["generated"] = now.isoformat()
         pdf = self.renderer(data)
+        checkpoint()
         if not isinstance(pdf, bytes) or not pdf.startswith(b"%PDF-"):
             raise ValueError("Renderer did not produce a PDF")
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -50,6 +53,7 @@ class ScheduledReports:
                 output.write(pdf)
                 output.flush()
                 os.fsync(output.fileno())
+            checkpoint()
             os.replace(temporary, target)
         finally:
             Path(temporary).unlink(missing_ok=True)

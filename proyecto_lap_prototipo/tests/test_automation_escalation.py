@@ -309,6 +309,19 @@ class EscalationTests(unittest.TestCase):
         self.assertEqual(self.tick()["sent"], 0)
         self.smtp.assert_not_called()
 
+    def test_cooperative_stop_after_first_delivery_keeps_remaining_incident_unsent(self):
+        from task_control import budget, Cancelled
+        import threading
+        event = threading.Event()
+        self.create("a")
+        self.create("b")
+        self.smtp.side_effect = lambda *args: event.set()
+        with budget(event, 60), self.assertRaises(Cancelled):
+            self.tick()
+        self.smtp.assert_called_once()
+        self.assertEqual(self.notification("a")["status"], "sent")
+        self.assertIsNone(self.notification("b"))
+
 
 if __name__ == "__main__":
     unittest.main()
