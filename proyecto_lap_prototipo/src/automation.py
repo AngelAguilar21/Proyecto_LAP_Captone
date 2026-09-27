@@ -24,9 +24,11 @@ class AutomationService:
             from automation_reports import ScheduledReports
             from automation_backups import ProjectBackups
             from automation_escalation import AlertEscalation
+            from automation_cleanup import RetentionCleanup
             self.tasks["reports"] = ScheduledReports(engine, self.store)
             self.tasks["backups"] = ProjectBackups(engine, self.store)
             self.tasks["escalation"] = AlertEscalation(engine)
+            self.tasks["cleanup"] = RetentionCleanup(engine, self.store)
         self.stop_event = threading.Event()
         self.run_lock = threading.Lock()
         self.lifecycle_lock = threading.Lock()

@@ -15,6 +15,7 @@ import subprocess
 import threading
 import time
 from collections import deque
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -66,6 +67,8 @@ class Engine:
         self.config_error = None
         self.read_config_file()
         self.lock = threading.RLock()
+        self.resource_lock = threading.RLock()
+        self.resource_users = 0
         self.stop_event = threading.Event()
         self.pause_event = threading.Event()
         self.worker = None
@@ -315,6 +318,17 @@ class Engine:
         finally:
             if conexion:
                 conexion.close()
+
+    @contextmanager
+    def resource_use(self):
+        """Register HTTP resource use without holding a lock during streaming."""
+        with self.resource_lock:
+            self.resource_users += 1
+        try:
+            yield
+        finally:
+            with self.resource_lock:
+                self.resource_users -= 1
 
     def validate_incident_history(self, incident_id, never_attended):
         """Backend for an explicit human history decision; never run automatically."""
@@ -1060,6 +1074,10 @@ class Handler(BaseHTTPRequestHandler):
         return self.headers.get("Sec-Fetch-Site", "same-origin") != "cross-site"
 
     def do_GET(self):
+        with self.server.engine.resource_use():
+            return self._do_GET()
+
+    def _do_GET(self):
         if not self.allowed():
             return self.send_data(403, {"error": "Acceso local requerido."})
         url = urlparse(self.path)
@@ -1154,6 +1172,10 @@ class Handler(BaseHTTPRequestHandler):
         return self.send_data(code, {"error": message})
 
     def do_POST(self):
+        with self.server.engine.resource_use():
+            return self._do_POST()
+
+    def _do_POST(self):
         engine = self.server.engine
         size = int(self.headers.get("Content-Length", "0"))
         if not self.allowed() or not secrets.compare_digest(self.headers.get("X-LAP-Token", ""), engine.token):
