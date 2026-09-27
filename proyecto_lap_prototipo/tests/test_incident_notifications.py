@@ -162,6 +162,81 @@ class IncidentNotificationTests(unittest.TestCase):
         self.assertEqual(row["status"], "sent")
 
 
+    def test_accepted_delivery_retries_persistence_only_and_keeps_acceptance_time(self):
+        write = self.service._write_result
+        results = []
+        def unavailable_once(identity, result):
+            results.append(result)
+            self.clock.time.return_value = 2000
+            if len(results) == 1:
+                raise sqlite3.OperationalError("synthetic disk busy")
+            return write(identity, result)
+        with patch.object(self.service, "_write_result", side_effect=unavailable_once):
+            self.assertTrue(self.send())
+        self.assertEqual(results, [("sent", 1000, None)] * 2)
+        self.assertEqual(self.service.get(self.path, "session-a:bag:1")["sent_at"], 1000)
+        self.smtp.assert_called_once()
+
+    def test_persistence_outage_is_observable_and_later_recovery_never_resends(self):
+        with patch.object(self.service, "_write_result", side_effect=sqlite3.OperationalError("disk")) as write:
+            self.assertFalse(self.send())
+            self.assertEqual(write.call_count, 3)
+            self.assertEqual(self.service.diagnostics()["pending_results"], 1)
+            self.assertEqual(self.service.diagnostics()["error"], "notification_result_persistence_failed")
+            self.assertFalse(self.send())
+        self.service.recover(self.path)
+        self.assertEqual(self.service.get(self.path, "session-a:bag:1")["status"], "sent")
+        self.assertEqual(self.service.diagnostics()["pending_results"], 0)
+        self.smtp.assert_called_once()
+
+    def test_restart_after_lost_confirmation_becomes_uncertain_not_failed(self):
+        import incident_notifications as delivery
+        with patch.object(self.service, "_write_result", side_effect=OSError("disk")):
+            self.assertFalse(self.send())
+        identity = self.service._identity(self.path, "session-a:bag:1", "original")
+        # Simulate loss of volatile results on process exit; persisted claim remains.
+        delivery.PENDING.pop(identity)
+        restarted = IncidentNotifications(notifier.Mailer(self.root), process_id="boot-b")
+        restarted.recover(self.path)
+        self.assertFalse(self.send(service=restarted))
+        row = restarted.get(self.path, "session-a:bag:1")
+        self.assertEqual(row["status"], "uncertain")
+        self.assertIsNone(row["sent_at"])
+        self.smtp.assert_called_once()
+
+    def test_async_accepted_delivery_keeps_pending_result_after_worker_exits(self):
+        with patch.object(self.service, "_write_result", side_effect=OSError("disk")):
+            self.service.send(self.path, "session-a:bag:1", "Test", "Test")
+            self.service.join()
+        self.service.recover(self.path)
+        self.assertEqual(self.service.get(self.path, "session-a:bag:1")["status"], "sent")
+        self.smtp.assert_called_once()
+
+    def test_commit_acknowledgement_failure_does_not_repeat_delivery_or_change_timestamp(self):
+        write = self.service._write_result
+        calls = []
+        def lost_ack(identity, result):
+            write(identity, result)
+            calls.append(result)
+            if len(calls) == 1:
+                raise sqlite3.OperationalError("commit acknowledgement lost")
+        with patch.object(self.service, "_write_result", side_effect=lost_ack):
+            self.assertTrue(self.send())
+        self.assertEqual(len(calls), 2)
+        self.smtp.assert_called_once()
+        self.assertEqual(self.service.get(self.path, "session-a:bag:1")["attempts"], 1)
+
+    def test_same_process_orphan_is_uncertain_but_live_claim_is_not_stolen(self):
+        with closing(business_data.connect(self.path)) as db, db:
+            db.execute("INSERT INTO incident_notifications "
+                       "(incident_id,notification_kind,status,attempted_at,owner) "
+                       "VALUES (?,'original','attempting',1000,'boot-a')", ("session-a:bag:1",))
+        self.service.recover(self.path)
+        self.assertEqual(self.service.get(self.path, "session-a:bag:1")["status"], "uncertain")
+        self.assertFalse(self.send())
+        self.smtp.assert_not_called()
+
+
 class SMTPOutcomeTests(unittest.TestCase):
     def setUp(self):
         self.transport = self.enterContext(patch.object(notifier.smtplib, "SMTP_SSL"))

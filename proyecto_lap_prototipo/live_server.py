@@ -1119,7 +1119,8 @@ class Handler(BaseHTTPRequestHandler):
             return get(self, url, ROOT)
         if url.path == "/api/mail":
             import notifier
-            return self.send_data(200, {**notifier.public(engine.settings_root), "lastError": engine.mailer.error, "sent": engine.mailer.sent})
+            return self.send_data(200, {**notifier.public(engine.settings_root), "lastError": engine.mailer.error,
+                                       "sent": engine.mailer.sent, "deliveryPersistence": engine.notifications.diagnostics()})
         if url.path == "/api/auth":
             sesion = engine.sessions.leer(self.headers.get("X-LAP-Session", ""))
             return self.send_data(200, {
