@@ -32,6 +32,8 @@ from live_metrics import SessionMetrics
 from spatial_scope import accepts
 import projects
 import business_data
+import business_catalog
+import commercial
 import sqlite3
 import auth
 from counting.source import low_latency_ffmpeg
@@ -115,16 +117,16 @@ class Engine:
                 try:
                     meta=json.loads(path.read_text(encoding='utf-8'))
                     if meta.get('projectId') not in (self.project_id, None):continue
-                    if meta.get('module')=='unified' and meta.get('status') in ('ended','stopped') and meta.get('cameraAnalytics') and meta.get('levelAnalytics'):
+                    if meta.get('module') in ('unified','demo') and meta.get('status') in ('ended','stopped') and meta.get('cameraAnalytics'):
                         summaries.append(meta)
                 except (OSError,ValueError):pass
             if summaries:
                 last=max(summaries,key=lambda value:value['created']);pid=last['config'].get('planId','custom')
                 if any(c['id'] in last['cameraAnalytics'] for c in self.config['cameras']):
-                    analytics=copy.deepcopy(last['levelAnalytics'].get(pid,self.state['analytics']))
+                    analytics=copy.deepcopy(last.get('levelAnalytics',{}).get(pid,self.state['analytics']))
                     analytics.update(clusters=[],mappedCount=0)
                     for zone in analytics.get('zones',[]):zone.update(count=0,alert=False)
-                    self.state.update(status=last['status'],session=last['session'],mode='p2pnet',t=last['end'],planId=pid,analytics=analytics,levelAnalytics=last['levelAnalytics'],cameraAnalytics=last['cameraAnalytics'],identityDeleted=True)
+                    self.state.update(status=last['status'],session=last['session'],mode='demo' if last['module']=='demo' else 'p2pnet',t=last['end'],planId=pid,analytics=analytics,levelAnalytics=last.get('levelAnalytics',{}),cameraAnalytics=last['cameraAnalytics'],identityDeleted=True)
 
     def dispatch_alerts(self, camera_analytics, analytics):
         """Guarda cada alerta nueva en la bitacora y, si el correo esta
@@ -558,6 +560,47 @@ class Engine:
                 return self.open_project(remaining)
             return self.projects_listing()
 
+    def business_metrics(self):
+        with self.lock:
+            con = business_data.connect(self.config_path)
+            try:
+                businesses = business_catalog.sync(con, self.config, ROOT / "dashboard" / "public")
+                observed = self.runtime_config or self.config
+                analytics = self.state.get("cameraAnalytics", {})
+                mode, sid, elapsed = self.state.get("mode"), self.state.get("session"), self.state.get("t", 0)
+                if not sid:
+                    histories = []
+                    for path in (self.data_root / "data/replays").glob("*/manifest.json"):
+                        try:
+                            candidate = json.loads(path.read_text(encoding="utf-8"))
+                            if candidate.get("projectId") == self.project_id and candidate.get("status") in ("ended", "stopped") and candidate.get("cameraAnalytics"):
+                                histories.append(candidate)
+                        except (OSError, ValueError):
+                            continue
+                    if histories:
+                        last = max(histories, key=lambda m:m["created"])
+                        sid, elapsed = last["session"], last["end"]
+                        mode = "demo" if last["module"] == "demo" else "p2pnet"
+                        analytics = last["cameraAnalytics"]
+                if sid:
+                    from replay import manifest
+                    try:
+                        meta = manifest(self.data_root, sid)
+                        observed = {**meta["config"], "cameras": meta["cameras"]}
+                    except (OSError, ValueError, KeyError):
+                        pass
+                traffic = business_catalog.traffic(businesses, analytics, observed, self.config)
+                if sid:
+                    try:
+                        meta["end"] = elapsed
+                        meta["cameraAnalytics"] = analytics
+                        commercial.save_session(con, meta, traffic)
+                    except (UnboundLocalError, OSError, ValueError):
+                        pass
+                return {"negocios": traffic, "mode": mode, "session": sid, "t": elapsed}
+            finally:
+                con.close()
+
     def snapshot(self):
         with self.lock:
             return copy.deepcopy({**self.state, "serverTime": time.time(), "serverInstance": self.instance, "configRevision": self.revision, "sourceChecks":self.source_checks, "audit":list(self.audit), "preview": self.preview_snapshot()})
@@ -570,6 +613,15 @@ class Engine:
         with self.lock:
             if self.worker and self.worker.is_alive():
                 raise ValueError("Detén la sesión antes de cambiar el plano o la calibración.")
+            con = business_data.connect(self.config_path)
+            try:
+                businesses = business_catalog.sync(con, config, ROOT / "dashboard" / "public")
+                known = {b["id"] for b in businesses}
+                if all(not l.get("place") or l["place"]["id"] in known for c in config["cameras"] for l in c.get("countLines", [])):
+                    config = business_catalog.bind_config(con, config, businesses)
+                    business_catalog.save_bindings(con, config)
+            finally:
+                con.close()
             projects.atomic_write(self.config_path, json.dumps(config, ensure_ascii=False, indent=2))
             if self.managed and self.project_id:
                 projects.touch(ROOT, self.project_id)
@@ -606,6 +658,7 @@ class Engine:
             if self.worker and self.worker.is_alive():
                 raise ValueError("Ya hay una sesión activa; detenla primero.")
             mode = request.get("detector", "p2pnet")
+            test_run = request.get('testRun') is True
             if mode not in ("p2pnet", "demo"):
                 raise ValueError("AeroTrack opera únicamente con P2PNet.")
             if mode == "p2pnet" and request.get("inferenceSize", 256) not in (128, 256, 384, 512):
@@ -624,7 +677,7 @@ class Engine:
             if not selected:
                 raise ValueError("Activa al menos una cámara.")
             if mode == "p2pnet":
-                if any(c.get("illustrative") for c in selected):
+                if any(c.get("illustrative") for c in selected) and not test_run:
                     raise ValueError("Las ubicaciones ilustrativas no sirven para medir ocupación comercial.")
                 if any(len(c.get("pairs", [])) < 4 for c in selected):
                     raise ValueError("Calibra todas las cámaras con al menos cuatro referencias antes de iniciar.")
@@ -635,7 +688,7 @@ class Engine:
                 for camera in selected:
                     calibration(camera.get("pairs", []))
             if request.get("requireUnified") and mode != "demo":
-                if any(c.get('illustrative') for c in selected):
+                if any(c.get('illustrative') for c in selected) and not test_run:
                     raise ValueError('Las ubicaciones ilustrativas permiten probar el mapa, pero no validar identidades entre cámaras. Usa referencias reales del mismo suelo y tiempos sincronizados.')
                 if len(selected)>1 and not self.config["clocksVerified"]:
                     raise ValueError("Verifica el tiempo común y los desfases antes del conteo multicámara.")
@@ -655,6 +708,7 @@ class Engine:
             self.state = {"status": "starting", "mode": mode, "people": [], "cameras": [], "events": [], "t": 0,
                           "analytics": {"clusters": [], "zones": [], "heat": [], "mappedCount": 0}, "error": None, "session": secrets.token_hex(4)}
             self.runtime_config = copy.deepcopy(self.config)
+            self.runtime_config['testRun'] = test_run
             self.runtime_config["cameras"] = copy.deepcopy(selected)
             selected_ids = {camera['id'] for camera in selected}
             for camera in self.runtime_config['cameras']:
@@ -834,6 +888,8 @@ class Engine:
             for camera in cams:
                 plan=level_configs[camera.get('planId','custom')]
                 camera['scope']={key:plan.get(key) for key in ('width','height','workArea','zones','mapAsset')}
+            from bag_signal import BagSignal
+            bag_signal = BagSignal(ROOT,cams)
             flow = ZoneFlow(config)
             trails = {}
             wall_start = time.monotonic()
@@ -843,10 +899,9 @@ class Engine:
                     self.stop_event.wait(.1)
                     continue
                 start = time.monotonic()
-                # Las grabaciones simulan una fuente viva: si la inferencia tarda,
-                # se saltan frames intermedios en vez de reproducir el video en
-                # cámara lenta y acumular segundos de retraso.
-                t = start - wall_start if active[0]["stream"] else max(timeline, start - wall_start)
+                # En vivo prima la latencia. En archivos prima conservar las
+                # muestras: el coste de inferencia no debe saltarse cruces.
+                t = start - wall_start if active[0]["stream"] else timeline
                 observations, raw_frames, pending = [], {}, []
                 for c in list(active):
                     if self.stop_event.is_set():
@@ -913,6 +968,23 @@ class Engine:
                         group=[p for p in people if p['camera']==c['id']]
                         camera_analytics[c['id']] = combined.observe(c,raw_frames[c['id']],group,t)
                         camera_analytics[c['id']]['map']=camera_maps[c['id']].update(group,t)
+                for cid, frame in raw_frames.items():
+                    try:
+                        bag_events = bag_signal.observe(cid,frame,t)
+                        if bag_events:
+                            con = business_data.connect(self.config_path)
+                            try:
+                                commercial.setup(con)
+                                with con:
+                                    for event in bag_events:
+                                        ident = f"{self.state['session']}:{cid}:{event['business']}:{event['t']}"
+                                        con.execute("INSERT OR IGNORE INTO commercial_bags VALUES (?,?,?,?,?,?,?,?,?)", (ident,self.state['session'],event['business'],t,int(event['matched']),int(event['changed']),event['similarity'],event['reason'],'demo' if config.get('testRun') else 'real'))
+                            finally:
+                                con.close()
+                        if cid in bag_signal.cameras:
+                            camera_analytics.setdefault(cid,{})['bagSignal'] = {'status':'experimental','samples':len(bag_events)}
+                    except (ValueError, ImportError, OSError, RuntimeError) as exc:
+                        camera_analytics.setdefault(cid,{})['bagSignal'] = {'status':'unavailable','error':str(exc)}
                 encoded = {}
                 for cid, frame in raw_frames.items():
                     # Operator-only view on a loopback-only server: the operator already
@@ -994,6 +1066,8 @@ class Engine:
                     replay.meta['derivedMapVersion']=2
             if replay:
                 try:
+                    replay.meta['reportAnalytics'] = copy.deepcopy(self.state['analytics'])
+                    replay.meta['totals'] = copy.deepcopy(self.state.get('totals', {}))
                     replay.finish("error" if self.state["status"]=="error" else "stopped" if self.stop_event.is_set() else "ended")
                 except OSError as exc:
                     self.state.update(status="error", error=f"No se pudo guardar la reproducción: {exc}")
@@ -1023,6 +1097,10 @@ class Engine:
         occupancy = Occupancy(config)
         metrics = SessionMetrics()
         history = {}
+        from following.line_counter import LineCounter
+        counters = {c["id"]: LineCounter(c.get("countLines", [])) for c in config["cameras"]}
+        from replay import ReplayWriter
+        replay = ReplayWriter(self.data_root, self.state["session"], "demo", config["cameras"], {k:v for k,v in config.items() if k != "cameras"}, self.project_id)
         t = 0.
         while not self.stop_event.is_set():
             if self.pause_event.is_set():
@@ -1037,11 +1115,27 @@ class Engine:
                 h.append([x, y, t])
                 del h[:-90]
                 people.append({"id": pid, "camera": config["cameras"][i % len(config["cameras"])]["id"], "point": [x, y], "history": list(h), "association": "synthetic", "predicted": False})
+            camera_analytics = {}
+            for c in config["cameras"]:
+                synthetic = []
+                for l in c.get("countLines", []):
+                    a,b = l["a"],l["b"]
+                    dx,dy = b[0]-a[0],b[1]-a[1]
+                    length = math.hypot(dx,dy) or 1
+                    side = .02 if int(t/2)%2 else -.02
+                    synthetic.append({"id": "DEMO-"+l["id"], "pixel": [(a[0]+b[0])/2-dy/length*side,(a[1]+b[1])/2+dx/length*side]})
+                camera_analytics[c["id"]] = {"crossings": counters[c["id"]].update(synthetic,t)}
+            analytics = occupancy.update(people,t)
+            replay.append({"t":t,"analytics":analytics,"levels":{config.get("planId","custom"):analytics},"cameras":[{"id":cid,"t":t,"analysis":a,"people":[p for p in people if p["camera"]==cid]} for cid,a in camera_analytics.items()]})
             with self.lock:
-                analytics = occupancy.update(people,t)
+                self.state["cameraAnalytics"] = camera_analytics
                 self.state.update(status="paused" if self.pause_event.is_set() else "running", people=people, t=t, analytics=analytics, totals=metrics.update(people,analytics,t), series=list(metrics.series), updatedAt=time.time(), cameras=[])
             self.stop_event.wait(.2)
             t += .2
+        replay.meta["cameraAnalytics"] = camera_analytics if t else {}
+        replay.meta['reportAnalytics'] = copy.deepcopy(self.state['analytics'])
+        replay.meta['totals'] = copy.deepcopy(self.state.get('totals', {}))
+        replay.finish("stopped")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1058,7 +1152,7 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         try:
             self.wfile.write(data)
-        except (BrokenPipeError, ConnectionResetError):
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
             pass
 
     def allowed(self):
@@ -1076,6 +1170,59 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_data(403, {"error": "Acceso local requerido."})
         url = urlparse(self.path)
         engine = self.server.engine
+        if url.path == "/api/commercial/sample":
+            if auth.hay_usuarios(engine.settings_root) and not engine.sessions.leer(self.headers.get("X-LAP-Session", "")):
+                return self.send_data(401,{"error":"Inicia sesión."})
+            try:
+                sample = json.loads((ROOT / "data/commercial-tests/validacion.json").read_text(encoding="utf-8"))
+                if sample.get("projectId") != engine.project_id:
+                    raise ValueError("No hay una prueba comercial guardada en este proyecto.")
+                return self.send_data(200,sample)
+            except (OSError, ValueError) as exc:
+                return self.send_data(404,{"error":str(exc)})
+        if url.path in ("/api/commercial", "/api/commercial/template", "/api/commercial/export"):
+            if auth.hay_usuarios(engine.settings_root) and not engine.sessions.leer(self.headers.get("X-LAP-Session", "")):
+                return self.send_data(401, {"error": "Inicia sesión para consultar ventas."})
+            with engine.lock:
+                metrics = engine.business_metrics()
+                con = business_data.connect(engine.config_path)
+                try:
+                    businesses = business_catalog.sync(con, engine.config, ROOT / "dashboard/public")
+                    if url.path == "/api/commercial/template":
+                        return self.send_data(200, commercial.template(businesses).encode("utf-8-sig"), "text/csv; charset=utf-8")
+                    query = parse_qs(url.query)
+                    result = commercial.summary(con, businesses, metrics["negocios"], query.get("dataset",["real"])[0], query.get("date",[None])[0], query.get("hour",[None])[0])
+                    if url.path == "/api/commercial/export":
+                        import csv, io
+                        output = io.StringIO(); writer = csv.writer(output)
+                        if query.get('kind', [''])[0] == 'incidents':
+                            writer.writerow(['Negocio','Origen','Inicio','Duración segundos','Pico personas','Ventas de la hora PEN','Referencia histórica PEN','Días comparables','Diferencia descriptiva %','Alcance de comparación'])
+                            for row in result['businesses']:
+                                for incident in row['incidents']:
+                                    writer.writerow([row['name'],result['dataset'],incident['start'],incident['duration'],incident['peak'],incident['sales'],incident['baseline'],incident['sampleDays'],incident['differencePercent'],incident['scope']])
+                            return self.send_data(200, output.getvalue().encode('utf-8-sig'), 'text/csv; charset=utf-8')
+                        writer.writerow(["Negocio","Fecha","Hora","Origen","Entradas","Ventas PEN","Proyección PEN","Días históricos","Salidas emparejadas","Objetos nuevos","Salidas sin emparejar"])
+                        for row in result["businesses"]:
+                            writer.writerow([row["name"],result["date"],result["hour"],result["dataset"],row["entries"],row["sales"],row["forecast"]["estimate"],row["forecast"]["days"],row["bags"]["matched"],row["bags"]["changed"],row["bags"]["unmatched"]])
+                        return self.send_data(200, output.getvalue().encode("utf-8-sig"), "text/csv; charset=utf-8")
+                    return self.send_data(200,result)
+                except (ValueError, TypeError) as exc:
+                    return self.send_data(400,{"error":str(exc)})
+                finally:
+                    con.close()
+        if url.path == "/api/businesses/metrics":
+            if auth.hay_usuarios(engine.settings_root) and not engine.sessions.leer(self.headers.get("X-LAP-Session", "")):
+                return self.send_data(401, {"error": "Inicia sesión."})
+            return self.send_data(200, engine.business_metrics())
+        if url.path == "/api/businesses":
+            if auth.hay_usuarios(engine.settings_root) and not engine.sessions.leer(self.headers.get("X-LAP-Session", "")):
+                return self.send_data(401, {"error": "Inicia sesión para consultar los negocios."})
+            with engine.lock:
+                conexion = business_data.connect(engine.config_path)
+                try:
+                    return self.send_data(200, {"negocios": business_catalog.sync(conexion, engine.config, ROOT / "dashboard" / "public"), "projectId": engine.project_id})
+                finally:
+                    conexion.close()
         if url.path.startswith("/api/replay/"):
             from replay import get
             return get(self,url,self.server.engine.data_root)
@@ -1109,13 +1256,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_data(200, {"config": engine.config, "token": engine.token, "revision": engine.revision, "projectId": engine.project_id})
         if url.path == "/api/state":
             return self.send_data(200, engine.snapshot())
-        if url.path == "/api/report":
+        if url.path in ("/api/report", "/api/report/session"):
             from live_reports import export
             query=parse_qs(url.query)
             try:
                 with engine.lock:
                     config=copy.deepcopy(engine.config)
                     snapshot=engine.snapshot()
+                if query.get('session'):
+                    from replay import report_snapshot
+                    config,snapshot,meta=report_snapshot(engine.data_root,query['session'][0],engine.project_id)
+                if url.path == '/api/report/session':
+                    return self.send_data(200, {'config':config,'state':snapshot,'created':meta['created'] if query.get('session') else None,'scope':'session'})
                 result,mime=export(config,snapshot,query.get("kind",["zones"])[0],query.get("format",["csv"])[0])
                 with engine.lock:
                     engine.record("Reporte exportado",query.get("kind",["zones"])[0]+" · "+query.get("format",["csv"])[0])
@@ -1145,7 +1297,7 @@ class Handler(BaseHTTPRequestHandler):
     # Rutas de configuracion: solo el operador. El administrador entra al
     # sistema, ve todo y ajusta umbrales de alerta, pero no toca la geometria
     # ni la calibracion, para no romper por error algo que costo calibrar.
-    SOLO_OPERADOR = ("/api/config", "/api/import-plan", "/api/plan-lines", "/api/upload",
+    SOLO_OPERADOR = ("/api/commercial/import", "/api/businesses", "/api/config", "/api/import-plan", "/api/plan-lines", "/api/upload",
                      "/api/camera-preview", "/api/calibration-check")
 
     def reject(self, size, code, message):
@@ -1230,6 +1382,64 @@ class Handler(BaseHTTPRequestHandler):
             if not 0 < size <= 4000000:
                 raise ValueError("Tamaño de solicitud inválido.")
             data = json.loads(self.rfile.read(size))
+            if not isinstance(data, dict):
+                raise ValueError("Solicitud inválida.")
+            if parsed.path == "/api/commercial/import":
+                with engine.lock:
+                    if data.get("projectId") != engine.project_id:
+                        raise ValueError("El proyecto cambió; recarga antes de importar.")
+                    con = business_data.connect(engine.config_path)
+                    try:
+                        businesses = business_catalog.sync(con, engine.config, ROOT / "dashboard/public")
+                        result = commercial.import_sales(con,data.get("csv"),businesses,data.get("name","ventas.csv"),data.get("dataset","real"),bool(data.get("preview")))
+                        return self.send_data(200,result)
+                    finally:
+                        con.close()
+            if parsed.path == "/api/businesses":
+                with engine.lock:
+                    if data.get("projectId") != engine.project_id:
+                        raise ValueError("El proyecto cambió. Recarga los negocios antes de guardar.")
+                    if engine.worker and engine.worker.is_alive():
+                        raise ValueError("Detén el monitoreo antes de editar los negocios o sus accesos.")
+                    conexion = business_data.connect(engine.config_path)
+                    try:
+                        if data.get("action") == "reopen":
+                            with conexion:
+                                conexion.execute("INSERT OR REPLACE INTO negocio_estados VALUES (?,?)", (data.get("id"), "activo"))
+                        elif data.get("action") == "delete":
+                            with conexion:
+                                conexion.execute("INSERT OR REPLACE INTO negocio_estados VALUES (?,?)", (data.get("id"), "cerrado"))
+                            updated = copy.deepcopy(engine.config)
+                            for c in updated["cameras"]:
+                                for l in c.get("countLines", []):
+                                    if (l.get("place") or {}).get("id") == data.get("id"):
+                                        l.pop("place", None)
+                            engine.configure(updated)
+                        elif data.get("action") == "save":
+                            referencia = data.get("referencia")
+                            catalogo = None
+                            if referencia:
+                                asset = referencia.get("asset") if isinstance(referencia, dict) else None
+                                if asset not in [f"/maps/lap/{n}.json" for n in (1, 2, 3, 4)]:
+                                    raise ValueError("Referencia cartográfica inválida.")
+                                catalogo = json.loads((ROOT / "dashboard" / "public" / asset.lstrip("/")).read_text(encoding="utf-8"))
+                            business_data.guardar_negocio(conexion, data, engine.config, catalogo)
+                            updated = copy.deepcopy(engine.config)
+                            for c in updated["cameras"]:
+                                for l in c.get("countLines", []):
+                                    if (l.get("place") or {}).get("id") == data["id"]:
+                                        l.pop("place", None)
+                                    if any(p["camaraId"] == c["id"] and p["lineaId"] == l["id"] for p in data.get("puertas", [])):
+                                        l["place"] = {"id": data["id"], "name": data["nombre"], **data["ubicacion"]}
+                            engine.configure(updated)
+                        else:
+                            raise ValueError("Acción de negocio desconocida.")
+                        engine.record("Negocios actualizados", data.get("nombre") or data.get("id", ""))
+                        return self.send_data(200, {"negocios": business_data.listar_negocios(conexion), "projectId": engine.project_id, "config": engine.config})
+                    except sqlite3.IntegrityError as exc:
+                        raise ValueError("No se pudo guardar el negocio: revisa sus puertas.") from exc
+                    finally:
+                        conexion.close()
             if not isinstance(data, dict):
                 raise ValueError("Solicitud inválida.")
             if parsed.path.startswith("/api/counting/"):

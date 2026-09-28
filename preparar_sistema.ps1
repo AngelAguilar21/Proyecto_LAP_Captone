@@ -15,7 +15,7 @@ Run-Step $python @('-c','import sys; assert sys.version_info[:2] == (3,12), "Se 
 Run-Step $python @('-m','pip','install','--no-compile','-r','requirements.txt')
 Run-Step $python @('-m','pip','check')
 Run-Step $python @('proyecto_lap_prototipo/setup_counting.py')
-Run-Step $python @('proyecto_lap_prototipo/setup_tracking.py','--download')
+Run-Step $python @('proyecto_lap_prototipo/setup_objects.py','--download')
 Run-Step $python @('proyecto_lap_prototipo/setup_workspace.py')
 Push-Location 'proyecto_lap_prototipo/dashboard'
 try {

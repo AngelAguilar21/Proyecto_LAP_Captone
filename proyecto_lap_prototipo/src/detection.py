@@ -15,6 +15,7 @@ umbral de confianza (0.5 por defecto) siguen exactamente run_test.py del
 repo oficial, para no desviarnos de como fue entrenado el modelo.
 """
 import sys
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -56,6 +57,10 @@ class DetectorP2PNet:
         # alto. None = resolucion original.
         self.lado_max = lado_max
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        if self.device == "cpu":
+            # Evitar que cada lote pequeño ocupe todos los hilos del equipo.
+            # Coincide con el límite del motor de conteo independiente.
+            torch.set_num_threads(max(1, min(4, (os.cpu_count() or 2)//2)))
 
         args = SimpleNamespace(backbone=backbone, row=row, line=line,
                                 weight_path=ruta_pesos, gpu_id=0)

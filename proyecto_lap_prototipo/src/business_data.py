@@ -12,6 +12,7 @@ con los de otro proyecto, igual que ya pasa con su plano y sus cámaras.
 import json
 import sqlite3
 import time
+import math
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -66,6 +67,27 @@ CREATE TABLE IF NOT EXISTS trafico_historico (
 CREATE INDEX IF NOT EXISTS idx_trafico_zona_hora_dia ON trafico_historico (zona, hora, dia_semana);
 """
 
+NEGOCIOS_ESQUEMA = """
+CREATE TABLE IF NOT EXISTS negocio_ubicaciones (
+    negocio_id TEXT PRIMARY KEY REFERENCES negocios(id) ON DELETE CASCADE,
+    plano_id TEXT NOT NULL, x REAL NOT NULL, y REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS negocio_puertas (
+    negocio_id TEXT NOT NULL REFERENCES negocios(id) ON DELETE CASCADE,
+    camara_id TEXT NOT NULL, linea_id TEXT NOT NULL,
+    PRIMARY KEY (negocio_id, camara_id, linea_id),
+    UNIQUE (camara_id, linea_id)
+);
+CREATE TABLE IF NOT EXISTS negocio_referencias (
+    negocio_id TEXT PRIMARY KEY REFERENCES negocios(id) ON DELETE CASCADE,
+    asset TEXT NOT NULL, feature_id TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS negocio_estados (
+    negocio_id TEXT PRIMARY KEY REFERENCES negocios(id) ON DELETE CASCADE,
+    estado TEXT NOT NULL DEFAULT 'activo'
+);
+"""
+
 ESTADOS_VALIDOS = {"pendiente", "revisado", "falsa_alarma", "resuelto"}
 TIPOS_VALIDOS = {"aglomeracion"}
 
@@ -82,6 +104,9 @@ def connect(project_path):
     conexion = sqlite3.connect(path, timeout=15)
     conexion.execute("PRAGMA foreign_keys = ON")
     conexion.executescript(ESQUEMA)
+    conexion.executescript(NEGOCIOS_ESQUEMA)
+    conexion.execute("INSERT OR IGNORE INTO negocio_puertas SELECT id, camara_id, linea_id FROM negocios WHERE camara_id IS NOT NULL AND linea_id IS NOT NULL")
+    conexion.commit()
     return conexion
 
 
@@ -99,13 +124,86 @@ def crear_negocio(conexion, id_negocio, nombre, camara_id=None, linea_id=None):
 def listar_negocios(conexion):
     filas = conexion.execute(
         "SELECT id, nombre, camara_id, linea_id FROM negocios ORDER BY nombre").fetchall()
-    return [{"id": f[0], "nombre": f[1], "camaraId": f[2], "lineaId": f[3]} for f in filas]
+    ubicaciones = {f[0]: {"planId": f[1], "point": [f[2], f[3]]} for f in
+                   conexion.execute("SELECT negocio_id, plano_id, x, y FROM negocio_ubicaciones")}
+    puertas = defaultdict(list)
+    referencias = {f[0]: {"asset": f[1], "featureId": f[2]} for f in
+                   conexion.execute("SELECT negocio_id, asset, feature_id FROM negocio_referencias")}
+    estados = dict(conexion.execute('SELECT negocio_id, estado FROM negocio_estados'))
+    for negocio, camara, linea in conexion.execute("SELECT negocio_id, camara_id, linea_id FROM negocio_puertas ORDER BY camara_id, linea_id"):
+        puertas[negocio].append({"camaraId": camara, "lineaId": linea})
+    return [{"id": f[0], "nombre": f[1], "camaraId": f[2], "lineaId": f[3],
+             "puertas": puertas[f[0]], "ubicacion": ubicaciones.get(f[0]), "referencia": referencias.get(f[0]), "estado": estados.get(f[0], 'activo')} for f in filas]
+
+
+def guardar_negocio(conexion, datos, config, catalogo=None):
+    """Valida accesos reales y guarda ubicación y todas las puertas atómicamente."""
+    if not isinstance(datos.get("id"), str) or not isinstance(datos.get("nombre"), str):
+        raise ValueError("Indica el identificador y el nombre del negocio.")
+    ident = datos["id"].strip()
+    nombre = datos["nombre"].strip()
+    if not ident or len(ident) > 100 or not nombre or len(nombre) > 120:
+        raise ValueError("Indica un nombre de negocio de hasta 120 caracteres.")
+    current = conexion.execute("SELECT nombre FROM negocios WHERE id=?", (ident,)).fetchone()
+    if (not current or current[0] != nombre) and conexion.execute("SELECT 1 FROM negocios WHERE lower(trim(nombre))=lower(?) AND id<>?", (nombre, ident)).fetchone():
+        raise ValueError("Ya existe un negocio con ese nombre en el proyecto.")
+    ubicacion = datos.get("ubicacion") or {}
+    if not isinstance(ubicacion, dict):
+        raise ValueError("Marca la ubicación del negocio en el plano.")
+    plano = ubicacion.get("planId")
+    planos = config.get("plans") or {config.get("planId", "custom"): config}
+    punto = ubicacion.get("point")
+    if plano not in planos or not isinstance(punto, list) or len(punto) != 2:
+        raise ValueError("Marca la ubicación del negocio en un plano del proyecto.")
+    if any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in punto):
+        raise ValueError("La ubicación del negocio es inválida.")
+    if not (0 <= punto[0] <= planos[plano]["width"] and 0 <= punto[1] <= planos[plano]["height"]):
+        raise ValueError("La ubicación debe estar dentro del plano.")
+    referencia = datos.get("referencia")
+    if referencia:
+        if not isinstance(referencia, dict) or referencia.get("asset") != planos[plano].get("mapAsset"):
+            raise ValueError("El local seleccionado no pertenece al mapa de este nivel.")
+        lugar = next((f for f in (catalogo or {}).get("features", []) if str(f.get("id")) == referencia.get("featureId") and f.get("geometry", {}).get("type") == "Point" and f.get("properties", {}).get("class") in ("retail", "food_and_drink")), None)
+        if not lugar:
+            raise ValueError("El local seleccionado ya no existe en la cartografía.")
+        if any(abs(a-b) > .001 for a,b in zip(punto,lugar["geometry"]["coordinates"])):
+            raise ValueError("La ubicación debe coincidir con el local seleccionado. Usa ubicación propia para moverla.")
+        if conexion.execute("SELECT 1 FROM negocio_referencias WHERE asset=? AND feature_id=? AND negocio_id<>?", (referencia["asset"], referencia["featureId"], ident)).fetchone():
+            raise ValueError("Este local del mapa ya está registrado como negocio.")
+    puertas = datos.get("puertas", [])
+    if not isinstance(puertas, list):
+        raise ValueError("Selecciona las puertas del negocio.")
+    validas = {(c["id"], l["id"]): c for c in config.get("cameras", []) for l in c.get("countLines", [])}
+    usadas = set()
+    for puerta in puertas:
+        if not isinstance(puerta, dict) or not isinstance(puerta.get("camaraId"), str) or not isinstance(puerta.get("lineaId"), str):
+            raise ValueError("Una de las puertas es inválida.")
+        clave = (puerta.get("camaraId"), puerta.get("lineaId"))
+        if clave not in validas or clave in usadas:
+            raise ValueError("Una de las líneas ya no existe o está repetida. Revisa las puertas.")
+        if (validas[clave].get("planId") or config.get("planId", "custom")) != plano:
+            raise ValueError("Las puertas deben pertenecer al mismo nivel del negocio.")
+        if conexion.execute("SELECT 1 FROM negocio_puertas WHERE camara_id=? AND linea_id=? AND negocio_id<>?", (*clave, ident)).fetchone():
+            raise ValueError("Una línea seleccionada ya está asociada a otro negocio.")
+        usadas.add(clave)
+    with conexion:
+        primera = puertas[0] if puertas else {}
+        conexion.execute("INSERT INTO negocios VALUES (?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET nombre=excluded.nombre, camara_id=excluded.camara_id, linea_id=excluded.linea_id",
+                         (ident, nombre, primera.get("camaraId"), primera.get("lineaId"), time.time()))
+        conexion.execute("INSERT INTO negocio_ubicaciones VALUES (?,?,?,?) ON CONFLICT(negocio_id) DO UPDATE SET plano_id=excluded.plano_id,x=excluded.x,y=excluded.y", (ident, plano, *punto))
+        conexion.execute("DELETE FROM negocio_puertas WHERE negocio_id=?", (ident,))
+        conexion.executemany("INSERT INTO negocio_puertas VALUES (?,?,?)", [(ident, *clave) for clave in usadas])
+        conexion.execute("DELETE FROM negocio_referencias WHERE negocio_id=?", (ident,))
+        if referencia:
+            conexion.execute("INSERT INTO negocio_referencias VALUES (?,?,?)", (ident, referencia["asset"], referencia["featureId"]))
 
 
 def eliminar_negocio(conexion, id_negocio):
-    conexion.execute("DELETE FROM ventas WHERE negocio_id = ?", (id_negocio,))
-    conexion.execute("DELETE FROM negocios WHERE id = ?", (id_negocio,))
-    conexion.commit()
+    if not isinstance(id_negocio, str):
+        raise ValueError("Selecciona el negocio que quieres eliminar.")
+    with conexion:
+        conexion.execute("DELETE FROM ventas WHERE negocio_id = ?", (id_negocio,))
+        conexion.execute("DELETE FROM negocios WHERE id = ?", (id_negocio,))
 
 
 # --- Ventas ---

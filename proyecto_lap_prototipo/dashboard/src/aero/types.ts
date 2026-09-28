@@ -1,9 +1,10 @@
 export type Point = [number, number];
 export type SourceMode = 'recordings' | 'live' | 'demo';
-export type View = 'replay' | 'overview' | 'setup' | 'map' | 'cameras' | 'lab' | 'dashboard' | 'zones' | 'rules' | 'reports' | 'audit' | 'alerts' | 'projects';
+export type View = 'commercial' | 'businesses' | 'replay' | 'overview' | 'setup' | 'map' | 'cameras' | 'lab' | 'dashboard' | 'zones' | 'rules' | 'reports' | 'audit' | 'alerts' | 'projects';
 export interface Camera {
   analysisZones?:{id:string;name:string;points:Point[];threshold:number;dwell:number}[];
   crowdThreshold?:number; crowdDwell?:number; illustrative?:boolean;
+  bagSignal?:boolean;
   countLines?:{id:string;name:string;place?:{id:string;name:string;point:Point;planId:string};a:Point;b:Point;entrySide:number;bands?:{negative:Point[];positive:Point[]}}[];
   planId?: string;
   color?: string; active?: boolean; restrictCoverage?: boolean;
@@ -28,6 +29,7 @@ export interface Config {
   width: number; height: number; unit: 'relative' | 'meters'; background: string; radius: number;
   minPeople: number; dwell: number; handoffSeconds: number; matchDistance: number; clocksVerified: boolean; personHeight?: number;
   cameras: Camera[]; zones: Zone[]; airport?: string; floor?: string; sourceMode?: SourceMode;
+  recordingStartedAt?:string;
   commercialContext?:CommercialContext;
   mapConfigured?: boolean; setupComplete?: boolean; planName?: string; importWarnings?: string[];
 }
@@ -42,6 +44,7 @@ export interface CameraStatus {
 }
 export interface HeatCell { x: number; y: number; size: number; seconds: number; peak: number; visits?: number }
 export interface SessionState {
+  testRun?: boolean;
   cameraAnalytics?:Record<string,any>;
   planId?:string;
   serverInstance?: string;

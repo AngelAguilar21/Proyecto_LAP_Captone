@@ -5,6 +5,7 @@ import { freshCamera, isActive, isStream } from './types';
 import Icon from './Icon';
 import { CameraEditor, CameraPanel } from './CameraPanel';
 import CameraRegionEditor from './CameraRegionEditor';
+import CameraAccessEditor from './CameraAccessEditor';
 import PreviewControls from './PreviewControls';
 import PlanWorkspace from './PlanWorkspace';
 import PlanSelector from './PlanSelector';
@@ -175,6 +176,7 @@ export default function SetupFlow({ session, selected, onSelected, onNavigate, s
           <section className="aero-panel">
             <div className="panel-heading"><div><h2>Zona útil de la imagen</h2></div></div>
             <CameraRegionEditor key={camera.id} camera={camera} config={config} session={session} onChange={session.setConfig}/>
+            <CameraAccessEditor key={`access-${camera.id}`} camera={camera} config={config} session={session} onChange={session.setConfig}/>
           </section>
         </>:<p className="empty-text">Agrega una cámara en el paso anterior.</p>}
       </div>}

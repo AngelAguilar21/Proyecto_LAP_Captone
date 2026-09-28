@@ -33,8 +33,8 @@ La instalación conserva una configuración existente. En una instalación nueva
 | P2PNet, código oficial | Submódulo Git `proyecto_lap_prototipo/external/P2PNet`, fijado a un commit |
 | P2PNet, pesos SHTechA | El submódulo incluye `weights/SHTechA.pth`, aproximadamente 86 MB |
 | Compatibilidad P2PNet | `setup_counting.py` aplica el parche versionado y verifica una inferencia CPU |
-| YOLO y ByteTrack | Dependencia Ultralytics fijada en `requirements-tracking.txt`; integración en `src/following` |
-| YOLO11n, pesos COCO | `setup_tracking.py --download` descarga el archivo oficial y comprueba una inferencia |
+| YOLO y ByteTrack | Dependencia Ultralytics fijada en `proyecto_lap_prototipo/requirements-commercial.txt`; integración en `src/following` |
+| YOLO11n, pesos COCO | `setup_objects.py --download` descarga el archivo oficial y comprueba una inferencia |
 | Mapas LAP y frontend | Archivos versionados; `npm ci` instala dependencias y `npm run build` compila la interfaz |
 
 No necesitas UCF-QNRF para ejecutar los modelos preentrenados. Ese dataset se utiliza para experimentos de evaluación o entrenamiento. Descargar un ZIP de GitHub no incorpora el contenido de los submódulos: utiliza Git.
@@ -55,3 +55,7 @@ npm run dev -- --port 5173 --strictPort
 Abre http://127.0.0.1:5173. Al terminar cambios de interfaz, ejecuta `npm run build` desde `proyecto_lap_prototipo/dashboard` para actualizar el modo normal de 8765. Para verificar el backend: `.venv/Scripts/python.exe -m unittest discover -s proyecto_lap_prototipo/tests`.
 
 La inferencia CPU y el arranque están separados de la precisión: P2PNet puede sobreestimar en escenas distintas de sus datos de entrenamiento. Contrasta las estimaciones con anotaciones manuales antes de usar umbrales operativos.
+
+## Negocios y ventas
+
+La rama comercial añade **Negocios y accesos** y **Ventas y análisis**. Se inicia con los mismos comandos CMD; no necesita un servidor de BD adicional. Se guarda en SQLite por proyecto. Reinicia el servidor después de actualizar. El detector opcional de objetos usa YOLO11n y ByteTrack; la preparación descarga sus pesos oficiales. Consulta `proyecto_lap_prototipo/docs/PLAN_COMERCIAL.md` para importar ventas, vincular accesos y ver la prueba guardada en Proyecto principal.

@@ -1,5 +1,6 @@
 # Entorno común AeroTrack: Python 3.12, conteo y seguimiento en CPU.
--r proyecto_lap_prototipo/requirements-tracking.txt
+-r proyecto_lap_prototipo/requirements-counting.txt
+-r proyecto_lap_prototipo/requirements-commercial.txt
 
 # Preparación de datasets y utilidades del proyecto.
 pandas

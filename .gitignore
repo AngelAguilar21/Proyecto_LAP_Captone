@@ -81,3 +81,10 @@ proyecto_lap_prototipo/docs/REVISION_USABILIDAD_MONITOREO.md
 proyecto_lap_prototipo/config/correo.local.json
 proyecto_lap_prototipo/config/projects/
 proyecto_lap_prototipo/config/usuarios.local.json
+
+# Lectura local de papers y notas de investigación; no se versiona.
+proyecto_lap_prototipo/paper_reidentification/
+proyecto_lap_prototipo/SCOUT/
+
+# Exportaciones generadas al validar la fase comercial; se regeneran desde la app.
+proyecto_lap_prototipo/data/commercial-tests/reportes/

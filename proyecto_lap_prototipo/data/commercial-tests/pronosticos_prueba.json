@@ -1,0 +1,47 @@
+[
+  {
+    "date": "2026-09-27",
+    "hour": 18,
+    "entries": 10,
+    "forecast": {
+      "estimate": 212.5,
+      "perEntry": 21.25,
+      "days": 4,
+      "range": [
+        205.0,
+        220.0
+      ],
+      "reason": "Proyección, no venta confirmada. Ingreso histórico por entrada; no ticket por compra."
+    }
+  },
+  {
+    "date": "2026-09-27",
+    "hour": 19,
+    "entries": 25,
+    "forecast": {
+      "estimate": 531.25,
+      "perEntry": 21.25,
+      "days": 4,
+      "range": [
+        512.5,
+        550.0
+      ],
+      "reason": "Proyección, no venta confirmada. Ingreso histórico por entrada; no ticket por compra."
+    }
+  },
+  {
+    "date": "2026-09-27",
+    "hour": 20,
+    "entries": 40,
+    "forecast": {
+      "estimate": 850.0,
+      "perEntry": 21.25,
+      "days": 4,
+      "range": [
+        820.0,
+        880.0
+      ],
+      "reason": "Proyección, no venta confirmada. Ingreso histórico por entrada; no ticket por compra."
+    }
+  }
+]

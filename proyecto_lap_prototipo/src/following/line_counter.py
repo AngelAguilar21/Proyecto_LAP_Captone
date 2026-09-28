@@ -5,8 +5,9 @@ import numpy as np
 
 
 class LineCounter:
-    def __init__(self, lines):
+    def __init__(self, lines, include_identity=False):
         self.lines = lines
+        self.include_identity = include_identity
         self.previous = {}
         self.totals = {line['id']: {'id': line['id'], 'name': line['name'], 'place': line.get('place'), 'entries': 0, 'exits': 0, 'lastCrossing': None, 'events': [], 'hours': {}} for line in lines}
 
@@ -44,7 +45,10 @@ class LineCounter:
                         old['crossed'] = t
                         total=self.totals[line['id']]
                         direction='entries' if entering else 'exits'
-                        total['events'].append({'t':t,'direction':direction})
+                        event = {'t':t,'direction':direction}
+                        if self.include_identity:
+                            event['person'] = person['id']
+                        total['events'].append(event)
                         total['events']=total['events'][-1000:]
                         hour=total['hours'].setdefault(str(int(t//3600)),{'entries':0,'exits':0})
                         hour[direction]+=1

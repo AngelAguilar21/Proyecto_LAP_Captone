@@ -18,8 +18,8 @@ def report_data(config, state, kind):
         names={c['id']:c.get('name',c['id']) for c in config['cameras']}
         rows=[]
         for cid,a in state.get('cameraAnalytics',{}).items():
-            o=a['occupancy'];lines=a.get('crossings',[])
-            rows.append([names.get(cid,cid),a['t'],o['count'],o['peak'],o['peakAt'],round(o['mean'],2),sum(l['entries'] for l in lines),sum(l['exits'] for l in lines)])
+            o=a.get('occupancy',{});lines=a.get('crossings',[])
+            rows.append([names.get(cid,cid),a.get('t',state['t']),o.get('count'),o.get('peak'),o.get('peakAt'),round(o['mean'],2) if o.get('mean') is not None else None,sum(l['entries'] for l in lines),sum(l['exits'] for l in lines)])
         title='Resumen de monitoreo por cámara'
     elif kind in ("zones", "comparison"):
         headers=["Sector","Nivel","Referencia","Sector X","Sector Y","Personas x segundos","Pico observado","IDs observados","Prioridad"]
@@ -65,7 +65,7 @@ def report_data(config, state, kind):
         title="Trayectorias recientes de la sesión"
     else:
         raise ValueError("Tipo de reporte desconocido.")
-    return {"title":title,"headers":headers,"rows":rows,"airport":(config.get("airport") or "Espacio sin nombre"),"session":state["session"],"mode":"SIMULACIÓN SINTÉTICA" if state.get("mode")=="demo" else "FUENTE REAL - SIN VALIDACIÓN DE PRECISIÓN", "unit":"metros" if config["unit"]=="meters" else "unidades relativas","seconds":round(state["t"],2),"generated":datetime.now(timezone.utc).isoformat(),"note":"Datos observados; asociaciones estimadas. Ocupación no equivale a rentabilidad. Flujo horario calculado sobre las muestras retenidas (hasta 3600)."}
+    return {"title":title,"headers":headers,"rows":rows,"airport":(config.get("airport") or "Espacio sin nombre"),"session":state["session"],"mode":"SIMULACIÓN SINTÉTICA" if state.get("mode")=="demo" else "VIDEOS DE PRUEBA - PLANO ILUSTRATIVO" if state.get("testRun") else "FUENTE REAL - SIN VALIDACIÓN DE PRECISIÓN", "unit":"metros" if config["unit"]=="meters" else "unidades relativas","seconds":round(state["t"],2),"generated":datetime.now(timezone.utc).isoformat(),"note":"Datos observados; asociaciones estimadas. Ocupación no equivale a rentabilidad. Flujo horario calculado sobre las muestras retenidas (hasta 3600)."}
 
 
 def _median(values):
@@ -119,10 +119,10 @@ def business_report_data(config, state):
     pass_zones=[z for z in zones if (z.get("visits") or 0)>=median_visits and (z.get("seconds") or 0)<median_seconds and z is not top]
     if pass_zones:
         recommendations.append(f"{', '.join(z['name'] for z in pass_zones)} tiene tráfico alto pero poca permanencia. Encaja mejor con publicidad o señalización de paso que con retail que dependa de tiempo de exposición.")
-    active_cameras=len([c for c in state.get('cameras',[]) if c.get('status')=='live'])
+    active_cameras=len([c for c in state.get('cameras',[]) if c.get('status')=='live']) if state['status'] in ('running','paused') else len(state.get('cameraAnalytics',{}))
     total_cameras=len(config['cameras'])
     if total_cameras and active_cameras<total_cameras:
-        recommendations.append(f"Solo {active_cameras} de {total_cameras} cámaras están activas en esta sesión. Antes de comparar zonas con confianza para una decisión comercial conviene ampliar la cobertura o repetir la medición con todas las fuentes activas.")
+        recommendations.append(f"Solo {active_cameras} de {total_cameras} cámaras aportaron resultados en esta sesión. Antes de comparar zonas con confianza para una decisión comercial conviene ampliar la cobertura o repetir la medición con todas las fuentes activas.")
     if not recommendations:
         recommendations.append("Aún no hay suficientes datos en esta sesión para generar recomendaciones. Estas aparecen a medida que se observan zonas y accesos.")
     peak_time=f"a las {int(peak['t']//60):02d}:{int(peak['t']%60):02d}" if peak else "sin muestras aún"
@@ -131,7 +131,7 @@ def business_report_data(config, state):
         "title":"Reporte comercial",
         "airport":(config.get("airport") or "Espacio sin nombre"),
         "session":state["session"],
-        "mode":"SIMULACIÓN SINTÉTICA" if state.get("mode")=="demo" else "FUENTE REAL - SIN VALIDACIÓN DE PRECISIÓN",
+        "mode":"SIMULACIÓN SINTÉTICA" if state.get("mode")=="demo" else "VIDEOS DE PRUEBA - PLANO ILUSTRATIVO" if state.get("testRun") else "FUENTE REAL - SIN VALIDACIÓN DE PRECISIÓN",
         "unit":"metros" if config["unit"]=="meters" else "unidades relativas",
         "seconds":round(state["t"],2),
         "generated":datetime.now(timezone.utc).isoformat(),

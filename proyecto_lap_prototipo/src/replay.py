@@ -100,3 +100,26 @@ def get(handler,url,root):
    return
   return handler.send_data(404,{'error':'Ruta desconocida.'})
  except (ValueError,OSError) as exc:return handler.send_data(400,{'error':str(exc)})
+
+
+def report_snapshot(root, sid, project_id):
+ """Reconstruye un informe de una sesión guardada, sin reactivar videos."""
+ meta=manifest(root,sid)
+ if meta.get('projectId') != project_id:
+  raise ValueError('La sesión no pertenece al proyecto abierto.')
+ if meta.get('status') == 'running':
+  raise ValueError('Finaliza el monitoreo antes de consultar este informe guardado.')
+ last={};series=[]
+ with (directory(root,sid)/'samples.jsonl').open(encoding='utf-8') as source:
+  for line in source:
+   try:sample=json.loads(line)
+   except ValueError:continue
+   last=sample
+   count=sum(len(c.get('people',[])) for c in sample.get('cameras',[]))
+   series.append({'t':sample['t'],'count':count})
+   if len(series)>3600:series=series[::2]
+ pid=meta.get('config',{}).get('planId','custom')
+ analytics=meta.get('reportAnalytics') or meta.get('levelAnalytics',{}).get(pid) or last.get('levels',{}).get(pid) or last.get('analytics') or {'clusters':[],'zones':[],'heat':[],'mappedCount':0}
+ state={'session':sid,'status':meta['status'],'mode':'demo' if meta['module']=='demo' else 'p2pnet','t':meta['end'],'planId':pid,'people':[],'cameras':[], 'analytics':analytics,'cameraAnalytics':meta.get('cameraAnalytics') or {c['id']:c.get('analysis',{}) for c in last.get('cameras',[])},'totals':meta.get('totals',{}),'series':series,'testRun':bool(meta.get('config',{}).get('testRun'))}
+ config={**meta['config'],'cameras':meta['cameras']}
+ return config,state,meta
