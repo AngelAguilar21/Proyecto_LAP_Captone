@@ -46,7 +46,7 @@ export default function CommercialReportBoard({ config, state, demo }: { config:
   const peakValue = peakSample?.count ?? 0;
   const maxSeries = Math.max(1, ...series.map(s => s.count));
 
-  const activeCameras = state.cameras.filter(c => c.status === 'live').length;
+  const activeCameras = ['running','paused'].includes(state.status)?state.cameras.filter(c => c.status === 'live').length:Object.keys(state.cameraAnalytics||{}).length;
   const totalCameras = config.cameras.length;
 
   const crossings = Object.entries(state.cameraAnalytics || {}).flatMap(([cid, a]: [string, any]) =>
@@ -78,7 +78,7 @@ export default function CommercialReportBoard({ config, state, demo }: { config:
     advisories.push({ tag: 'Lectura', tone: 'blue', text: `${passZones.map(z => z.name).join(', ')} tiene${passZones.length === 1 ? '' : 'n'} tráfico alto pero poca permanencia. Encaja mejor con publicidad o señalización de paso que con retail que dependa de tiempo de exposición.` });
   }
   if (totalCameras > 0 && activeCameras < totalCameras) {
-    advisories.push({ tag: 'Cobertura', tone: 'blue', text: `Solo ${activeCameras} de ${totalCameras} cámaras están activas en esta sesión. Antes de comparar zonas con confianza para una decisión comercial, conviene ampliar la cobertura o repetir la medición con todas las fuentes activas.` });
+    advisories.push({ tag: 'Cobertura', tone: 'blue', text: `Solo ${activeCameras} de ${totalCameras} cámaras aportaron resultados en esta sesión. Antes de comparar zonas con confianza para una decisión comercial, conviene ampliar la cobertura o repetir la medición con todas las fuentes activas.` });
   }
 
   const live = ['running', 'paused'].includes(state.status);
@@ -90,12 +90,12 @@ export default function CommercialReportBoard({ config, state, demo }: { config:
       <span className="crb-status-sep" />
       <span>{state.session ? `Sesión ${state.session}` : 'Sin sesión'}</span>
       <span className="crb-status-sep" />
-      <span>{demo ? 'Datos sintéticos' : (config.airport || 'Aeropuerto')}</span>
+      <span>{state.testRun ? 'Videos de prueba' : demo ? 'Datos sintéticos' : (config.airport || 'Aeropuerto')}</span>
       <span className="crb-status-sep" />
       <span>{formatTime(state.t)} de fuente</span>
     </div>
 
-    <h1 className="crb-headline">Dónde está la gente, y qué hacer con eso</h1>
+    <h1 className="crb-headline">Ocupación y flujo de la sesión</h1>
 
     <div className="crb-kpis">
       <div className="crb-kpi"><span>Ocupación pico</span><strong>{peakValue}</strong><small>{series.length ? `a las ${formatTime(peakSample.t)}` : 'sin muestras'}</small></div>
@@ -127,10 +127,10 @@ export default function CommercialReportBoard({ config, state, demo }: { config:
 
       <aside className="crb-context">
         <h2>Contexto de la medición</h2>
-        <div className="crb-context-row"><Icon name="camera" size={16} /><div><span>Cobertura de cámaras</span><strong>{activeCameras} / {totalCameras} activas</strong></div></div>
+        <div className="crb-context-row"><Icon name="camera" size={16} /><div><span>Cobertura de cámaras</span><strong>{activeCameras} / {totalCameras} analizadas</strong></div></div>
         <div className="crb-context-row"><Icon name={config.clocksVerified ? 'check' : 'alert'} size={16} /><div><span>Sincronización entre cámaras</span><strong>{config.cameras.length > 1 ? (config.clocksVerified ? 'Verificada' : 'Sin verificar') : 'No aplica (1 cámara)'}</strong></div></div>
         <div className="crb-context-row"><Icon name="clock" size={16} /><div><span>Ventana de mayor actividad</span><strong>{busiest ? `Hora ${busiest.hour} · prom. ${busiest.avg.toFixed(1)}` : 'sin datos aún'}</strong></div></div>
-        <div className="crb-context-row"><Icon name="report" size={16} /><div><span>Unidad y procedencia</span><strong>{config.unit === 'meters' ? 'Metros' : 'Unidades relativas'} · {demo ? 'Simulación' : 'Fuente real'}</strong></div></div>
+        <div className="crb-context-row"><Icon name="report" size={16} /><div><span>Unidad y procedencia</span><strong>{config.unit === 'meters' ? 'Metros' : 'Unidades relativas'} · {state.testRun ? 'Plano ilustrativo' : demo ? 'Simulación' : 'Fuente real'}</strong></div></div>
       </aside>
     </div>
 

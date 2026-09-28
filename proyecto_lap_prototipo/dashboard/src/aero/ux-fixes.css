@@ -222,3 +222,32 @@
 @media (prefers-reduced-motion: reduce) {
   .aero .sidebar-toggle, .aero .sidebar-user .logout { transition: none !important; }
 }
+
+/* En modo plegado cada control ocupa su propia fila centrada. */
+@media(min-width:701px){
+ .aero.sidebar-collapsed .sidebar-brand{display:flex;flex-direction:column;align-items:center;gap:10px!important;padding:4px 0 14px!important;}
+ .aero.sidebar-collapsed .sidebar-brand::after{display:none!important;content:none!important;}
+ .aero.sidebar-collapsed .sidebar-brand strong{display:none!important;}
+ .aero.sidebar-collapsed .sidebar-logo-crop{display:block!important;width:34px;flex:0 0 34px;}
+ .aero.sidebar-collapsed .sidebar-nav button{justify-content:center!important;padding:10px 0!important;}
+ .aero.sidebar-collapsed .sidebar-user{display:flex;flex-direction:column;align-items:center;gap:12px;padding:14px 0 0!important;}
+ .aero.sidebar-collapsed .sidebar-user>span{display:none!important;}
+ .aero.sidebar-collapsed .sidebar-user>svg{margin:0!important;}
+ .aero.sidebar-collapsed .sidebar-user .logout{margin:0!important;}
+}
+
+@media(min-width:701px) and (max-width:1100px){
+ .aero .sidebar-brand{display:flex;flex-direction:column;align-items:center;gap:10px!important;padding:4px 0 14px!important;}
+ .aero .sidebar-brand::after{display:none!important;content:none!important;}
+ .aero .sidebar-brand strong{display:none!important;}
+ .aero .sidebar-logo-crop{display:block!important;width:34px;flex:0 0 34px;}
+ .aero .sidebar-nav button{justify-content:center!important;padding:10px 0!important;}
+ .aero .sidebar-user{display:flex;flex-direction:column;align-items:center;gap:12px;padding:14px 0 0!important;}
+ .aero .sidebar-user>span{display:none!important;}
+ .aero .sidebar-user>svg{margin:0!important;}
+ .aero .sidebar-user .logout{margin:0!important;}
+}
+
+.aero .aero-sidebar{display:flex;flex-direction:column;overflow:hidden;}
+.aero .sidebar-brand,.aero .sidebar-user{flex-shrink:0;}
+.aero .sidebar-nav{flex:1;min-height:0;overflow-y:auto;align-content:start;scrollbar-width:thin;}

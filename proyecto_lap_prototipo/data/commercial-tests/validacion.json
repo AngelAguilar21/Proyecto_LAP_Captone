@@ -1,0 +1,33 @@
+{
+  "project": "Proyecto principal",
+  "session": "e998c4da",
+  "date": "2026-09-27",
+  "hour": 23,
+  "business": "Tanta To Go",
+  "entries": 1,
+  "exits": 2,
+  "forecast": {
+    "estimate": 21.25,
+    "perEntry": 21.25,
+    "days": 4,
+    "range": [
+      20.5,
+      22.0
+    ],
+    "reason": "Proyección, no venta confirmada. Ingreso histórico por entrada; no ticket por compra."
+  },
+  "bags": {
+    "exits": 0,
+    "matched": 0,
+    "changed": 0,
+    "unmatched": 0,
+    "coverage": null
+  },
+  "incidentCount": 1,
+  "dataset": "demo",
+  "testsAreSynthetic": false,
+  "projectId": "p-6dcbedd3",
+  "businessId": "lap-3-704792018557",
+  "videoMeasurements": true,
+  "salesAreSynthetic": true
+}

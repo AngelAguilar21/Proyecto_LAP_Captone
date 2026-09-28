@@ -1,0 +1,1401 @@
+{
+  "project": "Proyecto principal",
+  "session": "e998c4da",
+  "status": "ended",
+  "error": null,
+  "t": 78.6,
+  "businesses": [
+    {
+      "id": "lap-1-536899183412",
+      "nombre": "Aelia Duty Free",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-1",
+        "point": [
+          726.414616571427,
+          1103.0784161020122
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-347476929419",
+      "nombre": "Aelia Duty Free Express",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          540.7591205802265,
+          1181.1953570027533
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-281695930540",
+      "nombre": "Aelia Duty Free Salidas Internacional",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          702.8335213275585,
+          1012.9154048754559
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-1090103539346",
+      "nombre": "Alpaca 111",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          771.0215800203549,
+          1112.6422658758413
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-493166116351",
+      "nombre": "Assist Card (local 1)",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          713.0544294827956,
+          1189.2990770401198
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-78166038216",
+      "nombre": "Assist Card (local 2)",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          836.2893792402264,
+          1129.5797708188056
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-292390042501",
+      "nombre": "Bonbonniere",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          738.0226479763036,
+          985.6839852904312
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-122295296828",
+      "nombre": "Burger Boy",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          757.369366984431,
+          997.3650231821308
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-571581652071",
+      "nombre": "Callao",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          651.4369546040803,
+          1081.7605219496604
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-580433461348",
+      "nombre": "China Wok",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          908.4197882214714,
+          988.2392123292404
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-1031082421139",
+      "nombre": "Coolbox (local 1)",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          879.5092194395149,
+          967.4323635846506
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-208493588366",
+      "nombre": "Coolbox (local 2)",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          734.5183366087937,
+          1130.3098356870369
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-693721004037",
+      "nombre": "Coolbox (local 3)",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          896.8847633034181,
+          927.6438282660488
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-1016667266712",
+      "nombre": "Copper",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          652.6780648800733,
+          1001.08835401011
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-2-357283122035",
+      "nombre": "Delicass",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-2",
+        "point": [
+          785.0388254903944,
+          1163.3087677310882
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-2-326193110937",
+      "nombre": "Dunkin Donuts",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-2",
+        "point": [
+          842.2029046728993,
+          1154.255963365021
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-254764389817",
+      "nombre": "Dunkin Donuts",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          807.6708364055625,
+          966.7022987164194
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-541856571055",
+      "nombre": "Duty Free Express",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          636.5436312921632,
+          1026.6406243982028
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-639888184022",
+      "nombre": "Duty Paid",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          824.4623283748806,
+          1027.0056568323184
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "a72c5227-e2c1-4de9-9382-19fe108dcb3a",
+      "nombre": "El Bodegón",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          794.967707698339,
+          977.7992847135339
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-728188383130",
+      "nombre": "El Bodegón",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          794.967707698339,
+          977.7992847135339
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-443193865725",
+      "nombre": "Farmacia",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          722.3992597961553,
+          1136.2233611197098
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-1013678035265",
+      "nombre": "Grab & Go",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          904.9884833407847,
+          944.6543396958364
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-708138571141",
+      "nombre": "Grab & Go Dique Swing",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          622.7454052825931,
+          876.7583069503324
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-915919416056",
+      "nombre": "Hstern",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          663.9210638508342,
+          1031.9700979362908
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-527891066587",
+      "nombre": "Hugo Boss",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          627.2718074656267,
+          1056.2812580483906
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-640529984958",
+      "nombre": "Ibero Librerias",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          871.3324929153252,
+          983.8588231198531
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-102633964730",
+      "nombre": "Ilaria (local 1)",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          642.0921242907206,
+          1020.5080795050606
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-1091312171471",
+      "nombre": "Ilaria (local 2)",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          840.742774936437,
+          966.1182468218343
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-2-985518675025",
+      "nombre": "Interbank",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-2",
+        "point": [
+          832.2010159781315,
+          1161.0455666395715
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-731720254277",
+      "nombre": "KFC",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          857.6802798794013,
+          946.1144694322987
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-776390472160",
+      "nombre": "KO Asian Kitchen",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          755.7632242743223,
+          1031.3860460417059
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-777326577639",
+      "nombre": "Kira",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          660.7087784306168,
+          1078.1832040953275
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-1025859322585",
+      "nombre": "Kuna (local 1)",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          824.9733737826424,
+          953.9991700091961
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-121897079078",
+      "nombre": "Kuna (local 2)",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          669.4695568493916,
+          1049.1266223397247
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-1089408749610",
+      "nombre": "La Ibérica",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          883.4515697279636,
+          966.5562857427731
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-1089441929119",
+      "nombre": "La Lucha",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          770.2185086653005,
+          1013.1344243359252
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-118318121304",
+      "nombre": "Las Reyes (local 1)",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          627.3448139524498,
+          887.8552929474471
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-320484787286",
+      "nombre": "Las Reyes (local 2)",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          763.4289053907502,
+          1002.3294642861031
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-1-235251835940",
+      "nombre": "Listo!",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-1",
+        "point": [
+          780.9504622282996,
+          1164.330858546612
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-2-44244347758",
+      "nombre": "Listo!",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-2",
+        "point": [
+          712.6163905618569,
+          1198.7169138403026
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-391385182345",
+      "nombre": "Livingstone",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          838.0415349239813,
+          948.3776705238156
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-1-5828682752",
+      "nombre": "McDonald's",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-1",
+        "point": [
+          841.399833317845,
+          1163.8928196256732
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-624036888653",
+      "nombre": "McDonald's",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          887.7589524505278,
+          996.7079648007227
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-442902179425",
+      "nombre": "Miniso",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          857.9723058266939,
+          1009.8491324288847
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-940582569929",
+      "nombre": "Natoo Grab & Go",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          509.0743052989914,
+          1115.1244864278274
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-1-10309365673",
+      "nombre": "OXXO",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-1",
+        "point": [
+          795.7707790533934,
+          1157.176222837946
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-531497681785",
+      "nombre": "Oasis del Sol",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          815.774556442929,
+          957.9415202976446
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-1044177343751",
+      "nombre": "Pan Sal Aire",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          794.6026752642234,
+          950.4948586416862
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-308137373338",
+      "nombre": "Papacho’s",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          800.0781617759577,
+          993.4226728936821
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-930064368628",
+      "nombre": "Pardos",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          897.2497957375338,
+          992.108556130866
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-692143267895",
+      "nombre": "Patapampa",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          844.6851252248855,
+          967.7973960187661
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-1-564696805314",
+      "nombre": "PeruSIM",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-1",
+        "point": [
+          731.5250706490457,
+          1172.5805915576248
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-508449836191",
+      "nombre": "Perusuyo",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          761.1657042992334,
+          1139.5086530267504
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-795815567509",
+      "nombre": "Pizza Hut",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          858.4103447476325,
+          935.8935612770616
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-967485274683",
+      "nombre": "Puku Puku",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          831.908990030839,
+          998.3871139976545
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-281877255055",
+      "nombre": "Renzo Costa",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          837.822515463512,
+          979.1864079631732
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-23257690371",
+      "nombre": "Retablo (local 1)",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          793.5075779618767,
+          1150.3136130765724
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-807531796635",
+      "nombre": "Retablo (local 2)",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          798.4720190658489,
+          1147.9043990114094
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-585758061388",
+      "nombre": "Rumbo Perú (local 1)",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          697.796073736763,
+          1148.1234184718787
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-626404089286",
+      "nombre": "Rumbo Perú (local 2)",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          728.4587982024744,
+          1047.2284536823233
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-858788139971",
+      "nombre": "Rumbo Sur",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          845.1961706326474,
+          1014.7405670460339
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-845106876327",
+      "nombre": "Sakamoto",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          803.6554796302906,
+          1001.0153475232869
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-1-960013542430",
+      "nombre": "So! Coffee",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-1",
+        "point": [
+          661.6578627593174,
+          922.7523936488996
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-684757367436",
+      "nombre": "Sol Alpaca",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          660.4897589701475,
+          970.7906619785142
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-1-614416333560",
+      "nombre": "Starbucks",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-1",
+        "point": [
+          726.8526554923658,
+          1219.3777496112464
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-2-217494503308",
+      "nombre": "Starbucks",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-2",
+        "point": [
+          794.6756817510466,
+          1158.9283785217008
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-866678588595",
+      "nombre": "Starbucks - Zona Internacional",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          632.3092550564222,
+          1068.0353024269134
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-64218521667",
+      "nombre": "Starbucks - Zona Nacional",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          900.8271135918667,
+          966.7022987164194
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-2-394938623160",
+      "nombre": "Sunku",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-2",
+        "point": [
+          813.7303748118816,
+          1149.7295611819875
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-264381141555",
+      "nombre": "Swarovski (local 1)",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          866.5870712718223,
+          968.6004673738205
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-97408849517",
+      "nombre": "Swarovski (local 2)",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          749.8496988416493,
+          1171.485494255278
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-4492756904",
+      "nombre": "TGI Fridays (local 1)",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          884.911699464426,
+          936.112580737531
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-75386038770",
+      "nombre": "TGI Fridays (local 2)",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          681.2966077147373,
+          960.7887732837464
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-1062929956533",
+      "nombre": "Tanta",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          807.8168493792086,
+          1009.7761259420616
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-704792018557",
+      "nombre": "Tanta To Go",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          935.2861753723805,
+          1000.3582891418788
+        ]
+      },
+      "accesses": [
+        {
+          "cameraId": "CAM-1",
+          "lineId": "93ce5ef5-0099-4050-93f9-84694462d0dc",
+          "name": "Acceso ",
+          "entries": 1,
+          "exits": 2
+        }
+      ],
+      "entries": 1,
+      "exits": 2,
+      "hours": {
+        "0": {
+          "entries": 1,
+          "exits": 2
+        }
+      },
+      "events": [
+        {
+          "t": 8.8,
+          "direction": "exits",
+          "cameraId": "CAM-1",
+          "lineId": "93ce5ef5-0099-4050-93f9-84694462d0dc"
+        },
+        {
+          "t": 13.6,
+          "direction": "entries",
+          "cameraId": "CAM-1",
+          "lineId": "93ce5ef5-0099-4050-93f9-84694462d0dc"
+        },
+        {
+          "t": 31.4,
+          "direction": "exits",
+          "cameraId": "CAM-1",
+          "lineId": "93ce5ef5-0099-4050-93f9-84694462d0dc"
+        }
+      ]
+    },
+    {
+      "id": "lap-3-127756616421",
+      "nombre": "Tori",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          766.4951778373213,
+          1007.9509637714835
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-502346438542",
+      "nombre": "Travel Market",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          783.2136633198164,
+          1106.7287404431684
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "lap-3-612479344540",
+      "nombre": "Wok to Gate",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          553.6082622610961,
+          1067.3052375586822
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    },
+    {
+      "id": "9ddf2e3a-2b49-4baf-88b1-3fd15b8d5078",
+      "nombre": "pan",
+      "estado": "activo",
+      "ubicacion": {
+        "planId": "lap-3",
+        "point": [
+          792.6769397896198,
+          957.2537675663552
+        ]
+      },
+      "accesses": [],
+      "entries": null,
+      "exits": null,
+      "hours": {},
+      "events": []
+    }
+  ]
+}

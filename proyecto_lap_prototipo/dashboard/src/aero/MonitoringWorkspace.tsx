@@ -31,6 +31,7 @@ export default function MonitoringWorkspace({ session, onSetup, onReplay, active
   const [historyLoading, setHistoryLoading] = useState(true);
   const quality = 256;
   const [unified, setUnified] = useState(false);
+  const [testRun,setTestRun]=useState(config.cameras.some(c=>c.illustrative));
   const [allLevels, setAllLevels] = useState(true);
   const [trend, setTrend] = useState<{ t: number; zones: any[] }[]>([]);
   const [pendientes, setPendientes] = useState<number | null>(null);
@@ -186,6 +187,7 @@ export default function MonitoringWorkspace({ session, onSetup, onReplay, active
       await session.post('start', {
         detector: 'p2pnet',
         combined: true,
+        testRun,
         inferenceSize: quality,
         cameraIds: (camera === 'all' ? availableCameras : cameras).filter(c => c.active !== false).map(c => c.id),
         requireUnified: unified,
@@ -206,13 +208,15 @@ export default function MonitoringWorkspace({ session, onSetup, onReplay, active
       <div className="monitor-header-actions">
         <button onClick={() => onSetup()}><Icon name="settings" size={16} />Configurar cámaras</button>
         <button onClick={onReplay}><Icon name="clock" size={16} />Ver resultados</button>
+        <label className="check"><input type="checkbox" checked={testRun} disabled={busy} onChange={e=>setTestRun(e.target.checked)}/>Prueba con videos</label>
         {!sinCamaras && <button className={busy ? 'danger' : 'primary'} disabled={session.busy || (!busy && !canStart)} onClick={toggleMonitoring}>
-          <Icon name={busy ? 'stop' : 'play'} size={16} />{busy ? 'Detener monitoreo' : 'Iniciar monitoreo'}
+          <Icon name={busy ? 'stop' : 'play'} size={16} />{busy ? 'Detener monitoreo' : testRun ? 'Analizar videos de prueba' : 'Iniciar monitoreo'}
         </button>}
       </div>
     </header>
 
     {error && <div className="notice error" role="alert">{error}</div>}
+    {testRun&&<p className="commerce-test">Los videos se procesan con sus detecciones y accesos configurados. El plano es ilustrativo; los resultados comerciales se guardan en Datos de prueba.</p>}
 
     {sinCamaras ? <section className="monitor-onboarding">
       <span className="monitor-onboarding-icon"><Icon name="camera" size={28} /></span>
