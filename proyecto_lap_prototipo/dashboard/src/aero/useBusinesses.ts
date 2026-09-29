@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Point } from './types';
 
 export interface Business {
-  id:string; nombre:string; estado?:string;
+  id:string; nombre:string; empresa?:string; estado?:string;
   puertas:{camaraId:string;lineaId:string}[];
   ubicacion:{planId:string;point:Point}|null;
   referencia?:{asset:string;featureId:string}|null;

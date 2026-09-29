@@ -87,7 +87,7 @@ export default function SetupFlow({ session, selected, onSelected, onNavigate, s
     if(!camera)return;
     void session.action(async()=>{
       await session.save();
-      await session.post('start',{detector:'p2pnet',camera:camera.id,requireUnified:false,inferenceSize:256});
+      await session.post('start',{detector:'yolo',camera:camera.id,requireUnified:false,inferenceSize:640});
       session.setNotice('Prueba P2PNet iniciada en modo rápido. El modelo se prepara al probar la fuente para reducir la espera.');
     });
   }

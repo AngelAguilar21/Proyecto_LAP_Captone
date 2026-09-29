@@ -43,7 +43,7 @@ export default function BusinessesPanel({session}:{session:Session}) {
   function navigate(target:Business|string){setPending(null);if(typeof target==='string'){setPlan(target);setDraft(null);setPlacing(false);setFocus(undefined);setCameraId('');}else edit(target);}
   function requestNavigate(target:Business|string){if(typeof target!=='string'&&target.id===draft?.id)return;if(dirty){setPending(target);return;}navigate(target);}
   function edit(b:Business){setAccessEditor(false);const next={...b,puertas:[...b.puertas]};setDraft(next);setBaseline(JSON.stringify(next));setPending(null);setFocus(b.ubicacion?.point);setPlan(b.ubicacion?.planId||config.planId||'custom');setCameraId(b.puertas[0]?.camaraId||'');setPlacing(false);setDeleting(null);}
-  function create(){setBaseline('');setPending(null);setFocus(undefined);setDraft({id:crypto.randomUUID(),nombre:'',puertas:[],ubicacion:null});setCameraId('');setPlacing(true);setDeleting(null);}
+  function create(){setBaseline('');setPending(null);setFocus(undefined);setDraft({id:crypto.randomUUID(),nombre:'',empresa:'Sin empresa',puertas:[],ubicacion:null});setCameraId('');setPlacing(true);setDeleting(null);}
   function selectPlace(p:MapPlace){const existing=items.find(b=>b.referencia?.asset===p.asset&&b.referencia.featureId===p.id);if(existing){if(draft&&!items.some(b=>b.id===draft.id)&&!draft.nombre.trim()&&!draft.puertas.length)edit(existing);else requestNavigate(existing);return;}if(!draft)return;setFocus(p.point);setDraft({...draft,nombre:!draft.nombre||draft.nombre===selectedPlace?.name?p.name:draft.nombre,ubicacion:{planId:plan,point:p.point},referencia:{asset:p.asset,featureId:p.id}});setPlacing(false);}
   const selectedPlace=places.find(p=>p.id===draft?.referencia?.featureId);
   async function save(target:Business|string|null=null){if(!draft)return;await session.action(async()=>{
@@ -63,6 +63,7 @@ export default function BusinessesPanel({session}:{session:Session}) {
       {draft&&<div className="business-save"><span>{draft.ubicacion?'Ubicación definida':'Falta ubicar el negocio'} · {draft.puertas.length} accesos</span><button onClick={()=>{setDraft(null);setPending(null);setPlacing(false);}}>{operator?'Cancelar cambios':'Cerrar detalle'}</button>{operator&&<button className="primary" disabled={session.busy||!draft.nombre.trim()||!draft.ubicacion} onClick={()=>void save()}>Guardar negocio</button>}</div>}
       <div className="business-editor-body">
       {draft&&<div className="business-fields">
+        <label>Empresa / operador<input maxLength={120} value={draft.empresa||'Sin empresa'} disabled={!operator} onChange={e=>setDraft({...draft,empresa:e.target.value})} placeholder="Por ejemplo, Corporación AeroRetail"/></label>
         <label>Nombre del negocio<input maxLength={120} value={draft.nombre} disabled={!operator} onChange={e=>setDraft({...draft,nombre:e.target.value})} placeholder="Por ejemplo, Duty Free"/></label><p>{draft.referencia?'Tienda existente: cambia el nombre y pulsa Guardar negocio. El icono del plano se conserva.':'Nuevo negocio: escribe su nombre, coloca su icono en el mapa y pulsa Guardar negocio. Puedes vincular su cámara después.'}</p>
 
       </div>}

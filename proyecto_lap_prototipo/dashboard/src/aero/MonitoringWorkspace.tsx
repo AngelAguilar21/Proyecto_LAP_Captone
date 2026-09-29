@@ -185,7 +185,7 @@ export default function MonitoringWorkspace({ session, onSetup, onReplay, active
       }
       await session.save();
       await session.post('start', {
-        detector: 'p2pnet',
+        detector: 'hybrid',
         combined: true,
         testRun,
         inferenceSize: quality,
@@ -291,8 +291,10 @@ export default function MonitoringWorkspace({ session, onSetup, onReplay, active
             <p>{c.active === false ? 'Cámara desactivada · ' : ''}{analytics ? `Última muestra: ${formatTime(analytics.t)}` : 'Todavía no hay resultados de esta cámara'}</p>
             <div className="feed-metrics">{busy && status?.duration && <span>Video: {formatTime(status.sourceTime || 0)} / {formatTime(status.duration)}</span>}<span>{analytics?.occupancy?.count ?? '--'} personas</span><span>Máximo: {analytics?.occupancy?.peak ?? '--'}</span></div>
             {zones.map((z: any) => <p key={z.id}>{z.name}: {z.count} personas · máximo {z.peak}{z.alert ? ' · Concentración sostenida' : ''}</p>)}
-            {analytics?.dense && <p>Puntos P2PNet: {analytics.dense.count} · muestra {formatTime(analytics.dense.t)}</p>}
+            {analytics?.dense?.status === 'ready' && <p>P2PNet (estimación de densidad): {analytics.dense.count} · muestra {formatTime(analytics.dense.t)}</p>}
             {analytics?.crossings?.map((line: any) => <p key={line.id}>{line.name}: {line.entries} entradas · {line.exits} salidas</p>)}
+            {analytics?.avie && <p>AVIE: {analytics.avie.state} · {analytics.avie.inferenceMs ?? '--'} ms</p>}
+            {analytics?.dense?.status === 'ready' && <p>P2PNet (estimación de densidad): {analytics.dense.count} · muestra {formatTime(analytics.dense.t)}</p>}
           </article>;
         })}</div>
       </section>

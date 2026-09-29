@@ -41,6 +41,7 @@ export interface CameraStatus {
   duration?:number; sourceTime?: number; lastCount?: number;
   id: string; status: string; count?: number; calibrated?: boolean; error?: string; timestamp?: number;
   width?: number; height?: number; fps?: number; processingMs?: number; sourceKey?: string; calibrationError?: number | null;
+  detector?: string; inferenceMs?: number; avie?: {state:string; detections?:number; tracks?:number; p2pRequested?:boolean};
 }
 export interface HeatCell { x: number; y: number; size: number; seconds: number; peak: number; visits?: number }
 export interface SessionState {

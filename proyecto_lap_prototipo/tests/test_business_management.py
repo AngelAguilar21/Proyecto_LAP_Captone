@@ -2,6 +2,7 @@
 import sys
 import tempfile
 import unittest
+import sqlite3
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 import business_data as db
@@ -65,6 +66,16 @@ class BusinessManagementTests(unittest.TestCase):
         self.connection.close()
         self.connection = db.connect(self.path)
         self.assertEqual(db.listar_negocios(self.connection)[0]['puertas'], [{'camaraId': 'c1', 'lineaId': 'a'}])
+
+    def test_legacy_database_gets_company_default(self):
+        legacy = Path(self.tmp.name) / 'legacy.json'
+        self.connection.close()
+        raw = sqlite3.connect(db.path_for(legacy))
+        raw.execute('CREATE TABLE negocios (id TEXT PRIMARY KEY, nombre TEXT NOT NULL, camara_id TEXT, linea_id TEXT, creado REAL NOT NULL)')
+        raw.execute('INSERT INTO negocios VALUES (?,?,?,?,?)', ('legacy', 'Negocio antiguo', None, None, 0))
+        raw.commit(); raw.close()
+        self.connection = db.connect(legacy)
+        self.assertEqual(db.listar_negocios(self.connection)[0]['empresa'], 'Sin empresa')
 
     def test_official_place_reference_is_persistent_and_not_duplicated(self):
         self.config['plans']['p3']['mapAsset'] = '/maps/lap/3.json'

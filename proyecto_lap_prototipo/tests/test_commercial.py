@@ -16,7 +16,7 @@ class CommercialTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory()
         self.con=db.connect(Path(self.temp.name)/'p.json')
-        db.crear_negocio(self.con,'shop','Tienda',None,None)
+        db.crear_negocio(self.con,'shop','Tienda',None,None,'Grupo AeroRetail')
         self.businesses=db.listar_negocios(self.con)
         commerce.setup(self.con)
 
@@ -65,6 +65,28 @@ class CommercialTests(unittest.TestCase):
         with self.con:
             self.con.execute('UPDATE commercial_traffic SET coverage=10')
         self.assertIsNone(commerce.forecast(self.con,'shop','2026-09-27',10,5)['estimate'])
+
+    def test_summary_groups_company_and_exposes_hourly_and_next_forecast(self):
+        for index in range(1, 5):
+            date=(datetime(2026,9,27)-timedelta(weeks=index)).date().isoformat()
+            commerce.import_sales(self.con, f'negocio_id,fecha,hora,monto,transacciones\nshop,{date},10,200,20\nshop,{date},11,300,30', self.businesses, f'{index}.csv')
+            with self.con:
+                self.con.execute('INSERT INTO commercial_traffic VALUES (?,?,?,?,?,?,?,?)',(str(index),'shop',date,10,10,8,3600,'real'))
+                self.con.execute('INSERT INTO commercial_traffic VALUES (?,?,?,?,?,?,?,?)',(str(index)+'-next','shop',date,11,12,9,3600,'real'))
+        with self.con:
+            self.con.execute('INSERT INTO commercial_traffic VALUES (?,?,?,?,?,?,?,?)',('current','shop','2026-09-27',10,15,11,3600,'real'))
+        commerce.import_sales(self.con, 'negocio_id,fecha,hora,monto,transacciones\nshop,2026-09-27,10,150,5', self.businesses, 'current.csv')
+        result = commerce.summary(self.con, self.businesses, [], day='2026-09-27', hour=10)
+        row = result['businesses'][0]
+        self.assertEqual(row['empresa'], 'Grupo AeroRetail')
+        self.assertEqual(row['entries'], 15)
+        self.assertEqual(row['conversion'], 33.3)
+        self.assertEqual(row['hourly'][0]['hour'], 10)
+        self.assertEqual(row['forecast']['estimate'], 300)
+        self.assertEqual(row['nextForecast']['expectedEntries'], 12)
+        self.assertEqual(row['nextForecast']['estimate'], 300)
+        self.assertEqual(result['empresas'][0]['name'], 'Grupo AeroRetail')
+        self.assertEqual(commerce.summary(self.con, self.businesses, [], day='2026-09-27', hour=10, empresa='Otro')['businesses'], [])
 
     def test_incident_hour_sales_and_small_sample(self):
         self.historical()

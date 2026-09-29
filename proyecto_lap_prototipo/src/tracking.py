@@ -66,6 +66,7 @@ class TrackPersona:
     estado: EstadoTrack = EstadoTrack.ACTIVO
     ultima_posicion_real: Tuple[float, float] = None
     ultima_velocidad_real: Tuple[float, float] = None
+    ultima_caja: Tuple[float, float, float, float] = None
 
     @property
     def posicion(self) -> Tuple[float, float]:
@@ -78,7 +79,7 @@ class TrackPersona:
     def predecir(self):
         self.kf.predict()
 
-    def actualizar(self, x: float, y: float, score: float, t: float):
+    def actualizar(self, x: float, y: float, score: float, t: float, box=None):
         self.kf.update(np.array([x, y]))
         self.score = score
         self.ultimo_t = t
@@ -86,6 +87,8 @@ class TrackPersona:
         self.estado = EstadoTrack.ACTIVO
         self.ultima_posicion_real = (x, y)
         self.ultima_velocidad_real = self.velocidad
+        if box is not None:
+            self.ultima_caja = tuple(float(value) for value in box)
 
 
 def _distancia_matriz(puntos_a: List[Tuple[float, float]], puntos_b: List[Tuple[float, float]]) -> np.ndarray:
@@ -145,7 +148,7 @@ class ByteTrackPuntos:
         usados_altas = set()
         emparejados_etapa1 = set()
         for i_c, i_d in emparejados1:
-            candidatos[i_c].actualizar(altas[i_d].x, altas[i_d].y, altas[i_d].confianza, t)
+            candidatos[i_c].actualizar(altas[i_d].x, altas[i_d].y, altas[i_d].confianza, t, getattr(altas[i_d], "box", None))
             usados_altas.add(i_d)
             emparejados_etapa1.add(i_c)
 
@@ -159,7 +162,7 @@ class ByteTrackPuntos:
         emparejados_etapa2 = set()
         for i_r, i_d in emparejados2:
             i_c = indices_restantes[i_r]
-            candidatos[i_c].actualizar(bajas[i_d].x, bajas[i_d].y, bajas[i_d].confianza, t)
+            candidatos[i_c].actualizar(bajas[i_d].x, bajas[i_d].y, bajas[i_d].confianza, t, getattr(bajas[i_d], "box", None))
             emparejados_etapa2.add(i_c)
 
         # Candidatos sin pareja en ninguna etapa: se marcan/mantienen perdidos
@@ -187,7 +190,8 @@ class ByteTrackPuntos:
         for i_d, d in enumerate(altas):
             if i_d not in usados_altas:
                 nuevo = TrackPersona(id=self._siguiente_id, kf=_crear_kalman(d.x, d.y),
-                                      score=d.confianza, ultimo_t=t)
+                                      score=d.confianza, ultimo_t=t,
+                                      ultima_caja=getattr(d, "box", None))
                 self._siguiente_id += 1
                 nuevos.append(nuevo)
         self.tracks_activos.extend(nuevos)

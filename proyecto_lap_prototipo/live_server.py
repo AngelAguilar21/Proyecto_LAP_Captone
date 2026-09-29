@@ -84,6 +84,7 @@ class Engine:
         # pide otro modelo o pesos distintos.
         self.detector_cache = None
         self.detector_cache_key = None
+        self.detector_caches = {}
         self.detector_lock = threading.Lock()
         self.detector_warmup = None
         self.token = secrets.token_urlsafe(32)
@@ -657,10 +658,12 @@ class Engine:
                 raise ValueError("Detén el análisis de conteo antes de iniciar tracking.")
             if self.worker and self.worker.is_alive():
                 raise ValueError("Ya hay una sesión activa; detenla primero.")
-            mode = request.get("detector", "p2pnet")
+            mode = request.get("detector", "hybrid")
             test_run = request.get('testRun') is True
-            if mode not in ("p2pnet", "demo"):
+            if mode not in ("hybrid", "yolo", "p2pnet", "demo"):
                 raise ValueError("AeroTrack opera únicamente con P2PNet.")
+            if mode in ("hybrid", "yolo") and request.get("inferenceSize", 640) not in (320, 480, 640, 960):
+                raise ValueError("El tamaÃ±o YOLO debe ser 320, 480, 640 o 960 pÃ­xeles.")
             if mode == "p2pnet" and request.get("inferenceSize", 256) not in (128, 256, 384, 512):
                 raise ValueError("El tamaño de inferencia debe ser 128, 256, 384 o 512 píxeles.")
             if not self.config["cameras"]:
@@ -676,12 +679,12 @@ class Engine:
                 selected=[c for c in self.config["cameras"] if c["id"] in camera_ids and c.get("active",True)]
             if not selected:
                 raise ValueError("Activa al menos una cámara.")
-            if mode == "p2pnet":
+            if mode in ("hybrid", "yolo", "p2pnet"):
                 if any(c.get("illustrative") for c in selected) and not test_run:
                     raise ValueError("Las ubicaciones ilustrativas no sirven para medir ocupación comercial.")
                 if any(len(c.get("pairs", [])) < 4 for c in selected):
                     raise ValueError("Calibra todas las cámaras con al menos cuatro referencias antes de iniciar.")
-                if any(float(c.get("height") or 0) <= float(self.config.get("personHeight") or ESTATURA_MEDIA) for c in selected):
+                if mode == "p2pnet" and any(float(c.get("height") or 0) <= float(self.config.get("personHeight") or ESTATURA_MEDIA) for c in selected):
                     raise ValueError("La altura de cada cámara debe superar la estatura media para proyectar cabezas al suelo.")
                 if any(not c.get("detectionZone") for c in selected):
                     raise ValueError("Delimita la zona útil de cada cámara para excluir espejos, vidrios y áreas externas.")
@@ -772,6 +775,13 @@ class Engine:
         sesiones (resolución de análisis) se ajusta sobre la
         instancia ya cargada, que es barato.
         """
+        if mode in ("hybrid", "yolo"):
+            key = ("yolo", int(request.get("inferenceSize") or 640))
+            with self.detector_lock:
+                if key not in self.detector_caches:
+                    from following.detector import YoloPersonDetector
+                    self.detector_caches[key] = YoloPersonDetector(ROOT / "models" / "yolo11n.pt", imgsz=key[1])
+                return self.detector_caches[key]
         if mode == "p2pnet":
             key = ("p2pnet",)
             lado_max = int(request.get("inferenceSize") or 256)
@@ -788,13 +798,22 @@ class Engine:
                 return self.detector_cache
         raise ValueError("AeroTrack opera únicamente con P2PNet.")
 
-    def warm_detector_async(self):
+        if mode in ("hybrid", "yolo"):
+            key = ("yolo", int(request.get("inferenceSize") or 640))
+            with self.detector_lock:
+                if key not in self.detector_caches:
+                    from following.detector import YoloPersonDetector
+                    self.detector_caches[key] = YoloPersonDetector(ROOT / "models" / "yolo11n.pt", imgsz=key[1])
+                return self.detector_caches[key]
+        raise ValueError("Detector no soportado.")
+
+    def warm_detector_async(self, mode="yolo"):
         """Prepara P2PNet después de comprobar una fuente, antes de pulsar Probar."""
-        if self.detector_cache_key == ("p2pnet",) or (self.detector_warmup and self.detector_warmup.is_alive()):
+        if (mode == "p2pnet" and self.detector_cache_key == ("p2pnet",)) or (mode != "p2pnet" and ("yolo", 640) in self.detector_caches) or (self.detector_warmup and self.detector_warmup.is_alive()):
             return
         def warm():
             try:
-                self.load_detector("p2pnet", {"inferenceSize": 256})
+                self.load_detector(mode, {"inferenceSize": 256 if mode == "p2pnet" else 640})
             except Exception as exc:
                 self.record("Preparación de P2PNet", f"No se pudo anticipar la carga: {exc}")
         self.detector_warmup = threading.Thread(target=warm, daemon=True, name="p2pnet-warmup")
@@ -804,7 +823,8 @@ class Engine:
         captures = {}
         replay = None
         combined = None
-        mode = request.get("detector", "p2pnet")
+        density_sampler = None
+        mode = request.get("detector", "hybrid")
         try:
             if mode == "demo":
                 self.demo(config)
@@ -816,7 +836,8 @@ class Engine:
             from following.appearance import torso_histogram
             from following.flow import ZoneFlow, FlowField
             person_height = float(config.get("personHeight") or ESTATURA_MEDIA)
-            detector = self.load_detector(mode, request)
+            primary_mode = "yolo" if mode == "hybrid" else mode
+            detector = self.load_detector(primary_mode, request)
             cams = [c for c in config["cameras"] if c.get("active",True) and (not request.get("camera") or c["id"] == request["camera"])]
             statuses = {}
             for c in cams:
@@ -850,7 +871,7 @@ class Engine:
                     fps = 25.
                 c.update(cap=cap, fps=fps, stream=stream, duration=cap.get(cv2.CAP_PROP_FRAME_COUNT)/fps if not stream else None, frameIndex=-1,
                          tracker=ByteTrackPuntos(umbral_alto=.6,max_frames_perdido=15),
-                         h=calibration(c.get("pairs", [])), headPoints=mode=="p2pnet")
+                         h=calibration(c.get("pairs", [])), headPoints=primary_mode=="p2pnet")
                 # P2PNet marca cabezas: se proyectan al suelo corrigiendo por la altura de la
                 # cámara, que por eso tiene que superar la estatura supuesta.
                 if c["headPoints"] and c["h"] is not None and not float(c.get("height") or 0) > person_height:
@@ -878,6 +899,9 @@ class Engine:
                 replay = ReplayWriter(self.data_root,self.state["session"],"unified" if request.get("combined") else "tracking",[{"id":c["id"],"name":c.get("name",c["id"]),"source":c["source"],"offset":c.get("offset",0),"planId":c.get("planId","custom"),"countLines":c.get("countLines",[])} for c in active],{k:v for k,v in config.items() if k != "cameras"},self.project_id)
             from following.combined import CombinedAnalysis
             combined = CombinedAnalysis(cams, ROOT) if request.get('combined') else None
+            from following.adaptive import AdaptiveVisionController, AsyncDensitySampler
+            avie = {c['id']: AdaptiveVisionController(c.get('crowdThreshold', 30)) for c in cams}
+            density_sampler = AsyncDensitySampler(lambda: self.load_detector('p2pnet', {'inferenceSize': 256})) if mode == 'hybrid' else None
             camera_analytics = {}
             level_configs={pid:config if pid==config.get('planId','custom') else {**config,**config.get('plans',{}).get(pid,{})} for pid in {c.get('planId','custom') for c in cams}}
             level_occupancy={pid:Occupancy(value) for pid,value in level_configs.items()}
@@ -932,9 +956,11 @@ class Engine:
                     pending.append((c, frame, height, width))
                 if not active or self.stop_event.is_set():
                     break
+                detector_started = time.monotonic()
                 detection_batches = (detector.detectar_lote([item[1] for item in pending])
                                      if hasattr(detector, "detectar_lote")
                                      else [detector.detectar(item[1]) for item in pending])
+                detector_ms = (time.monotonic() - detector_started) * 1000
                 for (c, frame, height, width), detections in zip(pending, detection_batches):
                     keep = []
                     for i,d in enumerate(detections):
@@ -946,7 +972,7 @@ class Engine:
                     tracks, _, _ = c["tracker"].actualizar(detections, t)
                     for tr in tracks:
                         px, py = tr.posicion
-                        box = None
+                        box = tr.ultima_caja
                         point = ground_point(c, px / width, py / height, person_height) if c["projects"] else None
                         if not accepts(c,c["scope"],px/width,py/height,point,image_only=not c["projects"]):
                             continue
@@ -959,14 +985,20 @@ class Engine:
                         sample = box if box is not None else (body_box(c.get("hInv"), px, py, point, width, height) if c["headPoints"] else None)
                         color = torso_histogram(frame, sample)
                         observations.append({"camera": c["id"], "local": tr.id, "point": point, "pixel": [float(px), float(py)], "box": box, "color": color, "score": tr.score})
-                    statuses[c["id"]] = {"id": c["id"], "status": "live", "width": width, "height": height, "fps":c["fps"], "duration":c.get("duration"), "calibrated": c["projects"], "count": sum(o["camera"]==c["id"] for o in observations), "excluded":excluded, "timestamp": t, "sourceTime":c["frameIndex"]/c["fps"] if not c["stream"] else None}
+                    camera_count = sum(o["camera"] == c["id"] for o in observations)
+                    avie_state = avie[c["id"]].update(detections, tracks, detector_ms / max(1, len(pending)))
+                    if density_sampler and avie_state["p2pRequested"]:
+                        density_sampler.submit(c["id"], frame, t)
+                    statuses[c["id"]] = {"id": c["id"], "status": "live", "width": width, "height": height, "fps":c["fps"], "duration":c.get("duration"), "calibrated": c["projects"], "count": camera_count, "excluded":excluded, "timestamp": t, "sourceTime":c["frameIndex"]/c["fps"] if not c["stream"] else None, "detector": primary_mode, "inferenceMs": round(detector_ms / max(1, len(pending)), 2), "avie": avie_state}
                     with self.lock:
                         self.source_checks[c["id"]] = {"source":c["source"],"valid":True,"width":width,"height":height,"fps":c["fps"],"checkedAt":time.time()}
                 people = identities.update(observations, t)
                 if combined:
                     for c in active:
                         group=[p for p in people if p['camera']==c['id']]
-                        camera_analytics[c['id']] = combined.observe(c,raw_frames[c['id']],group,t)
+                        camera_analytics[c['id']] = combined.observe(c, raw_frames[c['id']], group, t,
+                            density=density_sampler.latest(c['id']) if density_sampler else None,
+                            avie=avie[c['id']].last)
                         camera_analytics[c['id']]['map']=camera_maps[c['id']].update(group,t)
                 for cid, frame in raw_frames.items():
                     try:
@@ -1056,6 +1088,8 @@ class Engine:
             with self.lock:
                 self.state.update(status="error", error=f"{type(exc).__name__}: {exc}", people=[])
         finally:
+            if density_sampler:
+                density_sampler.close()
             self.flush_traffic()
             if combined:
                 final_analytics=combined.close()
@@ -1191,7 +1225,7 @@ class Handler(BaseHTTPRequestHandler):
                     if url.path == "/api/commercial/template":
                         return self.send_data(200, commercial.template(businesses).encode("utf-8-sig"), "text/csv; charset=utf-8")
                     query = parse_qs(url.query)
-                    result = commercial.summary(con, businesses, metrics["negocios"], query.get("dataset",["real"])[0], query.get("date",[None])[0], query.get("hour",[None])[0])
+                    result = commercial.summary(con, businesses, metrics["negocios"], query.get("dataset",["real"])[0], query.get("date",[None])[0], query.get("hour",[None])[0], query.get("empresa",[None])[0] or None)
                     if url.path == "/api/commercial/export":
                         import csv, io
                         output = io.StringIO(); writer = csv.writer(output)

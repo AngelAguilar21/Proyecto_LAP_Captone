@@ -33,7 +33,7 @@ def sync(con, config, public_root):
                 name = f['properties']['name']
                 if len(names[name]) > 1:
                     name += f" (local {sorted(names[name]).index(fid)+1})"
-                con.execute('INSERT OR IGNORE INTO negocios VALUES (?,?,?,?,?)', (ident, name, None, None, time.time()))
+                con.execute("INSERT OR IGNORE INTO negocios (id,nombre,camara_id,linea_id,creado,empresa) VALUES (?,?,?,?,?,?)", (ident, name, None, None, time.time(), 'Sin empresa'))
                 con.execute('INSERT OR IGNORE INTO negocio_ubicaciones VALUES (?,?,?,?)', (ident, pid, *f['geometry']['coordinates'][:2]))
                 con.execute('INSERT OR IGNORE INTO negocio_referencias VALUES (?,?,?)', (ident, asset, fid))
     # Conserva negocios vinculados por versiones anteriores del editor.
@@ -45,7 +45,7 @@ def sync(con, config, public_root):
                     continue
                 if con.execute("SELECT 1 FROM negocios WHERE id=?", (place["id"],)).fetchone():
                     continue
-                con.execute("INSERT INTO negocios VALUES (?,?,?,?,?)", (place["id"],place["name"],camera["id"],line["id"],time.time()))
+                con.execute("INSERT INTO negocios (id,nombre,camara_id,linea_id,creado,empresa) VALUES (?,?,?,?,?,?)", (place["id"],place["name"],camera["id"],line["id"],time.time(), 'Sin empresa'))
                 con.execute("INSERT INTO negocio_ubicaciones VALUES (?,?,?,?)", (place["id"],place["planId"],*place["point"]))
                 con.execute("INSERT INTO negocio_puertas VALUES (?,?,?)", (place["id"],camera["id"],line["id"]))
     return db.listar_negocios(con)
@@ -86,7 +86,7 @@ def traffic(businesses, analytics, observed_config, current_config=None):
     observed = {(c['id'], l['id']): l for c in observed_config.get('cameras', []) for l in c.get('countLines', [])}
     current = {(c['id'], l['id']): l for c in (current_config or observed_config).get('cameras', []) for l in c.get('countLines', [])}
     assignment = {(p['camaraId'], p['lineaId']): b['id'] for b in businesses for p in b['puertas']}
-    totals = {b['id']: {'id': b['id'], 'nombre': b['nombre'], 'estado': b.get('estado', 'activo'), 'ubicacion': b['ubicacion'], 'accesses': [], 'entries': None, 'exits': None, 'hours': {}, 'events': []} for b in businesses}
+    totals = {b['id']: {'id': b['id'], 'nombre': b['nombre'], 'empresa': b.get('empresa') or 'Sin empresa', 'estado': b.get('estado', 'activo'), 'ubicacion': b['ubicacion'], 'accesses': [], 'entries': None, 'exits': None, 'hours': {}, 'events': []} for b in businesses}
     for cid, a in analytics.items():
         for l in a.get('crossings', []):
             key = (cid, l['id'])

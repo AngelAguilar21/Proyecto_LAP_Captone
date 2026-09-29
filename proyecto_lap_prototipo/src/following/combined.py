@@ -17,14 +17,16 @@ class CombinedAnalysis:
             self.fast[c['id']] = CountingAnalytics(definition)
             self.lines[c['id']] = LineCounter(c.get('countLines', []))
 
-    def observe(self, camera, frame, people, t):
+    def observe(self, camera, frame, people, t, density=None, avie=None):
         cid = camera['id']; h, w = frame.shape[:2]
         normalized = [{'id': p.get('local',p['id']), 'pixel': [p['pixel'][0]/w, p['pixel'][1]/h]} for p in people]
         points = [SimpleNamespace(x=p['pixel'][0], y=p['pixel'][1]) for p in normalized]
-        p2p_points = self.fast[cid].update(points, 1, 1, t)
+        self.fast[cid].update(points, 1, 1, t)
         snapshot = self.fast[cid].snapshot()
+        dense = density or {'status': 'idle', 't': t, 'count': 0, 'points': []}
         result = {'t': t, 'occupancy': self.fast[cid].snapshot(), 'crossings': self.lines[cid].update(normalized,t),
-                  'dense': {'t': t, 'points': p2p_points, **snapshot}, 'denseEnabled': True}
+                  'dense': dense, 'denseEnabled': dense.get('status') == 'ready',
+                  'avie': avie or {'state': 'normal', 'p2pRequested': False}}
         self.snapshots[cid]=result
         return result
 
@@ -32,5 +34,5 @@ class CombinedAnalysis:
         for cid, snapshot in self.snapshots.items():
             self.fast[cid].finish(snapshot['t'],'análisis finalizado')
             snapshot['occupancy']=self.fast[cid].snapshot()
-            snapshot['dense']={**snapshot['dense'],**snapshot['occupancy']}
+            snapshot['dense']={**snapshot.get('dense', {}), 'status': snapshot.get('dense', {}).get('status', 'idle')}
         return self.snapshots

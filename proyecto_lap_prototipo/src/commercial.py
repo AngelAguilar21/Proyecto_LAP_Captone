@@ -5,6 +5,7 @@ import json
 import math
 import hashlib
 import statistics
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 
@@ -114,10 +115,10 @@ def import_sales(con, text, businesses, name, dataset='real', preview=False):
 def template(businesses):
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['negocio_id', 'negocio_nombre', 'fecha', 'hora', 'monto', 'moneda', 'transacciones'])
+    writer.writerow(['negocio_id', 'negocio_nombre', 'empresa', 'fecha', 'hora', 'monto', 'moneda', 'transacciones'])
     for b in businesses:
         if b.get('estado') != 'cerrado':
-            writer.writerow([b['id'], b['nombre'], '', '', '', 'PEN', ''])
+            writer.writerow([b['id'], b['nombre'], b.get('empresa') or 'Sin empresa', '', '', '', 'PEN', ''])
     return output.getvalue()
 
 
@@ -188,7 +189,28 @@ def forecast(con, bid, day, hour, entries, dataset='real'):
     return {'estimate': round(entries * rate, 2), 'perEntry': round(rate, 2), 'days': len(ratios), 'range': [round(entries * min(ratios), 2), round(entries * max(ratios), 2)], 'reason': 'Proyección, no venta confirmada. Ingreso histórico por entrada; no ticket por compra.'}
 
 
-def summary(con, businesses, traffic, dataset='real', day=None, hour=None):
+def next_forecast(con, bid, day, hour, dataset='real'):
+    """Pronostica la siguiente hora con trafico historico comparable."""
+    target = datetime.strptime(day, '%Y-%m-%d') + timedelta(hours=int(hour) + 1)
+    target_day, target_hour = target.date().isoformat(), target.hour
+    target_weekday = target.weekday()
+    counts = [entries for date, entries in con.execute(
+        'SELECT fecha,entradas FROM commercial_traffic WHERE negocio_id=? AND dataset=? AND hora=? AND coverage>=3300 AND fecha<?',
+        (bid, dataset, target_hour, target_day)).fetchall()
+        if datetime.strptime(date, '%Y-%m-%d').weekday() == target_weekday and entries is not None and entries >= 0]
+    if not counts:
+        return {'estimate': None, 'expectedEntries': None, 'days': 0, 'confidence': 'baja',
+                'target': f'{target_day}T{target_hour:02d}:00',
+                'reason': 'No hay trafico historico para pronosticar la siguiente hora.'}
+    expected = int(round(statistics.median(counts)))
+    result = forecast(con, bid, target_day, target_hour, expected, dataset)
+    result['expectedEntries'] = expected
+    result['target'] = f'{target_day}T{target_hour:02d}:00'
+    result['confidence'] = 'alta' if result.get('days', 0) >= 7 else 'media' if result.get('days', 0) >= 3 else 'baja'
+    return result
+
+
+def summary(con, businesses, traffic, dataset='real', day=None, hour=None, empresa=None):
     setup(con)
     now = datetime.now(LIMA)
     day, hour = day or now.date().isoformat(), now.hour if hour is None else int(hour)
@@ -204,8 +226,21 @@ def summary(con, businesses, traffic, dataset='real', day=None, hour=None):
         if entries is None:
             saved = con.execute('SELECT entradas FROM commercial_traffic WHERE negocio_id=? AND fecha=? AND hora=? AND dataset=? ORDER BY coverage DESC LIMIT 1', (b['id'], day, hour, dataset)).fetchone()
             entries = saved[0] if saved else None
-        sales = con.execute('SELECT monto FROM commercial_sales WHERE negocio_id=? AND fecha=? AND hora=? AND dataset=?', (b['id'], day, hour, dataset)).fetchone()
+        sales = con.execute('SELECT monto,transacciones FROM commercial_sales WHERE negocio_id=? AND fecha=? AND hora=? AND dataset=?', (b['id'], day, hour, dataset)).fetchone()
         projection = forecast(con, b['id'], day, hour, entries or 0, dataset) if entries is not None else {'estimate': None, 'days': 0, 'reason': 'No hay entradas medidas en esta franja.'}
+        projection['confidence'] = 'alta' if projection.get('days', 0) >= 7 else 'media' if projection.get('days', 0) >= 3 else 'baja'
+        next_projection = next_forecast(con, b['id'], day, hour, dataset)
+        transactions = sales[1] if sales else None
+        conversion = round(100 * transactions / entries, 1) if transactions is not None and entries and entries > 0 else None
+        hourly = []
+        for h, hourly_entries, hourly_exits, coverage in con.execute('SELECT hora,entradas,salidas,coverage FROM commercial_traffic WHERE negocio_id=? AND fecha=? AND dataset=? ORDER BY hora', (b['id'], day, dataset)):
+            hourly_sale = con.execute('SELECT monto,transacciones FROM commercial_sales WHERE negocio_id=? AND fecha=? AND hora=? AND dataset=?', (b['id'], day, h, dataset)).fetchone()
+            hourly_estimate = forecast(con, b['id'], day, h, hourly_entries, dataset)
+            hourly.append({'hour': h, 'entries': hourly_entries, 'exits': hourly_exits, 'coverage': round(coverage),
+                           'sales': hourly_sale[0] if hourly_sale else None,
+                           'transactions': hourly_sale[1] if hourly_sale else None,
+                           'estimate': hourly_estimate.get('estimate'),
+                           'confidence': 'alta' if hourly_estimate.get('days', 0) >= 7 else 'media' if hourly_estimate.get('days', 0) >= 3 else 'baja'})
         incidents = []
         for ident, start, duration, peak in con.execute('SELECT id,inicio,duracion,pico FROM commercial_incidents WHERE negocio_id=? AND dataset=? ORDER BY inicio DESC LIMIT 100', (b['id'], dataset)):
             when = datetime.fromisoformat(start).astimezone(LIMA)
@@ -221,6 +256,22 @@ def summary(con, businesses, traffic, dataset='real', day=None, hour=None):
             percent = round(100*(sold[0]/normal-1),1) if sold and normal and not crossing_hour else None
             incidents.append({'id':ident,'start':start,'duration':duration,'peak':peak,'sales':sold[0] if sold else None,'baseline':normal,'differencePercent':percent,'sampleDays':len(amounts),'scope':'Incidente asociado por la cámara del acceso. Hora que contiene el incidente; no ventas durante sus minutos.' if not crossing_hour else 'El incidente abarca varias horas; no se calcula variación.'})
         bags = con.execute('SELECT COUNT(*),COALESCE(SUM(matched),0),COALESCE(SUM(changed),0) FROM commercial_bags WHERE negocio_id=? AND dataset=? AND session IN (SELECT session FROM commercial_traffic WHERE negocio_id=? AND fecha=? AND dataset=?)', (b['id'],dataset,b['id'],day,dataset)).fetchone()
-        rows.append({'id':b['id'],'name':b['nombre'],'accesses':len(b['puertas']),'entries':entries,'sales':sales[0] if sales else None,'forecast':projection,'incidents':incidents,'bags':{'exits':bags[0],'matched':bags[1],'changed':bags[2],'unmatched':bags[0]-bags[1],'coverage':round(100*bags[1]/bags[0],1) if bags[0] else None}})
+        rows.append({'id':b['id'],'name':b['nombre'],'empresa':b.get('empresa') or 'Sin empresa','accesses':len(b['puertas']),
+                     'entries':entries,'sales':sales[0] if sales else None,'transactions':transactions,'conversion':conversion,
+                     'forecast':projection,'nextForecast':next_projection,'hourly':hourly,'incidents':incidents,
+                     'bags':{'exits':bags[0],'matched':bags[1],'changed':bags[2],'unmatched':bags[0]-bags[1],'coverage':round(100*bags[1]/bags[0],1) if bags[0] else None}})
+    companies = []
+    grouped = defaultdict(list)
+    for row in rows:
+        grouped[row['empresa']].append(row)
+    for name, group in sorted(grouped.items(), key=lambda item: item[0].lower()):
+        entries_total = sum(row['entries'] or 0 for row in group)
+        sales_total = sum(row['sales'] or 0 for row in group) if any(row['sales'] is not None for row in group) else None
+        estimated_total = sum(row['forecast'].get('estimate') or 0 for row in group) if any(row['forecast'].get('estimate') is not None for row in group) else None
+        transactions_total = sum(row['transactions'] or 0 for row in group) if any(row['transactions'] is not None for row in group) else None
+        companies.append({'name': name, 'businesses': len(group), 'entries': entries_total, 'sales': sales_total,
+                          'estimate': estimated_total, 'transactions': transactions_total,
+                          'conversion': round(100 * transactions_total / entries_total, 1) if transactions_total is not None and entries_total else None})
+    visible = [row for row in rows if not empresa or row['empresa'] == empresa]
     imports = [dict(zip(('id','name','dataset','rows','created'),r)) for r in con.execute('SELECT * FROM commercial_imports WHERE dataset=? ORDER BY creado DESC LIMIT 20',(dataset,))]
-    return {'date':day,'hour':hour,'dataset':dataset,'businesses':rows,'imports':imports,'currency':'PEN'}
+    return {'date':day,'hour':hour,'dataset':dataset,'empresa':empresa,'empresas':companies,'businesses':visible,'imports':imports,'currency':'PEN'}

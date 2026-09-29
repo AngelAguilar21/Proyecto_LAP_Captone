@@ -74,10 +74,11 @@ class AeroTrackTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.engine.start({"detector":"demo"})
 
-    def test_only_p2pnet_or_demo_can_start(self):
-        for legacy in ("yolo", "hog"):
-            with self.subTest(detector=legacy), self.assertRaisesRegex(ValueError, "P2PNet"):
-                self.engine.start({"detector":legacy})
+    def test_supported_detectors_and_unknown_mode(self):
+        # YOLO/hybrid are now the live primary route; only unknown legacy modes
+        # should be rejected before a source is opened.
+        with self.assertRaises(ValueError):
+            self.engine.start({"detector":"hog"})
 
     def test_csrf_blocks_cross_origin_mutations(self):
         with self.assertRaises(HTTPError) as missing:

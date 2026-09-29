@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS negocios (
     nombre TEXT NOT NULL,
     camara_id TEXT,
     linea_id TEXT,
-    creado REAL NOT NULL
+    creado REAL NOT NULL,
+    empresa TEXT NOT NULL DEFAULT 'Sin empresa'
 );
 
 CREATE TABLE IF NOT EXISTS ventas (
@@ -105,6 +106,11 @@ def connect(project_path):
     conexion.execute("PRAGMA foreign_keys = ON")
     conexion.executescript(ESQUEMA)
     conexion.executescript(NEGOCIOS_ESQUEMA)
+    # Los proyectos creados antes de la segmentación empresarial no tienen la
+    # columna nueva. La migración es local, idempotente y conserva sus datos.
+    columnas = {fila[1] for fila in conexion.execute("PRAGMA table_info(negocios)")}
+    if "empresa" not in columnas:
+        conexion.execute("ALTER TABLE negocios ADD COLUMN empresa TEXT NOT NULL DEFAULT 'Sin empresa'")
     conexion.execute("INSERT OR IGNORE INTO negocio_puertas SELECT id, camara_id, linea_id FROM negocios WHERE camara_id IS NOT NULL AND linea_id IS NOT NULL")
     conexion.commit()
     return conexion
@@ -112,18 +118,18 @@ def connect(project_path):
 
 # --- Negocios ---
 
-def crear_negocio(conexion, id_negocio, nombre, camara_id=None, linea_id=None):
+def crear_negocio(conexion, id_negocio, nombre, camara_id=None, linea_id=None, empresa="Sin empresa"):
     if not nombre or not nombre.strip():
         raise ValueError("El negocio necesita un nombre.")
     conexion.execute(
-        "INSERT INTO negocios (id, nombre, camara_id, linea_id, creado) VALUES (?,?,?,?,?)",
-        (id_negocio, nombre.strip(), camara_id, linea_id, time.time()))
+        "INSERT INTO negocios (id, nombre, camara_id, linea_id, creado, empresa) VALUES (?,?,?,?,?,?)",
+        (id_negocio, nombre.strip(), camara_id, linea_id, time.time(), (empresa or "Sin empresa").strip()))
     conexion.commit()
 
 
 def listar_negocios(conexion):
     filas = conexion.execute(
-        "SELECT id, nombre, camara_id, linea_id FROM negocios ORDER BY nombre").fetchall()
+        "SELECT id, nombre, camara_id, linea_id, empresa FROM negocios ORDER BY empresa, nombre").fetchall()
     ubicaciones = {f[0]: {"planId": f[1], "point": [f[2], f[3]]} for f in
                    conexion.execute("SELECT negocio_id, plano_id, x, y FROM negocio_ubicaciones")}
     puertas = defaultdict(list)
@@ -132,7 +138,7 @@ def listar_negocios(conexion):
     estados = dict(conexion.execute('SELECT negocio_id, estado FROM negocio_estados'))
     for negocio, camara, linea in conexion.execute("SELECT negocio_id, camara_id, linea_id FROM negocio_puertas ORDER BY camara_id, linea_id"):
         puertas[negocio].append({"camaraId": camara, "lineaId": linea})
-    return [{"id": f[0], "nombre": f[1], "camaraId": f[2], "lineaId": f[3],
+    return [{"id": f[0], "nombre": f[1], "empresa": f[4] or "Sin empresa", "camaraId": f[2], "lineaId": f[3],
              "puertas": puertas[f[0]], "ubicacion": ubicaciones.get(f[0]), "referencia": referencias.get(f[0]), "estado": estados.get(f[0], 'activo')} for f in filas]
 
 
@@ -142,9 +148,10 @@ def guardar_negocio(conexion, datos, config, catalogo=None):
         raise ValueError("Indica el identificador y el nombre del negocio.")
     ident = datos["id"].strip()
     nombre = datos["nombre"].strip()
-    if not ident or len(ident) > 100 or not nombre or len(nombre) > 120:
-        raise ValueError("Indica un nombre de negocio de hasta 120 caracteres.")
-    current = conexion.execute("SELECT nombre FROM negocios WHERE id=?", (ident,)).fetchone()
+    empresa = str(datos.get("empresa") or "Sin empresa").strip()
+    if not ident or len(ident) > 100 or not nombre or len(nombre) > 120 or len(empresa) > 120:
+        raise ValueError("Indica un negocio y una empresa de hasta 120 caracteres.")
+    current = conexion.execute("SELECT nombre, empresa FROM negocios WHERE id=?", (ident,)).fetchone()
     if (not current or current[0] != nombre) and conexion.execute("SELECT 1 FROM negocios WHERE lower(trim(nombre))=lower(?) AND id<>?", (nombre, ident)).fetchone():
         raise ValueError("Ya existe un negocio con ese nombre en el proyecto.")
     ubicacion = datos.get("ubicacion") or {}
@@ -188,8 +195,8 @@ def guardar_negocio(conexion, datos, config, catalogo=None):
         usadas.add(clave)
     with conexion:
         primera = puertas[0] if puertas else {}
-        conexion.execute("INSERT INTO negocios VALUES (?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET nombre=excluded.nombre, camara_id=excluded.camara_id, linea_id=excluded.linea_id",
-                         (ident, nombre, primera.get("camaraId"), primera.get("lineaId"), time.time()))
+        conexion.execute("INSERT INTO negocios (id,nombre,camara_id,linea_id,creado,empresa) VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET nombre=excluded.nombre, camara_id=excluded.camara_id, linea_id=excluded.linea_id, empresa=excluded.empresa",
+                         (ident, nombre, primera.get("camaraId"), primera.get("lineaId"), time.time(), empresa))
         conexion.execute("INSERT INTO negocio_ubicaciones VALUES (?,?,?,?) ON CONFLICT(negocio_id) DO UPDATE SET plano_id=excluded.plano_id,x=excluded.x,y=excluded.y", (ident, plano, *punto))
         conexion.execute("DELETE FROM negocio_puertas WHERE negocio_id=?", (ident,))
         conexion.executemany("INSERT INTO negocio_puertas VALUES (?,?,?)", [(ident, *clave) for clave in usadas])
