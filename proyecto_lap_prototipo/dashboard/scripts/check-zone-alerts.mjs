@@ -1,0 +1,37 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import ts from 'typescript';
+
+const source = readFileSync(new URL('../src/aero/zoneAlerts.ts', import.meta.url), 'utf8');
+const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 } });
+const { planAlerts } = await import('data:text/javascript;base64,' + Buffer.from(compiled.outputText).toString('base64'));
+const config = { zones: [], minPeople: 2, dwell: 2 };
+const episode = { id: 'a', scope: 'plan:custom', zone: 'Puerta', zoneId: 'z', start: 0,
+  duration: 2, peak: 3, alert: true, observed: true, end: null, threshold: 2, dwell: 2 };
+const state = (episodes, t = 2) => ({ t, analytics: { zones: [], zoneEpisodes: episodes } });
+const first = planAlerts(config, state([episode]))[0];
+const later = planAlerts(config, state([{ ...episode, observed: false, duration: 2 }], 100))[0];
+assert.equal(first.id, later.id);
+assert.equal(first.at, later.at);
+assert.equal(first.zone, 'Puerta');
+assert.equal(planAlerts(config, state([{ ...episode, duration: 50, peak: 10 }]))[0].people, 10);
+assert.equal(planAlerts(config, state([{ ...episode, end: 3 }]))[0].open, false);
+assert.notEqual(planAlerts(config, state([{ ...episode, id: 'b' }]))[0].id, first.id);
+assert.notEqual(planAlerts(config, state([{ ...episode, scope: 'plan:lap-2' }]))[0].id, first.id);
+assert.deepEqual(planAlerts(config, state([{ ...episode, alert: false }])), []);
+assert.deepEqual(planAlerts(config, state([])), []);
+assert.equal(planAlerts(config, { t: 4, analytics: { zones: [{ name: 'Legacy', count: 3, duration: 2, alert: true }] } })[0].zone, 'Legacy');
+console.log('Zone alert contract: 10 assertions OK (stable IDs, gaps, closure, scopes, legacy).');
+const summarySource = readFileSync(new URL('../src/aero/zoneSummary.ts', import.meta.url), 'utf8');
+const summaryCode = ts.transpileModule(summarySource, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 } });
+const { zoneRanking, zoneSeries } = await import('data:text/javascript;base64,' + Buffer.from(summaryCode.outputText).toString('base64'));
+const row = (t, count, observed = true) => ({ t, zones: [{ name: 'Zone', count, observed }] });
+const rows = [row(0, 2), row(1, 2), row(2, null, false), row(100, 4), row(101, 4)];
+assert.equal(zoneRanking(rows)[0].mean, 3);
+assert.equal(zoneRanking(rows)[0].peak, 4);
+assert.equal(zoneRanking(rows)[0].t, 100);
+assert.equal(zoneSeries(rows, 'Zone').length, 4);
+assert.deepEqual(zoneRanking([row(0, null, false)]), []);
+assert.equal(zoneRanking([row(0, 0), row(1, 0)])[0].mean, 0);
+assert.equal(zoneRanking([row(0, 2), row(1, 4)])[0].mean, 2);
+console.log('Zone summary contract: 7 assertions OK (unknown samples excluded; valid zero preserved).');

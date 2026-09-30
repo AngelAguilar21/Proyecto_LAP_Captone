@@ -4,8 +4,10 @@ Coordinates are always in a shared, user-defined plane. Association confidence i
 a heuristic, not a calibrated probability. No biometric models are used here.
 """
 from spatial_scope import validate_polygon
+import copy
 import math
 from collections import deque
+from zone_episodes import ZoneEpisodes, ensure_zone_ids
 
 import cv2
 import numpy as np
@@ -53,7 +55,7 @@ def validate_config(c):
     for pid, plan in plans.items():
         if not valid_plan_id(pid) or not isinstance(plan,dict):
             raise ValueError("Plano desconocido.")
-        validate_config({**c,**plan,"plans":{},"cameras":[]})
+        validate_config(copy.deepcopy({**c,**plan,"planId":pid,"plans":{},"cameras":[]}))
     if not valid_plan_id(c.get("planId","custom")):
         raise ValueError("Nivel desconocido.")
     if c.get("mapAsset") and c["mapAsset"] not in [f"/maps/lap/{n}.json" for n in (1,2,3,4)]:
@@ -200,6 +202,7 @@ def validate_config(c):
             raise ValueError(f"Campo {field} inválido.")
     if c.get("sourceMode", "recordings") not in ("recordings", "live", "demo"):
         raise ValueError("Modo de fuente inválido.")
+    ensure_zone_ids(c)
     return c
 
 
@@ -600,15 +603,16 @@ class IdentityStore:
 
 
 class Occupancy:
-    def __init__(self, config):
+    def __init__(self, config, scope=None, episode_namespace=None):
+        ensure_zone_ids(config)
         self.config = config
         self.cells = {}
         self.last_t = None
         self.zone_stats = {}
-        self.zone_start = {}
+        self.zone_episodes = ZoneEpisodes(scope or "plan:" + config.get("planId", "custom"), episode_namespace)
         self.cell_visitors = {}
 
-    def update(self, people, t):
+    def update(self, people, t, observation_valid=True):
         cfg = self.config
         # Count one observed global ID once, never extrapolated invisible people.
         unique = {p["id"]: p for p in people if p.get("point") is not None and not p.get("predicted")}
@@ -657,23 +661,26 @@ class Occupancy:
             circle["alert"] = circle["duration"] >= cfg["dwell"]
         self.clusters = circles
         zones = []
-        for index, zone in enumerate(cfg.get("zones", [])):
-            if zone.get("kind") in ("wall", "door"):
-                continue
+        configured = [z for z in cfg.get("zones", []) if z.get("kind") not in ("wall", "door")]
+        self.zone_episodes.retain([z["id"] for z in configured], t)
+        for zone in configured:
             poly = np.asarray(zone["points"], dtype=np.float32)
             members = {p["id"] for p in points if cv2.pointPolygonTest(poly, tuple(p["point"]), False) >= 0}
             n = len(members)
-            zkey = zone.get("id",str(index))
+            zkey = zone["id"]
             stats = self.zone_stats.setdefault(zkey,{"seconds":0.,"peak":0,"visitors":set()})
-            stats["seconds"] += n * dt
-            stats["peak"] = max(stats["peak"],n)
-            stats["visitors"].update(members)
-            rule = zone.get("rule",{})
-            if rule.get("enabled") and n >= rule["minPeople"]:
-                self.zone_start.setdefault(zkey,t)
-            else:
-                self.zone_start.pop(zkey,None)
-            duration = t-self.zone_start.get(zkey,t)
-            zones.append({"name":zone["name"],"count":n,"seconds":stats["seconds"],"peak":stats["peak"],"visits":len(stats["visitors"]),"duration":duration,"alert":bool(rule.get("enabled") and zkey in self.zone_start and duration >= rule["dwell"])})
+            if observation_valid:
+                stats["seconds"] += n * dt
+                stats["peak"] = max(stats["peak"],n)
+                stats["visitors"].update(members)
+            episode = self.zone_episodes.observe(zone, n, t, observation_valid,
+                context=[cfg.get(k) for k in ("width", "height", "unit", "workArea")])
+            zones.append({"id":zkey,"name":zone["name"],"count":n if observation_valid else None,"seconds":stats["seconds"],"peak":stats["peak"],"visits":len(stats["visitors"]),
+                          "duration":episode["duration"] if episode else 0.,
+                          "alert":bool(episode and episode["alert"] and observation_valid),
+                          "observed":bool(observation_valid), "scope":self.zone_episodes.scope,
+                          "episodeId":episode["id"] if episode else None,
+                          "start":episode["start"] if episode else None})
         ranked = sorted(self.cells.items(), key=lambda item: item[1]["seconds"], reverse=True)[:80]
-        return {"clusters": circles, "zones": zones, "heat": [{"x": k[0] * grid_size, "y": k[1] * grid_size, "size": grid_size, **v} for k, v in ranked], "mappedCount": len(unique)}
+        return {"clusters": circles, "zones": zones, "heat": [{"x": k[0] * grid_size, "y": k[1] * grid_size, "size": grid_size, **v} for k, v in ranked], "mappedCount": len(unique),
+                "zoneEpisodes": self.zone_episodes.snapshot()}

@@ -44,6 +44,12 @@ export interface CameraStatus {
   detector?: string; inferenceMs?: number; avie?: {state:string; detections?:number; tracks?:number; p2pRequested?:boolean};
 }
 export interface HeatCell { x: number; y: number; size: number; seconds: number; peak: number; visits?: number }
+export interface ZoneEpisode {
+  id: string; scope: string; zoneId: string; zone: string; zoneName: string;
+  start: number; last: number; duration: number; peak: number;
+  end: number | null; reason: string | null; observed: boolean; alert: boolean;
+  threshold: number; dwell: number; signature: string;
+}
 export interface SessionState {
   testRun?: boolean;
   cameraAnalytics?:Record<string,any>;
@@ -53,10 +59,11 @@ export interface SessionState {
   updatedAt?: number; serverTime?: number; error?: string; people: Person[]; cameras: CameraStatus[];
   events: { id: string; from: string; to: string; t: number }[];
   analytics: {
+    zoneEpisodes?: ZoneEpisode[];
     flowVectors?:{x:number;y:number;dx:number;dy:number;distance:number;samples:number;size:number}[];
     flow?: {name: string; entries: number; exits: number; lastCrossing: number | null}[];
     clusters: { center: Point; radius: number; count: number; duration: number; alert: boolean }[];
-    zones: { name: string; count: number; seconds?: number; peak?: number; visits?: number; alert?: boolean; duration?: number }[];
+    zones: { name: string; count: number | null; observed?: boolean; seconds?: number; peak?: number; visits?: number; alert?: boolean; duration?: number }[];
     heat: HeatCell[]; mappedCount: number;
   };
   totals?: { observed: number; identities: number; personSeconds: number; meanObservedSeconds: number; alerts: number };

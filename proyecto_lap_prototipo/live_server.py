@@ -138,7 +138,7 @@ class Engine:
         # proyecto, incluyendo sesiones con estado parcial o error recuperable.
         self.restore_last_result()
 
-    def dispatch_alerts(self, camera_analytics, analytics):
+    def dispatch_alerts(self, camera_analytics, analytics, level_analytics=None):
         """Guarda cada alerta nueva en la bitacora y, si el correo esta
         configurado, la envia. Nunca interrumpe la sesion: un fallo de disco o
         de correo se registra pero no corta el seguimiento."""
@@ -167,25 +167,26 @@ class Engine:
                     "detalle": {"camara": names.get(cid, cid), "origen": "camara"},
                     "asunto": "AeroTrack - Aglomeracion en " + str(episode.get("zone")),
                     "cuerpo": chr(10).join(body)})
-        for zone in (analytics or {}).get("zones", []):
-            if not zone.get("alert"):
+        plans = level_analytics.values() if level_analytics is not None else [analytics or {}]
+        for episode in (e for plan in plans for e in plan.get("zoneEpisodes", [])):
+            if not episode.get("alert"):
                 continue
-            key = "zona:{}:{}".format(zone.get("name"), round(self.state.get("t", 0)))
+            key = "zona:{}:{}".format(episode["scope"], episode["id"])
             body = [
-                "La zona " + str(zone.get("name")) + " del plano supero su umbral.",
+                "La zona " + str(episode["zone"]) + " del plano supero su umbral.",
                 "",
                 "Lugar: " + place,
-                "Personas observadas: " + str(zone.get("count")),
-                "Duracion: " + str(round(zone.get("duration", 0))) + " s",
+                "Personas observadas: " + str(episode["peak"]),
+                "Duracion: " + str(round(episode["duration"])) + " s",
                 "",
                 nota,
             ]
             pendientes.append({
-                "key": key, "tipo": "aglomeracion", "zona": zone.get("name"), "camara": None,
-                "inicio": self.state.get("t", 0) - (zone.get("duration") or 0),
-                "pico": zone.get("peak") or zone.get("count"), "duracion": zone.get("duration"),
-                "detalle": {"origen": "plano"},
-                "asunto": "AeroTrack - Alerta en " + str(zone.get("name")),
+                "key": key, "tipo": "aglomeracion", "zona": episode["zone"], "camara": None,
+                "inicio": episode["start"], "pico": episode["peak"], "duracion": episode["duration"],
+                "detalle": {"origen": "plano", "scope": episode["scope"],
+                            "zoneId": episode["zoneId"], "episodeId": episode["id"]},
+                "asunto": "AeroTrack - Alerta en " + str(episode["zone"]),
                 "cuerpo": chr(10).join(body)})
 
         if not pendientes:
@@ -502,7 +503,11 @@ class Engine:
         self.config_error = None
         if self.config_path.exists():
             try:
-                self.config = validate_config({**self.config, **json.loads(self.config_path.read_text(encoding="utf-8"))})
+                stored = json.loads(self.config_path.read_text(encoding="utf-8"))
+                self.config = validate_config({**self.config, **copy.deepcopy(stored)})
+                from zone_episodes import ensure_zone_ids
+                if ensure_zone_ids(stored):
+                    projects.atomic_write(self.config_path, json.dumps(stored, ensure_ascii=False, indent=2))
             except (ValueError, OSError) as exc:
                 self.config_error = str(exc)
         if self.config.get("background") and "planLines" not in self.config:
@@ -915,6 +920,7 @@ class Engine:
         combined = None
         density_sampler = None
         identity_memory = None
+        level_occupancy = {}
         mode = request.get("detector", "hybrid")
         try:
             if mode == "demo":
@@ -1036,11 +1042,12 @@ class Engine:
             avie = {c['id']: AdaptiveVisionController(c.get('crowdThreshold', 30)) for c in cams}
             density_sampler = AsyncDensitySampler(lambda: self.load_detector('p2pnet', {'inferenceSize': 256})) if mode == 'hybrid' else None
             camera_analytics = {}
-            level_configs={pid:config if pid==config.get('planId','custom') else {**config,**config.get('plans',{}).get(pid,{})} for pid in {c.get('planId','custom') for c in cams}}
+            from zone_episodes import plan_observed
+            level_configs={pid:config if pid==config.get('planId','custom') else {**config,**config.get('plans',{}).get(pid,{}), 'planId':pid} for pid in {c.get('planId','custom') for c in cams}}
             level_occupancy={pid:Occupancy(value) for pid,value in level_configs.items()}
             level_flow={pid:ZoneFlow(value) for pid,value in level_configs.items()}
             flow_fields={pid:FlowField(value) for pid,value in level_configs.items()}
-            camera_maps={c['id']:Occupancy(level_configs[c.get('planId','custom')]) for c in cams}
+            camera_maps={c['id']:Occupancy(level_configs[c.get('planId','custom')], scope='camera-map:'+c['id']) for c in cams}
             camera_levels={c['id']:c.get('planId','custom') for c in cams}
             for camera in cams:
                 plan=level_configs[camera.get('planId','custom')]
@@ -1135,7 +1142,7 @@ class Engine:
                             c["frameIndex"] += 1
                     ok, frame = cap.read()
                     c["frameIndex"] += 1
-                    if not ok:
+                    if not ok or frame is None or frame.size == 0:
                         statuses[c["id"]] = {**statuses[c["id"]], "status": "error" if c["stream"] else "ended", "error": "Fuente sin imagen" if c["stream"] else None}
                         active.remove(c)
                         cap.release()
@@ -1153,6 +1160,8 @@ class Engine:
                 if self.stop_event.is_set():
                     break
                 if not active:
+                    for counter in [occupancy, *level_occupancy.values(), *camera_maps.values()]:
+                        counter.update([], t, observation_valid=False)
                     if any(s.get("status") in ("error", "reconnecting") for s in statuses.values()):
                         self.stop_event.wait(.25)
                         continue
@@ -1162,7 +1171,11 @@ class Engine:
                                      if hasattr(detector, "detectar_lote")
                                      else [detector.detectar(item[1]) for item in pending])
                 detector_ms = (time.monotonic() - detector_started) * 1000
+                observed_ids = set()
                 for (c, frame, height, width), detections in zip(pending, detection_batches):
+                    if detections is None:
+                        continue
+                    observed_ids.add(c['id'])
                     keep = []
                     for i,d in enumerate(detections):
                         ground = ground_point(c,d.x/width,d.y/height,person_height) if c["projects"] else None
@@ -1203,11 +1216,16 @@ class Engine:
                     identity_memory.record(self.state["session"], people, identities, t)
                 if combined:
                     for c in active:
+                        if c['id'] not in observed_ids:
+                            continue
                         group=[p for p in people if p['camera']==c['id']]
                         camera_analytics[c['id']] = combined.observe(c, raw_frames[c['id']], group, t,
                             density=density_sampler.latest(c['id']) if density_sampler else None,
                             avie=avie[c['id']].last)
-                        camera_analytics[c['id']]['map']=camera_maps[c['id']].update(group,t)
+                        camera_analytics[c['id']]['map']=camera_maps[c['id']].update(group,t, observation_valid=bool(c.get('projects')))
+                for c in cams:
+                    if c['id'] not in observed_ids:
+                        camera_maps[c['id']].update([], t, observation_valid=False)
                 for cid, frame in raw_frames.items():
                     try:
                         bag_events = bag_signal.observe(cid,frame,t)
@@ -1271,12 +1289,14 @@ class Engine:
                 trails = {key: value for key, value in trails.items() if key in seen}
                 with self.lock:
                     self.frames.update(encoded)
-                    analytics = occupancy.update(people,t)
+                    primary_plan = config.get('planId','custom')
+                    analytics = occupancy.update([p for p in people if camera_levels[p['camera']]==primary_plan], t,
+                        observation_valid=plan_observed(cams, observed_ids, primary_plan))
                     analytics["flow"] = flow.update(people,t)
                     levels={}
                     for pid, counter in level_occupancy.items():
                         group=[p for p in people if camera_levels[p['camera']]==pid]
-                        levels[pid]=counter.update(group,t)
+                        levels[pid]=counter.update(group,t, observation_valid=plan_observed(cams, observed_ids, pid))
                         levels[pid]['flow']=level_flow[pid].update(group,t)
                         levels[pid]['flowVectors']=flow_fields[pid].update(group,t)
                     analytics=levels.get(config.get('planId','custom'),analytics)
@@ -1284,9 +1304,9 @@ class Engine:
                         views=[]
                         for c in active:
                             h,w=raw_frames[c["id"]].shape[:2]
-                            views.append({"id":c["id"],"t":statuses[c["id"]]["sourceTime"],"analysis":camera_analytics.get(c["id"]),"people":[{"id":p["id"],"box":[p["box"][0]/w,p["box"][1]/h,p["box"][2]/w,p["box"][3]/h] if p["box"] else None,"pixel":[p["pixel"][0]/w,p["pixel"][1]/h],"point":p["point"],"association":p["association"],"history":p.get("history",[])[-30:]} for p in people if p["camera"]==c["id"]]})
+                            views.append({"id":c["id"],"t":statuses[c["id"]].get("sourceTime"),"observed":c["id"] in observed_ids,"analysis":camera_analytics.get(c["id"]),"people":[{"id":p["id"],"box":[p["box"][0]/w,p["box"][1]/h,p["box"][2]/w,p["box"][3]/h] if p["box"] else None,"pixel":[p["pixel"][0]/w,p["pixel"][1]/h],"point":p["point"],"association":p["association"],"history":p.get("history",[])[-30:]} for p in people if p["camera"]==c["id"]]})
                         replay.append({"t":t,"cameras":views,"analytics":analytics,"levels":levels})
-                    self.dispatch_alerts(camera_analytics, analytics)
+                    self.dispatch_alerts(camera_analytics, analytics, levels)
                     self.record_traffic(analytics, bool(active and active[0].get("stream")))
                     self.state.update(status="paused" if self.pause_event.is_set() else "running", people=people, cameras=list(statuses.values()), events=list(identities.events), t=t,
                                       analytics=analytics, levelAnalytics=levels, cameraAnalytics=camera_analytics, synchronization={"mode":"live" if active[0]["stream"] else "recordings", "contentVerified":config["clocksVerified"], "sampleSkewSeconds":round(skew,5), "commonTime":t}, totals=metrics.update(people,analytics,t), series=list(metrics.series), processingMs=round(elapsed * 1000), updatedAt=time.time())
@@ -1296,6 +1316,14 @@ class Engine:
             with self.lock:
                 self.state.update(status="error", error=f"{type(exc).__name__}: {exc}", people=[])
         finally:
+            # Close aggregate episodes at their last source observation, never
+            # fabricate a below-threshold sample when a source/session ends.
+            reason = "source_error" if self.state["status"] == "error" else "session_stopped" if self.stop_event.is_set() else "session_ended"
+            for pid, counter in level_occupancy.items():
+                counter.zone_episodes.finish(reason)
+                snapshot = self.state.get('levelAnalytics', {}).get(pid)
+                if snapshot is not None:
+                    snapshot['zoneEpisodes'] = counter.zone_episodes.snapshot()
             if density_sampler:
                 density_sampler.close()
             if identity_memory:
@@ -1377,6 +1405,8 @@ class Engine:
             self.stop_event.wait(.2)
             t += .2
         replay.meta["cameraAnalytics"] = camera_analytics if t else {}
+        occupancy.zone_episodes.finish("session_stopped")
+        self.state['analytics']['zoneEpisodes'] = occupancy.zone_episodes.snapshot()
         replay.meta['reportAnalytics'] = copy.deepcopy(self.state['analytics'])
         replay.meta['totals'] = copy.deepcopy(self.state.get('totals', {}))
         replay.finish("stopped")

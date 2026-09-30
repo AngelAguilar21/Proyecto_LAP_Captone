@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import type {Session} from './useSession';
 import {formatTime,isActive} from './types';
+import {planAlerts} from './zoneAlerts';
 
 type Notice={id:string;title:string;body:string};
 export default function Notifications({session}:{session:Session}){
@@ -18,12 +19,12 @@ export default function Notifications({session}:{session:Session}){
     fresh.push({id:key,title:`Concentración en ${episode.zone}`,body:`${session.config?.cameras.find(c=>c.id===id)?.name||id}: máximo ${episode.peak} personas desde ${formatTime(episode.start)}. Consulta el video para revisar el episodio.`});
    }
   }
-  for(const z of session.state.analytics.zones.filter(z=>z.alert)){
-   const key=`map:${z.name}:${Math.round(session.state.t-(z.duration||0))}`;
-   if(!seen.current.has(key)){seen.current.add(key);fresh.push({id:key,title:`Alerta en ${z.name}`,body:`${z.count} personas observadas. Concentración sostenida durante ${Math.floor(z.duration||0)} s.`});}
+  for(const episode of session.config ? planAlerts(session.config,session.state) : []){
+   const key=episode.id;
+   if(!seen.current.has(key)){seen.current.add(key);fresh.push({id:key,title:`Alerta en ${episode.zone}`,body:`Máximo ${episode.people} personas observadas. Concentración sostenida durante ${Math.floor(episode.duration)} s.`});}
   }
   if(fresh.length)setAlerts(a=>[...a,...fresh].slice(-3));
- },[session.state.cameraAnalytics,session.state.analytics.zones,session.state.t,session.state.status,session.config]);
+ },[session.state.cameraAnalytics,session.state.analytics,session.state.t,session.state.status,session.config]);
  useEffect(()=>{if(!alerts.length)return;const id=setTimeout(()=>setAlerts(a=>a.slice(1)),12000);return()=>clearTimeout(id);},[alerts]);
  useEffect(()=>{if(!session.notice)return;const id=setTimeout(()=>session.setNotice(''),6000);return()=>clearTimeout(id);},[session.notice]);
  return <div className="notification-stack" aria-live="polite" aria-relevant="additions">

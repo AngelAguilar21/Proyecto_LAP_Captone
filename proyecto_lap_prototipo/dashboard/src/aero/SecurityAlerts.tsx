@@ -3,6 +3,7 @@ import type { Session } from './useSession';
 import { formatTime, isActive } from './types';
 import Icon from './Icon';
 import MailSettings from './MailSettings';
+import { planAlerts } from './zoneAlerts';
 
 type Incidente = {
   id: string; tipo: string; zona: string | null; camaraId: string | null;
@@ -58,23 +59,14 @@ export default function SecurityAlerts({ session, onOpenCamera }: { session: Ses
         known.current.set(key, entry);
       }
     }
-    for (const zone of state.analytics.zones.filter(z => z.alert)) {
-      const key = `plan:${zone.name}:${Math.round(state.t - (zone.duration || 0))}`;
-      const rule = config.zones.find(z => z.name === zone.name)?.rule;
-      const entry: Alert = {
-        id: key, at: state.t - (zone.duration || 0), zone: zone.name, camera: 'Plano (varias cámaras)',
-        people: zone.peak ?? zone.count, duration: zone.duration || 0,
-        threshold: rule?.minPeople ?? config.minPeople, dwell: rule?.dwell ?? config.dwell,
-        open: true, origin: 'plan',
-      };
+    for (const entry of planAlerts(config, state)) {
+      const key = entry.id;
       if (!known.current.has(key)) added++;
       known.current.set(key, entry);
     }
-    if (known.current.size !== alerts.length || added) {
-      setAlerts([...known.current.values()].sort((a, b) => b.at - a.at));
-      if (added && sound && isActive(state.status)) beep();
-    }
-  }, [state.cameraAnalytics, state.analytics.zones, state.t, state.status, config]);
+    setAlerts([...known.current.values()].sort((a, b) => b.at - a.at));
+    if (added && sound && isActive(state.status)) beep();
+  }, [state.cameraAnalytics, state.analytics, state.t, state.status, config]);
 
   // Bitácora: los incidentes guardados sobreviven al cierre de la sesión, a
   // diferencia de las alertas de arriba, que solo existen mientras corre.
