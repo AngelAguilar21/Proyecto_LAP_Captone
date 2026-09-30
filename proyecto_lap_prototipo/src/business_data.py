@@ -54,6 +54,21 @@ CREATE TABLE IF NOT EXISTS incidentes (
 );
 CREATE INDEX IF NOT EXISTS idx_incidentes_estado ON incidentes (estado);
 
+CREATE TABLE IF NOT EXISTS incident_notifications (
+    incident_id TEXT NOT NULL REFERENCES incidentes(id),
+    notification_kind TEXT NOT NULL CHECK(notification_kind IN ('original', 'escalation')),
+    status TEXT NOT NULL CHECK(status IN ('attempting', 'failed', 'sent', 'uncertain')),
+    attempts INTEGER NOT NULL DEFAULT 1,
+    attempted_at REAL NOT NULL,
+    sent_at REAL,
+    last_error TEXT,
+    owner TEXT NOT NULL,
+    PRIMARY KEY (incident_id, notification_kind),
+    CHECK ((status = 'sent' AND sent_at IS NOT NULL) OR
+           (status <> 'sent' AND sent_at IS NULL))
+);
+CREATE INDEX IF NOT EXISTS idx_notification_status ON incident_notifications(status);
+
 CREATE TABLE IF NOT EXISTS trafico_historico (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     zona TEXT NOT NULL,
@@ -103,16 +118,20 @@ def connect(project_path):
     path = path_for(project_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     conexion = sqlite3.connect(path, timeout=15)
-    conexion.execute("PRAGMA foreign_keys = ON")
-    conexion.executescript(ESQUEMA)
-    conexion.executescript(NEGOCIOS_ESQUEMA)
-    # Los proyectos creados antes de la segmentación empresarial no tienen la
-    # columna nueva. La migración es local, idempotente y conserva sus datos.
-    columnas = {fila[1] for fila in conexion.execute("PRAGMA table_info(negocios)")}
-    if "empresa" not in columnas:
-        conexion.execute("ALTER TABLE negocios ADD COLUMN empresa TEXT NOT NULL DEFAULT 'Sin empresa'")
-    conexion.execute("INSERT OR IGNORE INTO negocio_puertas SELECT id, camara_id, linea_id FROM negocios WHERE camara_id IS NOT NULL AND linea_id IS NOT NULL")
-    conexion.commit()
+    try:
+        conexion.execute("PRAGMA foreign_keys = ON")
+        conexion.executescript(ESQUEMA)
+        conexion.executescript(NEGOCIOS_ESQUEMA)
+        # Los proyectos creados antes de la segmentación empresarial no tienen la
+        # columna nueva. La migración es local, idempotente y conserva sus datos.
+        columnas = {fila[1] for fila in conexion.execute("PRAGMA table_info(negocios)")}
+        if "empresa" not in columnas:
+            conexion.execute("ALTER TABLE negocios ADD COLUMN empresa TEXT NOT NULL DEFAULT 'Sin empresa'")
+        conexion.execute("INSERT OR IGNORE INTO negocio_puertas SELECT id, camara_id, linea_id FROM negocios WHERE camara_id IS NOT NULL AND linea_id IS NOT NULL")
+        conexion.commit()
+    except Exception:
+        conexion.close()
+        raise
     return conexion
 
 
@@ -247,7 +266,7 @@ def ventas_por_fecha(conexion, negocio_id, fecha):
 # --- Incidentes ---
 
 def registrar_incidente(conexion, id_incidente, tipo, zona, camara_id, inicio,
-                        pico=None, duracion=None, detalle=None):
+                        pico=None, duracion=None, detalle=None, commit=True):
     if tipo not in TIPOS_VALIDOS:
         raise ValueError(f"Tipo de incidente inválido: {tipo}")
     ahora = time.time()
@@ -264,7 +283,8 @@ def registrar_incidente(conexion, id_incidente, tipo, zona, camara_id, inicio,
         "UPDATE incidentes SET pico = ?, duracion = ?, actualizado = ? "
         "WHERE id = ? AND estado = 'pendiente'",
         (pico, duracion, ahora, id_incidente))
-    conexion.commit()
+    if commit:
+        conexion.commit()
 
 
 def actualizar_estado_incidente(conexion, id_incidente, estado):

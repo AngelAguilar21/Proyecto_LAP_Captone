@@ -104,8 +104,11 @@ class Engine:
         self.preview_state = {"camera": None, "playing": False, "t": 0., "duration": 0., "live": False, "error": None}
         from notifier import Mailer
         self.mailer = Mailer(self.settings_root)
+        from incident_notifications import IncidentNotifications
+        self.notifications = IncidentNotifications(self.mailer)
+        if business_data.path_for(self.config_path).exists():
+            self.notifications.recover(self.config_path)
         self.sessions = auth.Sesiones()
-        self.notified = set()
         self.business_error = None
         self.traffic_buffer = {}
         self.traffic_flushed = 0.
@@ -146,9 +149,6 @@ class Engine:
         for cid, data in (camera_analytics or {}).items():
             for episode in (data.get("occupancy") or {}).get("episodes", []):
                 key = "aglomeracion:{}:{}".format(cid, episode.get("id"))
-                if key in self.notified:
-                    continue
-                self.notified.add(key)
                 body = [
                     "Se detecto una concentracion de personas.",
                     "",
@@ -171,9 +171,6 @@ class Engine:
             if not zone.get("alert"):
                 continue
             key = "zona:{}:{}".format(zone.get("name"), round(self.state.get("t", 0)))
-            if key in self.notified:
-                continue
-            self.notified.add(key)
             body = [
                 "La zona " + str(zone.get("name")) + " del plano supero su umbral.",
                 "",
@@ -197,20 +194,27 @@ class Engine:
         conexion = None
         try:
             conexion = business_data.connect(self.config_path)
+            conexion.execute("BEGIN IMMEDIATE")
             for alerta in pendientes:
                 business_data.registrar_incidente(
                     conexion, f"{sesion}:{alerta['key']}", alerta["tipo"], alerta["zona"],
                     alerta["camara"], alerta["inicio"] or 0, alerta["pico"], alerta["duracion"],
-                    {**alerta["detalle"], "sesion": sesion})
+                    {**alerta["detalle"], "sesion": sesion}, commit=False)
+            conexion.commit()
             self.business_error = None
         except (sqlite3.Error, OSError, ValueError) as exc:
-            self.business_error = str(exc)
+            self.business_error = type(exc).__name__
+            return  # Never send without a committed incident. A later dispatch may retry.
         finally:
             if conexion:
                 conexion.close()
         if self.mailer.ready():
             for alerta in pendientes:
-                self.mailer.send(alerta["asunto"], alerta["cuerpo"], key=alerta["key"])
+                try:
+                    self.notifications.send(self.config_path, f"{sesion}:{alerta['key']}",
+                                            alerta["asunto"], alerta["cuerpo"])
+                except (sqlite3.Error, OSError, ValueError) as exc:
+                    self.business_error = type(exc).__name__
 
     def record_traffic(self, analytics, live):
         """Acumula el conteo por zona y lo vuelca cada minuto al historico.
@@ -584,6 +588,8 @@ class Engine:
             self.config_path = projects.activate(ROOT, pid)
             self.project_id = pid
             self.read_config_file()
+            if business_data.path_for(self.config_path).exists():
+                self.notifications.recover(self.config_path)
             self.frames = {}
             self.preview_frames = {}
             self.source_checks = {}
@@ -791,7 +797,6 @@ class Engine:
                     raise ValueError("Delimita la zona útil de cada cámara para excluir espejos, vidrios y áreas externas.")
             self.stop_event.clear()
             self.pause_event.clear()
-            self.notified = set()
             self.frames = {}
             self.preview_frames = {}
             self.state = {"status": "starting", "mode": mode, "people": [], "cameras": [], "events": [], "t": 0,
@@ -1470,7 +1475,8 @@ class Handler(BaseHTTPRequestHandler):
             return get(self, url, ROOT)
         if url.path == "/api/mail":
             import notifier
-            return self.send_data(200, {**notifier.public(engine.settings_root), "lastError": engine.mailer.error, "sent": engine.mailer.sent})
+            return self.send_data(200, {**notifier.public(engine.settings_root), "lastError": engine.mailer.error, "sent": engine.mailer.sent,
+                                         "deliveryPersistence": engine.notifications.diagnostics()})
         if url.path == "/api/auth":
             sesion = engine.sessions.leer(self.headers.get("X-LAP-Session", ""))
             return self.send_data(200, {
