@@ -20,12 +20,12 @@ export interface Zone {
   rule?: { enabled: boolean; minPeople: number; dwell: number };
 }
 export interface CommercialContext { hasBusinesses:boolean; }
-export interface Plan { width:number; height:number; unit: 'relative'|'meters'; background:string; floor:string; zones:Zone[]; commercialContext?:CommercialContext; workArea?:Point[]; planLines?:number[][]; mapConfigured?:boolean; mapAsset?:string; planName?:string; planView?:'image'|'lines'; }
+export interface Plan { width:number; height:number; unit: 'relative'|'meters'; background:string; floor:string; zones:Zone[]; commercialContext?:CommercialContext; workArea?:Point[]; planLines?:number[][]; mapConfigured?:boolean; mapAsset?:string; planName?:string; planView?:'image'|'lines'; orientation?:'horizontal'|'vertical'; }
 export interface ProjectEntry { id:string; name:string; created:number; updated:number; airport:string; floor:string; cameras:number; plans:number; setupComplete:boolean; }
 export interface ProjectListing { active:string|null; projects:ProjectEntry[]; }
 export interface Config {
   planId?:string; plans?:Record<string,Plan>; mapAsset?:string;
-  workArea?: Point[]; planLines?: number[][]; planView?: 'image'|'lines';
+  workArea?: Point[]; planLines?: number[][]; planView?: 'image'|'lines'; orientation?:'horizontal'|'vertical';
   width: number; height: number; unit: 'relative' | 'meters'; background: string; radius: number;
   minPeople: number; dwell: number; handoffSeconds: number; matchDistance: number; clocksVerified: boolean; personHeight?: number;
   cameras: Camera[]; zones: Zone[]; airport?: string; floor?: string; sourceMode?: SourceMode;
@@ -73,4 +73,4 @@ export const isActive = (s: string) => ['starting', 'running', 'paused', 'stoppi
 export const isStream = (source: string | number) => typeof source === 'number' || /^(rtsp|https?|rtmp):\/\//i.test(source);
 export const formatTime = (value: number) => `${Math.floor(value / 60).toString().padStart(2, '0')}:${Math.floor(value % 60).toString().padStart(2, '0')}`;
 export const labelAssociation = (p: Person) => p.association === 'estimated' ? 'Asociación estimada' : p.association === 'uncertain' ? 'Confianza insuficiente para asociación' : p.association === 'synthetic' ? 'Simulación' : 'ID local confirmado';
-export const freshCamera = (): Camera => ({ id: `C-${crypto.randomUUID().slice(0, 5).toUpperCase()}`, name: 'Nueva cámara', location: '', type: 'tilted', source: '', x: 0, y: 0, offset: 0, links: [], pairs: [], heading: 90, fov: 60, range: 3, height: 3, tilt: 45, coverageShape: 'free', coveragePolygon: [], coverageWidth: 2 });
+export const freshCamera = (): Camera => ({ id: `C-${crypto.randomUUID().slice(0, 5).toUpperCase()}`, name: 'Nueva cámara', location: '', type: 'tilted', source: '', x: 0, y: 0, offset: 0, links: [], pairs: [], heading: 90, fov: 60, range: 3, height: 2, tilt: 45, coverageShape: 'free', coveragePolygon: [], coverageWidth: 2 });

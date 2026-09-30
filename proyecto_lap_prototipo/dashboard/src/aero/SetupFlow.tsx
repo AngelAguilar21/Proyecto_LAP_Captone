@@ -87,8 +87,20 @@ export default function SetupFlow({ session, selected, onSelected, onNavigate, s
     if(!camera)return;
     void session.action(async()=>{
       await session.save();
-      await session.post('start',{detector:'yolo',camera:camera.id,requireUnified:false,inferenceSize:640});
-      session.setNotice('Prueba P2PNet iniciada en modo rápido. El modelo se prepara al probar la fuente para reducir la espera.');
+      await session.post('start',{detector:'yolo',camera:camera.id,requireUnified:false,testRun:true,inferenceSize:640});
+      session.setNotice('Prueba de fuente iniciada en modo rápido. Se está comprobando la señal y el procesamiento.');
+    });
+  }
+  function finishSetup() {
+    void session.action(async()=>{
+      try {
+        await session.save({...config,setupComplete:true});
+      } catch (error) {
+        const message=error instanceof Error?error.message:String(error);
+        if(message.includes('Correspondencias inconsistentes')||message.includes('Calibración degenerada'))setStep(PROJECT_STEPS.indexOf('calibrate'));
+        throw error;
+      }
+      onNavigate('overview');
     });
   }
 
@@ -166,7 +178,7 @@ export default function SetupFlow({ session, selected, onSelected, onNavigate, s
       </div>}
 
       {id==='test'&&<div className="wizard-step-block">
-        <p className="wizard-help">Prueba P2PNet y delimita solo el suelo real que deseas analizar. Deja fuera espejos, vidrios, pantallas y otros niveles.</p>
+        <p className="wizard-help">Prueba la fuente y delimita solo el suelo real que deseas analizar. Deja fuera espejos, vidrios, pantallas y otros niveles.</p>
         {camera?<>
           <section className="aero-panel camera-full">
             <div className="panel-heading"><div><h2>{camera.name||camera.id}</h2></div><span className={`pill ${tested?'good':'warn'}`}>{tested?'Fuente comprobada':'Sin comprobar'}</span></div>
@@ -210,7 +222,7 @@ export default function SetupFlow({ session, selected, onSelected, onNavigate, s
             <div><dt>Fuentes probadas</dt><dd>{config.cameras.filter(c=>session.state.sourceChecks?.[c.id]?.source===c.source).length}</dd></div>
             <div><dt>Escala</dt><dd>{config.unit==='meters'?'Metros':'Relativa'}</dd></div>
           </dl>
-          <button className="primary" disabled={disabled||session.busy||!stages.every(s=>s.done)} onClick={()=>void session.action(async()=>{await session.save({...config,setupComplete:true});onNavigate('overview');})}>Guardar y abrir monitoreo</button>
+          <button className="primary" disabled={disabled||session.busy||!stages.every(s=>s.done)} onClick={finishSetup}>Guardar y abrir monitoreo</button>
           <button onClick={()=>onNavigate('lab')}>Continuar las pruebas en laboratorio</button>
         </div>
       </div>}

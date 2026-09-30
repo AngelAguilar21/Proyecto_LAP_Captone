@@ -33,12 +33,19 @@ class UnifiedTests(unittest.TestCase):
         analysis=CombinedAnalysis([camera],ROOT)
         frame=np.zeros((100,100,3),dtype=np.uint8)
         people=[{'id':'A','pixel':[25,50]},{'id':'B','pixel':[75,50]}]
+        # Escena normal: sin muestra de densidad, P2PNet no participa.
         result=analysis.observe(camera,frame,people,0)
         self.assertEqual(result['occupancy']['count'],1)
-        self.assertEqual(result['dense']['count'],1)
-        self.assertEqual(result['dense']['points'],[(.25,.5)])
+        self.assertEqual(result['dense']['status'],'idle')
+        self.assertEqual(result['dense']['count'],0)
+        self.assertFalse(result['denseEnabled'])
+        self.assertFalse(result['avie']['p2pRequested'])
         self.assertEqual(result['occupancy']['zones'][1]['count'],0)
-        result=analysis.observe(camera,frame,people,2)
+        # Escena densa: se reutiliza la muestra asíncrona sin una segunda inferencia.
+        density={'status':'ready','t':2,'count':1,'points':[(.25,.5)]}
+        result=analysis.observe(camera,frame,people,2,density=density)
+        self.assertTrue(result['denseEnabled'])
+        self.assertEqual(result['dense']['points'],[(.25,.5)])
         self.assertEqual(result['occupancy']['peak'],1)
         self.assertEqual(analysis.close()['C']['dense']['count'],1)
 

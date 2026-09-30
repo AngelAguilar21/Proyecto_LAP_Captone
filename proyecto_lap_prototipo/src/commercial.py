@@ -4,6 +4,7 @@ import io
 import json
 import math
 import hashlib
+import random
 import statistics
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -120,6 +121,59 @@ def template(businesses):
         if b.get('estado') != 'cerrado':
             writer.writerow([b['id'], b['nombre'], b.get('empresa') or 'Sin empresa', '', '', '', 'PEN', ''])
     return output.getvalue()
+
+
+def simulate_demo(con, businesses, days=28, seed='aerotrack'):
+    """Genera tráfico y ventas horarios sintéticos, separados del dato real.
+
+    El objetivo es probar el flujo comercial completo: entradas por acceso,
+    ventas, transacciones, conversión y pronóstico. Los valores no representan
+    un negocio real y se guardan exclusivamente en el dataset ``demo``.
+    """
+    setup(con)
+    active = [b for b in businesses if b.get('estado') != 'cerrado']
+    if not active:
+        raise ValueError('Crea al menos un negocio activo antes de generar datos de prueba.')
+    try:
+        days = max(7, min(int(days), 90))
+    except (TypeError, ValueError):
+        days = 28
+    end = datetime.now(LIMA).date() - timedelta(days=1)
+    start = end - timedelta(days=days - 1)
+    project_seed = hashlib.sha256(str(seed).encode('utf-8')).hexdigest()
+    session = f'demo-synthetic-{project_seed[:12]}'
+    import_id = f'demo-synthetic-{project_seed[:16]}'
+    rng = random.Random(int(project_seed[:12], 16))
+    profiles = {8:.22, 9:.48, 10:.72, 11:.92, 12:1.12, 13:1.28,
+                14:1.02, 15:.84, 16:.9, 17:1.08, 18:1.32, 19:1.46,
+                20:1.28, 21:.96, 22:.56}
+    traffic_rows, sales_rows = [], []
+    for index, business in enumerate(active):
+        local_seed = hashlib.sha256(f'{project_seed}:{business["id"]}'.encode()).hexdigest()
+        local = random.Random(int(local_seed[:12], 16))
+        base = 18 + (int(local_seed[12:16], 16) % 28)
+        conversion = .075 + (int(local_seed[16:18], 16) % 80) / 1000
+        ticket = 28 + (int(local_seed[18:22], 16) % 95)
+        for day_index in range(days):
+            day = start + timedelta(days=day_index)
+            weekday_factor = 1.12 if day.weekday() >= 5 else (0.9 if day.weekday() == 0 else 1.0)
+            for hour in range(24):
+                profile = profiles.get(hour, 0.03)
+                expected = base * profile * weekday_factor
+                entries = max(0, int(round(expected + local.gauss(0, max(1.0, expected * .14)))))
+                exits = max(0, int(round(entries * (0.72 + local.random() * .16))))
+                coverage = 3600.0
+                traffic_rows.append((session, business['id'], day.isoformat(), hour, entries, exits, coverage, 'demo'))
+                transactions = max(0, int(round(entries * conversion + local.gauss(0, .7)))) if entries else 0
+                amount = round(transactions * ticket * (0.88 + local.random() * .24), 2)
+                sales_rows.append((business['id'], day.isoformat(), hour, amount, transactions, 'demo', import_id))
+    with con:
+        con.execute('DELETE FROM commercial_traffic WHERE session=? AND dataset="demo"', (session,))
+        con.execute('DELETE FROM commercial_sales WHERE import_id=? AND dataset="demo"', (import_id,))
+        con.execute('INSERT OR REPLACE INTO commercial_imports VALUES (?,?,?,?,?)', (import_id, 'simulacion-comercial.json', 'demo', len(sales_rows), datetime.now(timezone.utc).isoformat()))
+        con.executemany('INSERT OR REPLACE INTO commercial_traffic VALUES (?,?,?,?,?,?,?,?)', traffic_rows)
+        con.executemany('INSERT OR REPLACE INTO commercial_sales VALUES (?,?,?,?,?,?,?)', sales_rows)
+    return {'dataset': 'demo', 'days': days, 'businesses': len(active), 'rows': len(sales_rows), 'session': session, 'start': start.isoformat(), 'end': end.isoformat()}
 
 
 def save_session(con, meta, traffic):

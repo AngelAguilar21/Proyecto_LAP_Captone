@@ -75,6 +75,14 @@ class LowLatencyFfmpegTests(unittest.TestCase):
             self.assertEqual(os.environ[CLAVE], ESPERADAS)
         self.assertEqual(os.environ[CLAVE], "algo_que_ya_habia")
 
+    def test_extensiones_hls_solo_se_permiten_cuando_se_piden(self):
+        from counting.source import low_latency_ffmpeg
+        with low_latency_ffmpeg():
+            self.assertNotIn("allowed_extensions", os.environ[CLAVE])
+        with low_latency_ffmpeg(allow_all_extensions=True):
+            self.assertEqual(os.environ[CLAVE], ESPERADAS + "|allowed_extensions;ALL")
+        self.assertNotIn(CLAVE, os.environ)
+
     def test_restaura_incluso_si_algo_falla_dentro(self):
         from counting.source import low_latency_ffmpeg
         with self.assertRaises(ValueError):

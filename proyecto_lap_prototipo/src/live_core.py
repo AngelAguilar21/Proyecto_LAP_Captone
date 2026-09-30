@@ -331,10 +331,64 @@ def ground_point(camera, u, v, person_height=ESTATURA_MEDIA):
     return project(camera["h"], u, v)
 
 
+def estimate_height(camera, box, width, height):
+    """Estatura aproximada (m) de una persona con recuadro completo.
+
+    Con la cámara a altura H, el rayo que pasa por la cabeza corta el suelo más
+    lejos que el rayo que pasa por los pies. Por triángulos semejantes:
+
+        estatura = H * (1 - d_pies / d_cabeza)
+
+    con las distancias medidas desde la base de la cámara en el plano. Es una
+    estimación ruidosa: solo se calcula si el recuadro no toca el borde de la
+    imagen y el resultado cae en un rango humano; si no, devuelve None.
+    """
+    if box is None or camera.get("h") is None or camera.get("headPoints"):
+        return None
+    cam_height = float(camera.get("height") or 0)
+    x1, y1, x2, y2 = box
+    if cam_height <= 0 or y1 < 2 or y2 > height - 2 or x1 < 2 or x2 > width - 2 or y2 <= y1:
+        return None
+    cx = (x1 + x2) / 2 / width
+    foot = project(camera["h"], cx, y2 / height)
+    head = project(camera["h"], cx, y1 / height)
+    if foot is None or head is None:
+        return None
+    base = (camera["x"], camera["y"])
+    d_foot, d_head = math.dist(base, foot), math.dist(base, head)
+    if d_head < 1e-6 or d_head <= d_foot:
+        return None
+    estimate = cam_height * (1 - d_foot / d_head)
+    return round(estimate, 3) if .8 <= estimate <= 2.4 else None
+
+
+def height_penalty(person, observation, tolerance=.12, span=.3, weight=.25):
+    """Penaliza una diferencia de estatura, sin descartar: la medida es ruidosa."""
+    a, b = person.get("height"), observation.get("height")
+    if a is None or b is None:
+        return 0.
+    return min(max(abs(a - b) - tolerance, 0.) / span, 1.) * weight
+
+
 def color_distance(a, b):
     if a is None or b is None:
         return .5
     return float(cv2.compareHist(a, b, cv2.HISTCMP_BHATTACHARYYA))
+
+
+def identity_appearance_distance(person, current):
+    """Compara contra una galería de vistas, no solo contra el último frame.
+
+    Una persona de espaldas o con otra orientación puede cambiar mucho su
+    histograma. Conservar varias muestras evita que la última pose reemplace
+    una firma útil obtenida en otra cámara o instante.
+    """
+    if current is None:
+        return .5
+    gallery = person.get("appearanceGallery") or []
+    if not gallery and person.get("color") is not None:
+        gallery = [person["color"]]
+    return min((color_distance(item, current) for item in gallery), default=.5)
 
 
 def update_appearance(previous, current, weight=.25):
@@ -428,13 +482,37 @@ class IdentityStore:
             if gid is not None and (gid, o["camera"]) in claimed:
                 gid = None
             association = "local"
-            if gid is None and o.get("point") is not None and cfg["clocksVerified"]:
+            # Recupera una identidad cuando ByteTrack pierde una detección y
+            # crea otro ID local en la misma cámara. Esto ocurre por oclusiones,
+            # saltos de confianza o cambios bruscos de escala; no debe generar
+            # una nueva persona global si la posición y la apariencia siguen
+            # siendo compatibles.
+            if gid is None and o.get("point") is not None:
                 candidates = []
                 for pid, p in self.people.items():
-                    if (pid, o["camera"]) in claimed or p["camera"] == o["camera"] or p["point"] is None:
+                    if (pid, o["camera"]) in claimed or p["point"] is None:
                         continue
                     dt = t - p["t"]
                     if dt < 0 or dt > cfg["handoffSeconds"]:
+                        continue
+                    same_camera = p["camera"] == o["camera"]
+                    if same_camera:
+                        # En una misma cámara no dependemos de clocksVerified ni
+                        # de enlaces entre cámaras. La posición se compara con
+                        # la predicción de movimiento y se usa un margen algo
+                        # mayor para absorber una detección perdida.
+                        target = (p["point"][0] + p["velocity"][0] * dt,
+                                  p["point"][1] + p["velocity"][1] * dt)
+                        gate = cfg["matchDistance"] * (2.2 + min(dt, 2) * .35)
+                        dist = math.dist(o["point"], target)
+                        appearance = identity_appearance_distance(p, o.get("color"))
+                        if dist <= gate and (appearance <= .78 or dist <= gate * .35):
+                            candidates.append((dist / gate + appearance * .35 + height_penalty(p, o), pid, True))
+                        continue
+                    # Entre cámaras distintas solo se asocia identidad si el
+                    # operador declaró verificada la sincronización de relojes
+                    # (RF-04). Sin esa declaración cada cámara conserva su ID.
+                    if not cfg["clocksVerified"]:
                         continue
                     old_cam = next(c for c in cfg["cameras"] if c["id"] == p["camera"])
                     new_cam=next(c for c in cfg["cameras"] if c["id"]==o["camera"])
@@ -448,22 +526,36 @@ class IdentityStore:
                         gate = cfg["matchDistance"] * 1.6
                     else:
                         target = (p["point"][0] + p["velocity"][0] * dt, p["point"][1] + p["velocity"][1] * dt)
-                        gate = cfg["matchDistance"] * (1 + min(dt, 5) * .15)
+                        speed = math.hypot(*p["velocity"])
+                        # El margen crece con el tiempo oculto y con la velocidad
+                        # estimada por Kalman. Así una persona puede atravesar el
+                        # espacio sin cobertura sin recibir un ID nuevo.
+                        gate = cfg["matchDistance"] * (2.0 + min(dt, 5) * .55) + speed * dt * .35
                     dist = math.dist(o["point"], target)
-                    appearance = color_distance(o.get("color"), p.get("color"))
+                    appearance = identity_appearance_distance(p, o.get("color"))
+                    direction_penalty = 0.0
+                    displacement = (o["point"][0] - p["point"][0], o["point"][1] - p["point"][1])
+                    displacement_length = math.hypot(*displacement)
+                    velocity_length = math.hypot(*p["velocity"])
+                    if not overlap and displacement_length > .01 and velocity_length > .05:
+                        alignment = sum(displacement[i] * p["velocity"][i] for i in (0, 1)) / (displacement_length * velocity_length)
+                        if alignment < -.35 and appearance > .45:
+                            continue
+                        direction_penalty = (1 - max(-1.0, min(1.0, alignment))) * .1
                     if dist <= gate and (appearance <= .82 or (overlap and dist <= gate*.3)):
-                        candidates.append((dist / gate + appearance * .3, pid))
+                        time_penalty = min(dt / max(float(cfg["handoffSeconds"]), .1), 1.0) * .12
+                        candidates.append((dist / gate * .55 + appearance * .35 + direction_penalty + time_penalty + height_penalty(p, o), pid, False))
                 candidates.sort()
                 if candidates and (len(candidates) == 1 or candidates[1][0] - candidates[0][0] > .12):
                     gid = candidates[0][1]
                     association = "estimated"
-                    self.events.appendleft({"type": "handoff", "id": gid, "from": self.people[gid]["camera"], "to": o["camera"], "t": t})
+                    self.events.appendleft({"type": "reidentification" if candidates[0][2] else "handoff", "id": gid, "from": self.people[gid]["camera"], "to": o["camera"], "t": t})
                 elif candidates:
                     association = "uncertain"
             if gid is None:
                 self.serial += 1
                 gid = f"P{self.serial:05d}"
-                self.people[gid] = {"history": deque(maxlen=180), "velocity": (0., 0.), "t": t, "point": None, "association": association}
+                self.people[gid] = {"history": deque(maxlen=180), "velocity": (0., 0.), "t": t, "point": None, "association": association, "appearanceGallery": deque(maxlen=12)}
             self.local[key] = gid
             claimed.add((gid, o["camera"]))
             p = self.people[gid]
@@ -473,7 +565,17 @@ class IdentityStore:
             if association != "local":
                 p["association"] = association
             appearance = update_appearance(p.get("color"), o.get("color"))
+            gallery = p.setdefault("appearanceGallery", deque(maxlen=12))
+            current_color = o.get("color")
+            if current_color is not None and not gallery:
+                gallery.append(current_color)
+            elif current_color is not None and min((color_distance(item, current_color) for item in gallery), default=1.) > .08:
+                gallery.append(current_color)
             p.update(camera=o["camera"], point=o["point"], t=t, color=appearance)
+            if o.get("height") is not None:
+                heights = p.setdefault("heights", deque(maxlen=15))
+                heights.append(o["height"])
+                p["height"] = float(sorted(heights)[len(heights) // 2])
             if o["point"] is not None:
                 if not p["history"] or p["history"][-1][2] != t:
                     p["history"].append([*o["point"], t])
@@ -482,7 +584,7 @@ class IdentityStore:
             if o["point"] is not None and math.hypot(*p["velocity"]) > .05 and neighbors:
                 future = (o["point"][0]+p["velocity"][0]*2,o["point"][1]+p["velocity"][1]*2)
                 next_camera = min((c for c in cfg["cameras"] if c["id"] in neighbors),key=lambda c:math.dist(future,(c["x"],c["y"])))["id"]
-            output.append({**{k: v for k, v in o.items() if k != "color"}, "id": gid, "association": p["association"], "history": list(p["history"]), "predicted": False, "velocity": list(p["velocity"]), "nextCamera": next_camera})
+            output.append({**{k: v for k, v in o.items() if k != "color"}, "id": gid, "association": p["association"], "history": list(p["history"]), "predicted": False, "velocity": list(p["velocity"]), "nextCamera": next_camera, "height": p.get("height")})
         # Bound retention to the declared handoff window; no indefinite identities.
         expired = {pid for pid, p in self.people.items() if t - p["t"] > cfg["handoffSeconds"]}
         for pid in expired:

@@ -37,7 +37,7 @@ const categories={retail:'Tienda',food:'Alimentos y bebidas',service:'Servicios'
 
 export default function ZoneWorkspace({session}:{session:Session}){
  const config=session.config!,busy=isActive(session.state.status),pid=config.planId||'custom';
- const [tool,setTool]=useState<MapTool>('select'),[selected,setSelected]=useState('');
+ const [tool,setTool]=useState<MapTool>('select'),[selected,setSelected]=useState(''),[selectedBusinessId,setSelectedBusinessId]=useState('');
  const [heat,setHeat]=useState<HeatCell[]>([]),[zoneMetrics,setZoneMetrics]=useState<any[]>([]),[source,setSource]=useState(''),[loading,setLoading]=useState(false);
  const businesses=config.zones.filter(zone=>zone.kind==='commercial');
  const recommended=config.zones.filter(zone=>zone.source==='system');
@@ -45,18 +45,21 @@ export default function ZoneWorkspace({session}:{session:Session}){
  const hasBusinesses=config.commercialContext?.hasBusinesses??businesses.length>0;
  const opportunities=suggestions(heat,config.zones);
  const analysisState={...EMPTY_STATE,status:'ended',planId:pid,analytics:{...EMPTY_STATE.analytics,heat}};
+ useEffect(()=>{
+  setSelectedBusinessId(current=>businesses.some(zone=>zone.id===current)?current:(businesses[0]?.id||''));
+ },[businesses.map(zone=>zone.id).join('|')]);
 
  useEffect(()=>{let alive=true;setHeat([]);setZoneMetrics([]);setSource('');if(busy){const analytics=(session.state as any).levelAnalytics?.[pid]||(session.state.planId===pid?session.state.analytics:EMPTY_STATE.analytics);setHeat(analytics.heat||[]);setZoneMetrics(analytics.zones||[]);setSource('Monitoreo en curso');return;}
   setLoading(true);void fetch('/api/replay/history').then(r=>r.json()).then(async list=>{const run=list.find((row:any)=>row.end>0&&row.module==='unified'&&row.cameras.some((camera:any)=>(camera.planId||row.config.planId)===pid));if(!run)return;const response=await fetch(`/api/replay/data?session=${run.session}&projection=current`);if(!response.ok)throw Error();const data=await response.json(),last=data.samples?.[data.samples.length-1],analytics=last?.levels?.[pid]||(data.config.planId===pid?last?.analytics:EMPTY_STATE.analytics);if(alive){setHeat(analytics?.heat||[]);setZoneMetrics(analytics?.zones||[]);setSource(`Análisis del ${new Date(run.created).toLocaleString('es-PE')}`);}}).catch(()=>{if(alive)setSource('No se pudo cargar el análisis para generar oportunidades.');}).finally(()=>{if(alive)setLoading(false);});return()=>{alive=false;};
  },[pid,busy,session.state.session]);
 
- function updateBusiness(index:number,patch:NonNullable<Zone['business']>){
-  const zone=businesses[index],zoneIndex=config.zones.indexOf(zone);
+ function updateBusiness(zone:Zone,patch:NonNullable<Zone['business']>){
+  const zoneIndex=config.zones.indexOf(zone);
   session.setConfig({...config,zones:config.zones.map((item,i)=>i===zoneIndex?{...item,business:{...item.business,...patch}}:item)});
  }
- function numberValue(index:number,key:keyof NonNullable<Zone['business']>,value:string){
+ function numberValue(zone:Zone,key:keyof NonNullable<Zone['business']>,value:string){
   const parsed=value===''?undefined:Math.max(0,Number(value));
-  updateBusiness(index,{[key]:Number.isFinite(parsed)?parsed:undefined});
+  updateBusiness(zone,{[key]:Number.isFinite(parsed)?parsed:undefined});
  }
  function accept(points:Point[]){
   const ordinal=recommended.length+1;
@@ -72,20 +75,21 @@ export default function ZoneWorkspace({session}:{session:Session}){
    {hasBusinesses&&<p className="commercial-instruction">Dibuja únicamente la huella de cada negocio existente con Polígono o Rectángulo. Las zonas ROI no se dibujan aquí: AeroTrack las propone después del análisis.</p>}
   </section>
   <div className="opportunity-layout">
-   <section className="aero-panel opportunity-map"><MapCanvas zonesOnly zoneMode="business" config={config} state={analysisState} connected selectedCamera={selected} onCamera={setSelected} editable={!busy&&hasBusinesses} onChange={session.setConfig} tool={tool} onTool={setTool}/></section>
+   <section className="aero-panel opportunity-map"><MapCanvas zonesOnly zoneMode="business" config={config} state={analysisState} connected selectedCamera={selected} onCamera={setSelected} onZoneSelect={zone=>setSelectedBusinessId(zone.id||'')} editable={!busy&&hasBusinesses} onChange={session.setConfig} tool={tool} onTool={setTool}/></section>
    <section className="aero-panel business-register">
-    <header><h2>Negocios existentes</h2><span>{businesses.length} registrados</span></header>
+    <header><div><h2>Negocios existentes</h2><p className="selected-business-caption">{businesses.find(zone=>zone.id===selectedBusinessId)?.name||'Selecciona un negocio en el plano o en la lista.'}</p></div><span>{businesses.length} registrados</span></header>
     {!hasBusinesses&&<p className="empty-text">Marcaste que este piso no contiene negocios. El sistema buscará oportunidades usando únicamente el flujo peatonal.</p>}
     {hasBusinesses&&!businesses.length&&<p className="empty-text">Dibuja el primer negocio sobre el plano. Después completa sus medidas y capacidad.</p>}
-    {businesses.map((zone,index)=>{const measured=zoneMetrics.find(metric=>metric.name===zone.name);return <article className="business-record" key={zone.id||index}>
+    {!!businesses.length&&<div className="business-tabs" role="tablist" aria-label="Negocios del plano">{businesses.map((zone,index)=><button key={zone.id||index} role="tab" aria-selected={zone.id===selectedBusinessId} className={zone.id===selectedBusinessId?'selected':''} onClick={()=>setSelectedBusinessId(zone.id||'')}>{zone.name||`Negocio ${index+1}`}</button>)}</div>}
+    {businesses.filter(zone=>!selectedBusinessId||zone.id===selectedBusinessId).map((zone,index)=>{const measured=zoneMetrics.find(metric=>metric.name===zone.name);return <article className="business-record is-selected" key={zone.id||index}>
      <div className="business-record-head"><input aria-label="Nombre del negocio" value={zone.name} onChange={event=>session.setConfig({...config,zones:config.zones.map(item=>item===zone?{...item,name:event.target.value}:item)})}/><button disabled={busy} onClick={()=>session.setConfig({...config,zones:config.zones.filter(item=>item!==zone)})}>Eliminar</button></div>
      <div className="business-fields">
-      <label>Tipo<select value={zone.business?.category||'other'} onChange={event=>updateBusiness(index,{category:event.target.value as NonNullable<Zone['business']>['category']})}>{Object.entries(categories).map(([value,label])=><option value={value} key={value}>{label}</option>)}</select></label>
-      <label>Ancho (m)<input type="number" min="0" step="0.1" value={zone.business?.widthM??''} onChange={event=>numberValue(index,'widthM',event.target.value)}/></label>
-      <label>Fondo (m)<input type="number" min="0" step="0.1" value={zone.business?.depthM??''} onChange={event=>numberValue(index,'depthM',event.target.value)}/></label>
-      <label>Área útil (m²)<input type="number" min="0" step="0.1" value={zone.business?.areaM2??''} onChange={event=>numberValue(index,'areaM2',event.target.value)}/></label>
-      <label>Capacidad<input type="number" min="0" step="1" value={zone.business?.capacity??''} onChange={event=>numberValue(index,'capacity',event.target.value)}/></label>
-      <label>Acceso (m)<input type="number" min="0" step="0.1" value={zone.business?.entranceWidthM??''} onChange={event=>numberValue(index,'entranceWidthM',event.target.value)}/></label>
+      <label>Tipo<select value={zone.business?.category||'other'} onChange={event=>updateBusiness(zone,{category:event.target.value as NonNullable<Zone['business']>['category']})}>{Object.entries(categories).map(([value,label])=><option value={value} key={value}>{label}</option>)}</select></label>
+      <label>Ancho (m)<input type="number" min="0" step="0.1" value={zone.business?.widthM??''} onChange={event=>numberValue(zone,'widthM',event.target.value)}/></label>
+      <label>Fondo (m)<input type="number" min="0" step="0.1" value={zone.business?.depthM??''} onChange={event=>numberValue(zone,'depthM',event.target.value)}/></label>
+      <label>Área útil (m²)<input type="number" min="0" step="0.1" value={zone.business?.areaM2??''} onChange={event=>numberValue(zone,'areaM2',event.target.value)}/></label>
+      <label>Capacidad<input type="number" min="0" step="1" value={zone.business?.capacity??''} onChange={event=>numberValue(zone,'capacity',event.target.value)}/></label>
+      <label>Acceso (m)<input type="number" min="0" step="0.1" value={zone.business?.entranceWidthM??''} onChange={event=>numberValue(zone,'entranceWidthM',event.target.value)}/></label>
      </div>
      <p className="business-observation">{measured?`Flujo observado: ${measured.visits||0} visitas · pico ${measured.peak||0}${zone.business?.capacity?` de ${zone.business.capacity} personas de capacidad`:''}`:'El próximo monitoreo calculará visitas, pico y permanencia dentro de esta huella.'}</p>
     </article>})}

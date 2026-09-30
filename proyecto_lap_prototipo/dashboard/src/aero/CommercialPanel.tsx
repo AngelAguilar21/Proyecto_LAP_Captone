@@ -73,6 +73,19 @@ export default function CommercialPanel({ session }: { session: Session }) {
     });
   }
 
+  async function generateDemo() {
+    await session.action(async () => {
+      const result = await session.post('commercial/simulate', { days: 28, projectId: session.projects.active });
+      setDataset('demo');
+      setDate(result.end);
+      setHour(12);
+      setEmpresa('');
+      setBusiness('');
+      setRefresh(value => value + 1);
+      session.setNotice(`Datos sintéticos generados: ${result.businesses} negocios y ${result.days} días horarios.`);
+    });
+  }
+
   const companies = data?.empresas || [];
   const rows = (data?.businesses || []).filter(row => !business || row.id === business);
   const selectedCompany = companies.find(item => item.name === empresa);
@@ -91,14 +104,33 @@ export default function CommercialPanel({ session }: { session: Session }) {
     }));
     return [...grouped.values()].sort((a, b) => a.hour - b.hour);
   }, [rows]);
+  const recommendations = useMemo(() => {
+    const messages: string[] = [];
+    const busiest = [...rows].sort((a, b) => (b.entries || 0) - (a.entries || 0))[0];
+    if (busiest && (busiest.entries || 0) > 0) messages.push(`${busiest.name} concentra el mayor aforo de la hora seleccionada (${busiest.entries} entradas). Prioriza personal, inventario y promociones en esta franja.`);
+    const next = rows.find(row => row.nextForecast.estimate != null);
+    if (next) messages.push(`El siguiente intervalo puede planificarse con el pronóstico de ${next.name}: ${money(next.nextForecast.estimate)} y ${next.nextForecast.expectedEntries ?? '—'} entradas esperadas. Úsalo como referencia, no como venta confirmada.`);
+    const conversions = rows.filter(row => row.conversion != null);
+    if (conversions.length) {
+      const best = [...conversions].sort((a, b) => (b.conversion || 0) - (a.conversion || 0))[0];
+      messages.push(`${best.name} tiene la mejor conversión observada (${best.conversion}%). Compara su propuesta, horario y acceso con los negocios de menor conversión.`);
+    }
+    if (rows.some(row => row.forecast.confidence === 'baja')) messages.push('Algunas estimaciones tienen muestra baja. Mantén la recomendación como hipótesis y acumula al menos tres días comparables antes de tomar decisiones comerciales.');
+    if (hourly.length) {
+      const peak = [...hourly].sort((a, b) => b.entries - a.entries)[0];
+      messages.push(`La franja de mayor afluencia del periodo es ${hourLabel(peak.hour)}. Es una oportunidad para medir conversión, permanencia y capacidad operativa de forma conjunta.`);
+    }
+    return messages;
+  }, [rows, hourly]);
 
   return <div className="commerce">
-    <div className="page-heading commerce-heading"><div><span className="eyebrow">INTELIGENCIA COMERCIAL</span><h1>Ventas y análisis</h1><p>Entradas medidas por hora y ventas estimadas para cada empresa del aeropuerto.</p></div><div className="commerce-actions"><button onClick={() => void openSavedTest()}>Ver prueba guardada</button><button onClick={() => void download(`/api/commercial/export?${query}&kind=${tab === 'incidents' ? 'incidents' : 'summary'}`, 'analisis-comercial.csv')}>Exportar CSV</button></div></div>
+    <div className="page-heading commerce-heading"><div><span className="eyebrow">INTELIGENCIA COMERCIAL</span><h1>Ventas y análisis</h1><p>Entradas medidas por hora y ventas estimadas para cada empresa del aeropuerto.</p></div><div className="commerce-actions"><button onClick={() => void generateDemo()} disabled={session.busy}>Generar datos de prueba</button><button onClick={() => void openSavedTest()}>Ver prueba guardada</button><button onClick={() => void download(`/api/commercial/export?${query}&kind=${tab === 'incidents' ? 'incidents' : 'summary'}`, 'analisis-comercial.csv')}>Exportar CSV</button></div></div>
     <section className="aero-panel commerce-filters"><label>Empresa / operador<select value={empresa} onChange={event => { setEmpresa(event.target.value); setBusiness(''); }}><option value="">Todas las empresas</option>{companies.map(item => <option key={item.name} value={item.name}>{item.name} · {item.businesses} negocios</option>)}</select></label><label>Negocio<select value={business} onChange={event => setBusiness(event.target.value)}><option value="">Todos los negocios</option>{rows.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label><label>Fecha<input type="date" value={date} onChange={event => setDate(event.target.value)} /></label><label>Hora cerrada<select value={hour} onChange={event => setHour(Number(event.target.value))}>{Array.from({ length: 24 }, (_, value) => <option key={value} value={value}>{hourLabel(value)}</option>)}</select></label><label>Origen<select value={dataset} onChange={event => { setDataset(event.target.value); setValidation(null); }}><option value="real">Datos reales</option><option value="demo">Datos de prueba</option></select></label></section>
     {selectedCompany && <section className="company-banner"><div><span>Empresa seleccionada</span><strong>{selectedCompany.name}</strong><small>{selectedCompany.businesses} negocios bajo este operador</small></div><div><span>Entradas</span><strong>{selectedCompany.entries}</strong></div><div><span>Ventas del periodo</span><strong>{money(selectedCompany.sales)}</strong></div><div><span>Conversión</span><strong>{selectedCompany.conversion == null ? 'Sin POS' : `${selectedCompany.conversion}%`}</strong></div></section>}
     {dataset === 'demo' && <p className="commerce-test" role="status">Datos de prueba separados de la operación real.</p>}
     {error && <p role="alert" className="notice warning">{error}</p>}
     <nav className="commerce-tabs" aria-label="Análisis comercial">{[['sales', 'Resumen horario'], ['forecast', 'Estimación y pronóstico'], ['incidents', 'Aglomeraciones y ventas'], ['bags', 'Señal de objeto nuevo']].map(([id, label]) => <button key={id} aria-pressed={tab === id} className={tab === id ? 'selected' : ''} onClick={() => setTab(id as typeof tab)}>{label}</button>)}</nav>
+    <section className="commerce-recommendations"><div><h2>Recomendaciones comerciales</h2><p>Lecturas automáticas para aforo, ventas, conversión, operación y oportunidades de crecimiento.</p></div>{recommendations.length ? <ul>{recommendations.map((message, index) => <li key={index}>{message}</li>)}</ul> : <p className="empty-text">Genera datos de prueba o ejecuta un monitoreo con accesos vinculados para obtener recomendaciones.</p>}</section>
     {tab === 'sales' && <section className="aero-panel commerce-content"><div className="commerce-kpis"><article><span>Entradas {hourLabel(hour)}</span><strong>{totals.entries || 'Sin medición'}</strong><small>Conteo confirmado por las líneas de entrada</small></article><article><span>Venta registrada</span><strong>{money(totals.sales)}</strong><small>Dato cargado desde ventas o POS</small></article><article><span>Venta estimada</span><strong>{money(totals.estimate)}</strong><small>Basada en entradas y días comparables</small></article><article><span>Conversión</span><strong>{conversion}</strong><small>Transacciones / entradas, si existe POS</small></article></div><div className="commerce-section-heading"><div><h2>Conteo horario por empresa</h2><p>La hora seleccionada representa un intervalo cerrado. La estimación no reemplaza la venta confirmada.</p></div><button onClick={() => void download('/api/commercial/template', 'plantilla-ventas.csv')}>Descargar plantilla CSV</button></div>{!hourly.length ? <p className="empty-text">Todavía no hay horas guardadas. Ejecuta un monitoreo con fecha de grabación y accesos vinculados.</p> : <div className="commerce-hourly"><div className="hourly-chart">{hourly.map(item => <div className="hourly-bar" key={item.hour}><i style={{ height: `${Math.max(8, Math.min(100, item.entries / Math.max(1, ...hourly.map(value => value.entries)) * 100))}%` }} /><span>{item.entries}</span><small>{String(item.hour).padStart(2, '0')}h</small></div>)}</div><table><thead><tr><th>Hora</th><th>Entradas</th><th>Ventas</th><th>Estimación</th></tr></thead><tbody>{hourly.map(item => <tr key={item.hour}><td>{hourLabel(item.hour)}</td><td>{item.entries}</td><td>{item.hasSales ? money(item.sales) : 'Sin datos'}</td><td>{item.hasEstimate ? money(item.estimate) : 'Muestra insuficiente'}</td></tr>)}</tbody></table></div>}
     <h2>Importar ventas históricas</h2><p>Un registro por negocio, fecha y hora. Usa los identificadores de la plantilla y soles PEN; la carga es atómica y no sobrescribe datos existentes.</p>{session.auth.rol === 'operador' && <div className="commerce-import"><label>CSV de ventas<input type="file" accept=".csv,text/csv" onChange={event => { const file = event.target.files?.[0]; setValidation(null); setCsv(''); if (file) { setFilename(file.name); if (file.size > 2000000) { setValidation({ rows: 0, errors: ['El archivo supera 2 MB.'], imported: false }); return; } void file.text().then(setCsv); } }} /></label><button disabled={!csv || session.busy} onClick={() => void upload(true)}>Validar archivo</button><button className="primary" disabled={!csv || session.busy || !validation || !!validation.errors.length} onClick={() => void upload(false)}>Importar ventas</button></div>}{validation && <div role="status" className={validation.errors.length ? 'notice warning' : 'notice'}><strong>{validation.imported ? 'Importación guardada' : `${validation.rows} filas revisadas`}</strong>{validation.errors.length ? <ul>{validation.errors.map((item, index) => <li key={index}>{item}</li>)}</ul> : <p>Archivo válido. Se guardará en {dataset === 'demo' ? 'datos de prueba' : 'datos reales'}.</p>}</div>}<h3>Importaciones guardadas</h3>{!data?.imports.length ? <p>No hay importaciones para este origen.</p> : <ul>{data.imports.map(item => <li key={item.id}>{item.name} · {item.rows} filas · {new Date(item.created).toLocaleString('es-PE')}</li>)}</ul>}</section>}
     {tab === 'forecast' && <section className="aero-panel commerce-content"><div className="forecast-intro"><h2>Hora cerrada y siguiente hora</h2><p>A las 10:30 puedes revisar la estimación de 09:00–10:00 y el pronóstico de 10:00–11:00. Ambos son modelos, no ventas confirmadas.</p></div><div className="forecast-grid">{rows.map(row => <article key={row.id}><span>{row.empresa}</span><h3>{row.name}</h3><div><small>{hourLabel(hour)} · estimación</small><strong>{money(row.forecast.estimate)}</strong><em>{confidenceLabel(row.forecast.confidence)} · {row.forecast.days} días comparables</em></div><div><small>{row.nextForecast.target ? row.nextForecast.target.slice(11, 16) : 'Siguiente hora'} · pronóstico</small><strong>{money(row.nextForecast.estimate)}</strong><em>Entradas esperadas: {row.nextForecast.expectedEntries ?? 'sin historial'}</em></div></article>)}</div></section>}

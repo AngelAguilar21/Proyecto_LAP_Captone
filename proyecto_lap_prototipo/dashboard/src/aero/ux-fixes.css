@@ -109,6 +109,9 @@
 .overview-v2 .monitor-camera-card p,
 .overview-v2 .monitor-camera-card small { color: var(--text-secondary) !important; }
 .overview-v2 .monitor-camera-card .feed-metrics { background: var(--surface-secondary) !important; color: var(--text-primary) !important; }
+.camera-card-actions { display: inline-flex; align-items: center; gap: 7px; }
+.camera-restart-button { border-color: #c97b22 !important; color: #9a560b !important; background: #fff8e8 !important; }
+:root[data-theme="dark"] .camera-restart-button { border-color: #d99b47 !important; color: #ffe0ad !important; background: #3a2a13 !important; }
 
 /* Reporte comercial: tema claro real con contraste AA, oscuro sin heredar tinta clara. */
 :root[data-theme="light"] .aero .report-dark-page { background: #f4f7fa !important; color: #102844 !important; }
@@ -177,6 +180,10 @@
 .business-register > header { position: sticky; top: 0; z-index: 2; }
 .business-register > header span,
 .system-opportunities > header > span { color: var(--text-secondary); font-size: 11px; white-space: nowrap; }
+.selected-business-caption { margin: 4px 0 0; color: var(--text-secondary); font-size: 11px; }
+.business-tabs { display: flex; gap: 7px; flex-wrap: wrap; padding: 12px 16px 0; }
+.business-tabs button { min-height: 34px; padding: 7px 11px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-secondary); color: var(--text-secondary); font-size: 11px; }
+.business-tabs button.selected { border-color: var(--accion); background: var(--accion-suave); color: var(--text-primary); font-weight: 700; }
 .business-record { padding: 14px 16px; border-bottom: 1px solid var(--border); }
 .business-record-head { display: flex; gap: 8px; }
 .business-record-head input { font-weight: 700; color: var(--text-primary); }
@@ -198,6 +205,50 @@
 .legacy-zones { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 16px 16px 0; padding: 12px; border: 1px solid #d3b36f; border-radius: 9px; background: #fff8e8; }
 .legacy-zones > div { flex: 1 1 320px; }
 .legacy-zones p { margin: 3px 0 0; color: #704300; font-size: 10px; }
+.plan-orientation-control { display: inline-flex; align-items: center; gap: 4px; padding: 3px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-secondary); color: var(--text-secondary); font-size: 10px; }
+.plan-orientation-control > span { padding: 0 5px; }
+.plan-orientation-control button { min-height: 28px; padding: 4px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--text-secondary); font-size: 10px; }
+.plan-orientation-control button.selected { background: var(--accion-suave); color: var(--text-primary); font-weight: 700; }
+:root[data-theme="dark"] .aero .map-toolbar .map-orientation { border-color: #35536a; background: #10283b; }
+:root[data-theme="dark"] .aero .map-toolbar button { color: #d7e5ee; }
+:root[data-theme="dark"] .aero .map-toolbar .map-orientation button { color: #d7e5ee; }
+:root[data-theme="dark"] .aero .map-toolbar .map-orientation button.on { background: #173f59; border-color: #4b7895; color: #f1f8fb; }
+
+/* Texto claro sobre superficies azul profundo, también cuando el usuario
+   está en el tema claro pero el módulo comercial/operativo usa una tarjeta
+   oscura por diseño. */
+.aero .company-banner *,
+.aero .commerce-kpis article *,
+.aero .commerce-recommendations *,
+.aero .forecast-grid article *,
+.aero .commerce-incidents article *,
+.aero .commerce-bag-row *,
+.aero .report-download-bar *,
+.aero .monitor-camera-card *,
+.aero .monitor-map-shell .map-toolbar *,
+.aero .monitor-map-shell .map-caption * {
+  color: #f2f7fb;
+}
+.aero .company-banner span,
+.aero .company-banner small,
+.aero .commerce-kpis span,
+.aero .commerce-kpis small,
+.aero .commerce-section-heading p,
+.aero .commerce-recommendations p,
+.aero .forecast-grid small,
+.aero .forecast-grid em,
+.aero .commerce-incidents p,
+.aero .commerce-bag-row span,
+.aero .monitor-camera-card small,
+.aero .monitor-camera-card p {
+  color: #c7d8e4 !important;
+}
+:root[data-theme="dark"] .aero :where(.aero-panel, .metric-card, .page-heading, .monitoring-workspace, .map-stage) {
+  color: #f2f4fb;
+}
+:root[data-theme="dark"] .aero :where(.aero-panel, .metric-card, .page-heading) :where(p, small, label, legend, .subtle) {
+  color: #d4deed;
+}
 :root[data-theme="dark"] .drawing-kind { border-color: #31516a; background: #0a2b45; color: #b4d8eb !important; }
 :root[data-theme="dark"] .saved-opportunities span { border-color: #705822; background: #32280e; color: #ffe0a0; }
 :root[data-theme="dark"] .legacy-zones { border-color: #705822; background: #32280e; }
@@ -251,3 +302,12 @@
 .aero .aero-sidebar{display:flex;flex-direction:column;overflow:hidden;}
 .aero .sidebar-brand,.aero .sidebar-user{flex-shrink:0;}
 .aero .sidebar-nav{flex:1;min-height:0;overflow-y:auto;align-content:start;scrollbar-width:thin;}
+
+.blocking-error-backdrop{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:24px;background:rgba(3,18,31,.62);backdrop-filter:blur(4px)}
+.blocking-error-dialog{width:min(560px,100%);display:grid;grid-template-columns:auto minmax(0,1fr);gap:18px;padding:26px;color:#17334d;background:#fff;border:1px solid #d9e5ee;border-top:5px solid #c73b4d;border-radius:14px;box-shadow:0 24px 70px rgba(2,18,32,.34)}
+.blocking-error-symbol{width:52px;height:52px;display:grid;place-items:center;color:#a92338;background:#fff0f2;border-radius:50%}
+.blocking-error-content h2{margin:0 0 8px;font-size:21px;color:#102d49}
+.blocking-error-content p{margin:0;max-width:60ch;color:#526b81;font-size:14px;line-height:1.65;white-space:pre-line}
+.blocking-error-actions{grid-column:1/-1;display:flex;justify-content:flex-end;gap:10px;padding-top:4px}
+@media(max-width:560px){.blocking-error-dialog{grid-template-columns:1fr;padding:22px}.blocking-error-symbol{width:44px;height:44px}.blocking-error-actions{grid-column:1;flex-direction:column-reverse}.blocking-error-actions button{width:100%}}
+@media(prefers-reduced-motion:no-preference){.blocking-error-dialog{animation:blocking-error-in .16s ease-out}@keyframes blocking-error-in{from{opacity:0;transform:translateY(8px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}}

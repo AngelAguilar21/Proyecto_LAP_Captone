@@ -80,6 +80,15 @@ export default function CommercialReportBoard({ config, state, demo }: { config:
   if (totalCameras > 0 && activeCameras < totalCameras) {
     advisories.push({ tag: 'Cobertura', tone: 'blue', text: `Solo ${activeCameras} de ${totalCameras} cámaras aportaron resultados en esta sesión. Antes de comparar zonas con confianza para una decisión comercial, conviene ampliar la cobertura o repetir la medición con todas las fuentes activas.` });
   }
+  if (busiest) {
+    advisories.push({ tag: 'Operación', tone: 'amber', text: `La franja ${busiest.hour}:00–${String((busiest.hour + 1) % 24).padStart(2, '0')}:00 concentra el mayor promedio de personas (${busiest.avg.toFixed(1)}). Úsala para planificar personal, reposición y activaciones comerciales.` });
+  }
+  if ((state.totals?.meanObservedSeconds || 0) > 0) {
+    advisories.push({ tag: 'Conversión', tone: 'blue', text: `La permanencia media observada es ${(state.totals?.meanObservedSeconds || 0).toFixed(1)} s. Contrástala con ventas y transacciones del mismo intervalo para distinguir tráfico de paso, interés y conversión real.` });
+  }
+  if (crossings.length) {
+    advisories.push({ tag: 'Medición', tone: 'blue', text: 'Las entradas se calculan con líneas virtuales y pueden incluir reingresos. Para visitantes únicos, mantén cámaras sincronizadas y revisa la asociación multicámara antes de comparar negocios.' });
+  }
 
   const live = ['running', 'paused'].includes(state.status);
 
@@ -155,7 +164,7 @@ export default function CommercialReportBoard({ config, state, demo }: { config:
     </section>}
 
     <section className="crb-advisories">
-      <h2>Avisos para LAP</h2>
+      <h2>Recomendaciones comerciales y operativas</h2>
       {advisories.length ? <div className="crb-advisory-list">{advisories.map((a, i) => <div className={`crb-advisory ${a.tone}`} key={i}><span className="crb-advisory-tag">{a.tag}</span><p>{a.text}</p></div>)}</div>
         : <p className="crb-empty">Aún no hay suficientes datos en esta sesión para generar avisos. Aparecen a medida que se observan zonas y accesos.</p>}
       <p className="crb-footnote">Estimaciones de una sesión de tracking anónimo, sin identificación personal. No sustituyen un estudio de rentabilidad; son un punto de partida para decidir dónde mirar primero.</p>

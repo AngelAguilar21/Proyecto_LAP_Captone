@@ -23,6 +23,7 @@ export default function MonitoringWorkspace({ session, onSetup, onReplay, active
     : (id === propio ? config.floor : config.plans?.[id]?.floor) || (id === 'custom' ? 'Plano del proyecto' : id);
 
   const [level, setLevel] = useState(propio);
+  const [mapOrientation, setMapOrientation] = useState<'horizontal'|'vertical'>(() => config.orientation || 'horizontal');
   const [camera, setCamera] = useState('all');
   const [zone, setZone] = useState('all');
   const [plan, setPlan] = useState<Config | null>(null);
@@ -40,6 +41,21 @@ export default function MonitoringWorkspace({ session, onSetup, onReplay, active
   const [detailCameraIds,setDetailCameraIds]=useState<string[]>(()=>{try{return JSON.parse(localStorage.getItem('aero.camera.visible')||'[]');}catch{return [];}});
   const mapRef = useRef<HTMLElement>(null);
   const busy = isActive(session.state.status);
+
+  function changeMapOrientation(next: 'horizontal'|'vertical') {
+    setMapOrientation(next);
+    if (level === propio) {
+      session.setConfig({...config,orientation:next});
+      return;
+    }
+    const currentPlan=config.plans?.[level];
+    if (currentPlan) session.setConfig({...config,plans:{...config.plans,[level]:{...currentPlan,orientation:next}}});
+  }
+
+  useEffect(() => {
+    const selectedPlan = level === propio ? config : config.plans?.[level];
+    setMapOrientation(selectedPlan?.orientation || 'horizontal');
+  }, [level, propio, config.orientation, config.plans]);
 
   useEffect(()=>{
     setDetailCameraIds(current=>{
@@ -195,6 +211,13 @@ export default function MonitoringWorkspace({ session, onSetup, onReplay, active
     });
   }
 
+  function restartCamera(cameraId: string) {
+    void session.action(async () => {
+      await session.post('camera-restart', { camera: cameraId });
+      session.setNotice('Se solicitó relanzar la cámara.');
+    });
+  }
+
   return <div className="monitoring-workspace overview-v2">
     <header className="monitor-page-header">
       <div className="monitor-title-group">
@@ -249,11 +272,12 @@ export default function MonitoringWorkspace({ session, onSetup, onReplay, active
           <div className="map-header-status">
             {historyLoading && <span className="map-sync"><i />Sincronizando</span>}
             <span className="map-floor">{nombreNivel(level)}</span>
+            <div className="plan-orientation-control" role="group" aria-label="Orientación del plano"><span>Vista</span>{(['horizontal','vertical'] as const).map(value=><button key={value} type="button" aria-pressed={mapOrientation===value} className={mapOrientation===value?'selected':''} onClick={()=>changeMapOrientation(value)}>{value==='horizontal'?'Horizontal':'Vertical'}</button>)}</div>
             <button className="icon-button" title="Pantalla completa" aria-label="Abrir plano en pantalla completa" onClick={() => void mapRef.current?.requestFullscreen().catch(() => {})}><Icon name="expand" size={17} /></button>
           </div>
         </header>
         <div className="monitor-map-shell">
-          {plan && <MapCanvas key={level} config={plan} state={state} connected={session.connected} peopleFirst selectedCamera={camera === 'all' ? '' : camera} onCamera={id => setCamera(id)} />}
+          {plan && <MapCanvas key={level} config={plan} state={state} connected={session.connected} peopleFirst orientation={mapOrientation} onOrientation={changeMapOrientation} selectedCamera={camera === 'all' ? '' : camera} onCamera={id => setCamera(id)} />}
           {!plan && <div className="map-skeleton" role="status"><span /><span /><span /></div>}
           {!busy && !archived && plan && <div className="monitor-map-empty">
             <span><Icon name="people" size={24} /></span>
@@ -285,7 +309,7 @@ export default function MonitoringWorkspace({ session, onSetup, onReplay, active
           const analytics = cameraAnalytics[c.id];
           const zones = analytics?.occupancy?.zones?.filter((z: any) => zone === 'all' || z.name === zone) || [];
           return <article className="aero-panel monitor-camera-card" key={c.id}>
-            <div className="panel-heading"><h2>{c.name || c.id}</h2><button disabled={busy} onClick={() => onSetup(c.id)}>Configurar</button></div>
+            <div className="panel-heading"><h2>{c.name || c.id}</h2><div className="camera-card-actions">{busy && status?.status === 'error' && <button className="camera-restart-button" disabled={session.busy} onClick={() => restartCamera(c.id)}>Relanzar cámara</button>}<button disabled={busy} onClick={() => onSetup(c.id)}>Configurar</button></div></div>
             {busy && <CameraVideo camera={c} state={session.state} connected={session.connected} />}
             {!busy && archived?.latestByCamera?.[c.id] && <small>Análisis: {new Date(archived.latestByCamera[c.id].created).toLocaleString('es-PE')}</small>}
             <p>{c.active === false ? 'Cámara desactivada · ' : ''}{analytics ? `Última muestra: ${formatTime(analytics.t)}` : 'Todavía no hay resultados de esta cámara'}</p>

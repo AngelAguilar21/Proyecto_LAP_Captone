@@ -43,6 +43,23 @@ function PanelHeader({number,title,color='blue',children}:{number?:number;title:
   return <div className="panel-heading"><div>{number&&<span className={`panel-number ${color}`}>{number}</span>}<h2>{title}</h2></div>{children}</div>;
 }
 
+function BlockingError({message,onClose,onResolve}:{message:string;onClose:()=>void;onResolve?:()=>void}) {
+  const calibration=message.includes('Correspondencias inconsistentes')||message.includes('Calibración degenerada');
+  return <div className="blocking-error-backdrop" role="presentation">
+    <section className="blocking-error-dialog" role="alertdialog" aria-modal="true" aria-labelledby="blocking-error-title" aria-describedby="blocking-error-copy">
+      <div className="blocking-error-symbol"><Icon name="alert" size={28}/></div>
+      <div className="blocking-error-content">
+        <h2 id="blocking-error-title">{calibration?'No se puede guardar esta calibración':'No se pudo completar la acción'}</h2>
+        <p id="blocking-error-copy">{explainError(message)}</p>
+      </div>
+      <div className="blocking-error-actions">
+        <button autoFocus={!calibration} onClick={onClose}>Cerrar</button>
+        {calibration&&onResolve&&<button className="primary" autoFocus onClick={onResolve}>Revisar homografía</button>}
+      </div>
+    </section>
+  </div>;
+}
+
 export default function AeroTrack() {
   const session=useSession();
   const {config,state}=session;
@@ -52,7 +69,8 @@ export default function AeroTrack() {
   useEffect(()=>{setVisited(p=>p.includes(view)?p:[...p,view]);},[view]);
   const [projectChosen,setProjectChosen]=useState(false);
   const [dismissedError,setDismissedError]=useState('');
-  const errorKey=`${state.serverInstance}:${state.session}:${session.error||state.error||(!session.connected?'Sin conexión':'')}`;
+  const blockingMessage=session.error||state.error||(!session.connected?'No hay conexión con la API local. Comprueba que el servidor de AeroTrack esté activo.':'');
+  const errorKey=`${state.serverInstance}:${state.session}:${blockingMessage}`;
   const [selected,setSelected]=useState('');
   const [person,setPerson]=useState<Person|null>(null);
   const mapRef=useRef<HTMLElement>(null);
@@ -77,11 +95,12 @@ export default function AeroTrack() {
   const stages=readiness(config,session);
   const ready=stages.every(s=>s.done);
   const demo=state.mode==='demo';
-  function start(id?:string, mode:'hybrid'|'yolo'|'p2pnet'|'demo'='hybrid') {mode=mode==='p2pnet'?'hybrid':mode;void session.action(async()=>{await session.save();await session.post('start',{detector:mode,camera:id||null,requireUnified:!id,inferenceSize:mode==='p2pnet'?256:640});session.setNotice(mode==='demo'?'Demostración sintética iniciada.':mode==='hybrid'?'Monitoreo híbrido iniciado (YOLO + densidad P2PNet bajo demanda).':'Monitoreo YOLO iniciado.');});}
+  function start(id?:string, mode:'hybrid'|'yolo'|'p2pnet'|'demo'='hybrid') {mode=mode==='p2pnet'?'hybrid':mode;void session.action(async()=>{await session.save();await session.post('start',{detector:mode,camera:id||null,requireUnified:!id,inferenceSize:640});session.setNotice(mode==='demo'?'Demostración sintética iniciada.':mode==='hybrid'?'Monitoreo híbrido iniciado (YOLO + densidad P2PNet bajo demanda).':'Monitoreo YOLO iniciado.');});}
   const openCameraSettings=()=>{setStep(2);navigate('setup');};
   const cameraPanel=(laboratory=false)=><CameraPanel session={session} selected={selected} onSelected={setSelected} laboratory={laboratory} onStart={()=>start(selected)} onConfigure={openCameraSettings}/>;
   const stats=<div className="metrics-row"><Metric label="Personas observadas" value={observed} icon="people" note="IDs de la sesión actual"/><Metric label="Aglomeraciones" value={alerts} icon="alert" tone={alerts?'red':'green'} note={`≥ ${config.minPeople} personas · ${config.dwell}s`}/><Metric label="Cámaras activas" value={`${activeCameras} / ${config.cameras.length}`} icon="camera" note={config.clocksVerified?'Sincronización declarada':'Sincronización por verificar'}/><Metric label="Tiempo de fuente" value={formatTime(state.t)} icon="clock" note={state.processingMs?`${state.processingMs} ms por ciclo`:'Esperando procesamiento'}/></div>;
   return <div className={`aero aero-shell${collapsed?' sidebar-collapsed':''}`}>
+    {blockingMessage&&dismissedError!==errorKey&&<BlockingError message={blockingMessage} onClose={()=>setDismissedError(errorKey)} onResolve={()=>{setDismissedError(errorKey);setStep(PROJECT_STEPS.indexOf('calibrate'));navigate('setup');}}/>}
     <aside className="aero-sidebar" aria-label="Navegación principal">
       <div className="sidebar-brand"><span className="sidebar-logo-crop"><img src="/assets/aerotrack-logo.png" alt="" width="50" height="64" className="sidebar-logo-image"/></span><strong>AeroTrack</strong>
         <button className="ghost sidebar-toggle" aria-label={collapsed?'Expandir navegación':'Plegar navegación'} aria-expanded={!collapsed} title={collapsed?'Expandir navegación':'Plegar navegación'} onClick={()=>{setCollapsed(v=>{const next=!v;try{localStorage.setItem('aero.sidebar',next?'collapsed':'open');}catch{/* modo privado */}return next;});}}><Icon name={collapsed?'panelOpen':'panelClose'} size={17}/></button>
@@ -116,10 +135,9 @@ export default function AeroTrack() {
     </header>
     {['setup','cameras','audit','lab'].includes(view)&&<nav className="product-subnav" aria-label="Herramientas del proyecto">{(['setup','lab','audit'] as View[]).map(id=>NAV.find(n=>n.id===id)!).map(n=><button key={n.id} className={view===n.id?'selected':''} onClick={()=>navigate(n.id)}>{n.id==='setup'?'Configurar proyecto':n.label}</button>)}</nav>}
     <main id="main-content" className="aero-main" key={session.projects.active||'sin-proyecto'}>{['setup','lab','audit'].includes(view)&&<p className="settings-context">{{setup:'Configura únicamente el proyecto abierto: pisos, planos, cámaras, homografía, zonas y reglas.',lab:'Diagnóstico · Verifica P2PNet y la señal antes de monitorear.',audit:'Auditoría · Consulta las operaciones realizadas en el sistema.'}[view as 'setup'|'lab'|'audit']}</p>}
-      {(!session.connected||session.error||state.error)&&dismissedError!==errorKey&&<div className="toast toast-error app-error" role="alert"><Icon name="alert"/><span>{explainError(session.error||state.error||'Backend desconectado. Las posiciones no se presentan como actuales.')}</span><button aria-label="Cerrar aviso de error" onClick={()=>{setDismissedError(errorKey);}}>Cerrar</button></div>}
       <Notifications session={session}/>
       {demo&&<div className="notice warning"><Icon name="lab"/><span>SIMULACIÓN · Datos sintéticos para probar las pantallas. No representan mediciones de un aeropuerto.</span></div>}
-      {!['commercial','businesses','overview','setup','audit','reports','replay','lab'].includes(view)&&!ready&&<div className="setup-banner"><div><Icon name="settings" size={21}/><span><strong>Prepara P2PNet sobre el plano</strong><small>{stages.filter(s=>s.done).length}/{stages.length} etapas preparadas · {stages.filter(s=>!s.done).map(s=>s.title.toLowerCase()).join(', ')} pendientes</small></span></div><button onClick={()=>{const pending=stages.find(s=>!s.done);setStep(Math.max(0,pending?PROJECT_STEPS.indexOf(pending.step):0));navigate('setup');}}>Continuar configuración <Icon name="arrow" size={15}/></button></div>}
+      {!['commercial','businesses','overview','setup','audit','reports','replay','lab'].includes(view)&&!ready&&<div className="setup-banner"><div><Icon name="settings" size={21}/><span><strong>Prepara el análisis sobre el plano</strong><small>{stages.filter(s=>s.done).length}/{stages.length} etapas preparadas · {stages.filter(s=>!s.done).map(s=>s.title.toLowerCase()).join(', ')} pendientes</small></span></div><button onClick={()=>{const pending=stages.find(s=>!s.done);setStep(Math.max(0,pending?PROJECT_STEPS.indexOf(pending.step):0));navigate('setup');}}>Continuar configuración <Icon name="arrow" size={15}/></button></div>}
       {['map','dashboard'].includes(view)&&<div className="session-bar"><div className="inline"><i className={`dot ${state.status==='running'?'green':state.status==='error'?'red':'amber'}`}/><strong>{state.session?`Sesión ${state.session}`:'Sin sesión activa'}</strong><span>{config.sourceMode==='live'?'Cámaras en vivo':config.sourceMode==='demo'?'Demostración':'Grabaciones de prueba'}</span>{session.dirty&&<span className="unsaved">Cambios sin guardar</span>}</div><div className="inline"><time>{clock.toLocaleTimeString('es-PE',{timeZone:'America/Lima'})}</time>{busy?<>{state.status==='paused'?<button onClick={()=>void session.action(async()=>{await session.post('resume',{});})}>▶ Reanudar</button>:<button disabled={state.status!=='running'} onClick={()=>void session.action(async()=>{await session.post('pause',{});})}>Ⅱ Pausar</button>}<button className="danger" disabled={session.busy||state.status==='stopping'} onClick={()=>void session.action(async()=>{await session.post('stop',{});})}>Finalizar sesión</button></>:<><button disabled={session.busy||!config.cameras.length} onClick={()=>start(undefined,'demo')}>Ver simulación</button><button className="primary" disabled={session.busy||!session.connected||!config.cameras.length||!ready} onClick={()=>start(undefined,config.sourceMode==='demo'?'demo':'p2pnet')}>Iniciar {config.cameras.length} cámara{config.cameras.length===1?'':'s'}</button></>}</div></div>
       }
       {visited.includes('replay')&&<div hidden={view!=='replay'}><ReplayWorkspace active={view==='replay'} currentConfig={config}/></div>}{visited.includes('overview')&&<div hidden={view!=='overview'}><MonitoringWorkspace active={view==='overview'} session={session} onReplay={()=>navigate('replay')} onSetup={id=>{if(id)setSelected(id);setStep(2);navigate('setup');}}/></div>}

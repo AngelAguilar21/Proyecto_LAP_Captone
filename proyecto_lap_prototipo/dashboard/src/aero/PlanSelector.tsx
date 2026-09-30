@@ -3,8 +3,8 @@ import type {Config,Plan} from './types';
 import Icon from './Icon';
 
 export function snapshotPlan(c:Config):Plan {
-  const {width,height,unit,background,floor,zones,commercialContext,workArea,planLines,mapConfigured,mapAsset,planName,planView}=c;
-  return {width,height,unit,background,floor:floor||'Espacio de pruebas',zones,commercialContext,workArea,planLines,mapConfigured,mapAsset,planName,planView};
+  const {width,height,unit,background,floor,zones,commercialContext,workArea,planLines,mapConfigured,mapAsset,planName,planView,orientation}=c;
+  return {width,height,unit,background,floor:floor||'Espacio de pruebas',zones,commercialContext,workArea,planLines,mapConfigured,mapAsset,planName,planView,orientation};
 }
 
 export default function PlanSelector({config,onChange,disabled=false,manage=false}:{config:Config;onChange:(c:Config)=>void;disabled?:boolean;manage?:boolean}){

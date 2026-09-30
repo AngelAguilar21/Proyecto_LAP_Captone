@@ -240,7 +240,10 @@ class VideoTests(unittest.TestCase):
             def set(self, *args): return True
             def get(self, prop): return 25
             def release(self): pass
-            def read(self): return frames.get(timeout=2)
+            def read(self):
+                # Una fuente que sigue fallando entrega lecturas vacías.
+                try: return frames.get_nowait()
+                except queue.Empty: return (False, None)
         with patch('counting.source.cv2.VideoCapture', return_value=Capture()):
             source = VideoSource('rtsp://example.test/camera', self.path)
             try:
@@ -251,9 +254,29 @@ class VideoTests(unittest.TestCase):
                         if source.latest is not None and source.latest[0].mean()==3: break
                     time.sleep(.01)
                 self.assertEqual(source.read()[0].mean(), 3)
-                frames.put((False, None))
+                # Tras agotar los reintentos de lectura y reconexión se informa el corte.
                 with self.assertRaisesRegex(ValueError, 'interrumpió'):
                     source.read()
+            finally: source.close()
+
+    def test_stream_recovers_from_a_brief_signal_loss(self):
+        frames = queue.Queue()
+        class Capture:
+            def isOpened(self): return True
+            def set(self, *args): return True
+            def get(self, prop): return 25
+            def release(self): pass
+            def read(self):
+                try: return frames.get(timeout=.05)
+                except queue.Empty: return (True, np.full((2,2,3), 9, np.uint8))
+        with patch('counting.source.cv2.VideoCapture', return_value=Capture()):
+            source = VideoSource('rtsp://example.test/camera', self.path)
+            try:
+                # Dos lecturas fallidas seguidas son un corte breve, no cero personas.
+                for _ in range(2): frames.put((False, None))
+                frames.put((True, np.full((2,2,3), 4, np.uint8)))
+                self.assertIsNotNone(source.read()[0])
+                self.assertIsNone(source.failure)
             finally: source.close()
 
 

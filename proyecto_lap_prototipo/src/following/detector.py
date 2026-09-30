@@ -14,6 +14,7 @@ class PersonDetection:
     y: float
     confianza: float
     box: tuple
+    appearance: object = None
 
 
 class YoloPersonDetector:

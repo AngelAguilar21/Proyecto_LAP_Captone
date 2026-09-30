@@ -28,8 +28,8 @@ import numpy as np
 import lap
 from filterpy.kalman import KalmanFilter
 
-DISTANCIA_MAX_ALTA_PX = 45.0  # gating para detecciones de alta confianza
-DISTANCIA_MAX_BAJA_PX = 45.0  # gating para el segundo intento con detecciones de baja confianza
+DISTANCIA_MAX_ALTA_PX = 60.0  # gating para detecciones de alta confianza
+DISTANCIA_MAX_BAJA_PX = 60.0  # gating para el segundo intento con detecciones de baja confianza
 
 
 def _crear_kalman(x: float, y: float) -> KalmanFilter:
@@ -67,6 +67,7 @@ class TrackPersona:
     ultima_posicion_real: Tuple[float, float] = None
     ultima_velocidad_real: Tuple[float, float] = None
     ultima_caja: Tuple[float, float, float, float] = None
+    apariencia: object = None
 
     @property
     def posicion(self) -> Tuple[float, float]:
@@ -79,7 +80,7 @@ class TrackPersona:
     def predecir(self):
         self.kf.predict()
 
-    def actualizar(self, x: float, y: float, score: float, t: float, box=None):
+    def actualizar(self, x: float, y: float, score: float, t: float, box=None, apariencia=None):
         self.kf.update(np.array([x, y]))
         self.score = score
         self.ultimo_t = t
@@ -89,6 +90,24 @@ class TrackPersona:
         self.ultima_velocidad_real = self.velocidad
         if box is not None:
             self.ultima_caja = tuple(float(value) for value in box)
+        if apariencia is not None:
+            if self.apariencia is None or getattr(self.apariencia, "shape", None) != getattr(apariencia, "shape", None):
+                self.apariencia = apariencia
+            else:
+                self.apariencia = self.apariencia * .8 + apariencia * .2
+                total = float(np.sum(self.apariencia))
+                if total > 0:
+                    self.apariencia = self.apariencia / total
+
+
+def _distancia_apariencia(a, b):
+    """Distancia Bhattacharyya aproximada para histogramas normalizados."""
+    if a is None or b is None:
+        return 0.0
+    if getattr(a, "shape", None) != getattr(b, "shape", None):
+        return 0.0
+    overlap = float(np.sum(np.sqrt(np.maximum(a, 0) * np.maximum(b, 0))))
+    return float(np.sqrt(max(0., 1. - min(1., overlap))))
 
 
 def _distancia_matriz(puntos_a: List[Tuple[float, float]], puntos_b: List[Tuple[float, float]]) -> np.ndarray:
@@ -125,6 +144,35 @@ class ByteTrackPuntos:
         self.tracks_perdidos: List[TrackPersona] = []
         self._siguiente_id = 1
 
+    def _asignar_con_prediccion(self, costo, candidatos, base, detecciones=None):
+        """Amplia el gate solo para tracks que llevan frames ocultos.
+
+        El filtro de Kalman ya predice la siguiente posición. Un umbral fijo,
+        sin embargo, rechazaba una reaparición válida después de una espalda u
+        oclusión. La tolerancia crece de forma acotada con la edad del track
+        perdido y la velocidad estimada; los tracks visibles conservan el gate
+        estricto para evitar intercambios entre personas cercanas.
+        """
+        if costo.size == 0:
+            return _asignar(costo, base)
+        gates = []
+        for track in candidatos:
+            missing = min(track.frames_sin_actualizar, 12)
+            speed = min(float(np.hypot(*track.velocidad)), 8.0)
+            gates.append(base * (1.0 + missing * .10) + speed * missing * .45)
+        max_gate = max(gates, default=base)
+        gated = costo.copy()
+        limite = max_gate
+        if detecciones:
+            limite += base * .55
+            for row, track in enumerate(candidatos):
+                for col, detection in enumerate(detecciones):
+                    apariencia = _distancia_apariencia(track.apariencia, getattr(detection, "appearance", None))
+                    gated[row, col] += base * .55 * apariencia
+        for row, gate in enumerate(gates):
+            gated[row, costo[row] > gate] = limite + 1.0
+        return _asignar(gated, limite)
+
     def actualizar(self, detecciones, t: float):
         """detecciones: iterable de objetos con atributos x, y, confianza
         (p.ej. DeteccionCabeza de detection.py).
@@ -143,12 +191,12 @@ class ByteTrackPuntos:
         posiciones_candidatos = [t.posicion for t in candidatos]
         posiciones_altas = [(d.x, d.y) for d in altas]
         costo1 = _distancia_matriz(posiciones_candidatos, posiciones_altas)
-        emparejados1, _, _ = _asignar(costo1, self.distancia_max_alta_px)
+        emparejados1, _, _ = self._asignar_con_prediccion(costo1, candidatos, self.distancia_max_alta_px, altas)
 
         usados_altas = set()
         emparejados_etapa1 = set()
         for i_c, i_d in emparejados1:
-            candidatos[i_c].actualizar(altas[i_d].x, altas[i_d].y, altas[i_d].confianza, t, getattr(altas[i_d], "box", None))
+            candidatos[i_c].actualizar(altas[i_d].x, altas[i_d].y, altas[i_d].confianza, t, getattr(altas[i_d], "box", None), getattr(altas[i_d], "appearance", None))
             usados_altas.add(i_d)
             emparejados_etapa1.add(i_c)
 
@@ -157,12 +205,13 @@ class ByteTrackPuntos:
         posiciones_restantes = [candidatos[i].posicion for i in indices_restantes]
         posiciones_bajas = [(d.x, d.y) for d in bajas]
         costo2 = _distancia_matriz(posiciones_restantes, posiciones_bajas)
-        emparejados2, _, _ = _asignar(costo2, self.distancia_max_baja_px)
+        candidatos_restantes = [candidatos[i] for i in indices_restantes]
+        emparejados2, _, _ = self._asignar_con_prediccion(costo2, candidatos_restantes, self.distancia_max_baja_px, bajas)
 
         emparejados_etapa2 = set()
         for i_r, i_d in emparejados2:
             i_c = indices_restantes[i_r]
-            candidatos[i_c].actualizar(bajas[i_d].x, bajas[i_d].y, bajas[i_d].confianza, t, getattr(bajas[i_d], "box", None))
+            candidatos[i_c].actualizar(bajas[i_d].x, bajas[i_d].y, bajas[i_d].confianza, t, getattr(bajas[i_d], "box", None), getattr(bajas[i_d], "appearance", None))
             emparejados_etapa2.add(i_c)
 
         # Candidatos sin pareja en ninguna etapa: se marcan/mantienen perdidos
@@ -191,7 +240,8 @@ class ByteTrackPuntos:
             if i_d not in usados_altas:
                 nuevo = TrackPersona(id=self._siguiente_id, kf=_crear_kalman(d.x, d.y),
                                       score=d.confianza, ultimo_t=t,
-                                      ultima_caja=getattr(d, "box", None))
+                                      ultima_caja=getattr(d, "box", None),
+                                      apariencia=getattr(d, "appearance", None))
                 self._siguiente_id += 1
                 nuevos.append(nuevo)
         self.tracks_activos.extend(nuevos)

@@ -27,7 +27,7 @@ def manifest(root,sid):
  return json.loads((directory(root,sid)/'manifest.json').read_text(encoding='utf-8'))
 
 def public(meta):
- return {**meta,'cameras':[{**{k:v for k,v in c.items() if k!='source'},'sourceKind':'recording' if isinstance(c.get('source'),str) and '://' not in c['source'] else 'live'} for c in meta['cameras']], 'config':{k:v for k,v in meta.get('config',{}).items() if k not in ('cameras','source')}}
+ return {**meta,'cameras':[{**{k:v for k,v in c.items() if k!='source'},'sourceKind':c.get('sourceKind') or ('recording' if isinstance(c.get('source'),str) and '://' not in c['source'] else 'live')} for c in meta['cameras']], 'config':{k:v for k,v in meta.get('config',{}).items() if k not in ('cameras','source')}}
 
 def recover_interrupted(root):
  """Se llama una vez al arrancar el servidor, nunca durante una sesión activa."""
