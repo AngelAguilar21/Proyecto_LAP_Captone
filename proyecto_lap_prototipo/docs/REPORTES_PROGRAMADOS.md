@@ -1,7 +1,8 @@
 # Reportes programados — integración Fase 4
 
-El arranque de `live_server.main()` registra únicamente `reports` como tarea
-productiva. Construir `Engine` o `AutomationService` no genera PDFs. Todas las
+Fase 4 introdujo `reports`; desde Fase 5 el arranque de `live_server.main()`
+registra explícitamente `reports` y `backups` (ver `BACKUPS_PROYECTOS.md`).
+Construir `Engine` o `AutomationService` no genera PDFs. Todas las
 automatizaciones siguen deshabilitadas por defecto. No hay UI de configuración,
 listado ni descarga de estos artefactos en esta fase.
 
@@ -173,8 +174,8 @@ lectura/transmisión.
   todos los fallos de energía/controlador. La reconciliación y salud cubren las
   discrepancias observables al volver a ejecutar.
 - No hay retención de PDFs/auditoría, reparación automática, UI ni alertas SMTP
-  de salud en esta fase. Backups, escalamiento, cleanup y restauración siguen
-  pendientes de sus fases correspondientes.
+  de salud en esta fase. Los backups de proyectos tienen su propia retención
+  acotada en Fase 5; escalamiento, cleanup general y restauración siguen pendientes.
 
 ## Verificación
 

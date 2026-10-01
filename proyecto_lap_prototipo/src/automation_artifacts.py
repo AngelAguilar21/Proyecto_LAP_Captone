@@ -96,14 +96,20 @@ def verify_pdf(data):
         return False
 
 
-def check_successes(store, task, root, now, resource_use, validator=verify_pdf):
+def check_successes(store, task, root, now, resource_use, validator=verify_pdf, *, retention=False, identity=None):
     outcomes = {}
     for row in store.successes(task):
         checkpoint()
         scope, date = row["scope"], row["date"]
         prior = store.health(task, scope, date)
+        if retention and prior and prior["status"] == "retired":
+            outcomes[(scope, date)] = "retired"
+            continue  # Reappearing retired files have no automatic deletion authority.
+        pending = retention and prior and prior["status"] == "retention_pending"
         try:
             path = safe_path(row["artifact"], root)
+            if identity is not None and not identity(row, path):
+                raise ValueError("Unexpected artifact identity")
             with resource_use(path):
                 data = read_artifact(path, root)
                 if not validator(data):
@@ -113,12 +119,15 @@ def check_successes(store, task, root, now, resource_use, validator=verify_pdf):
                 elif fingerprint(data) != (prior["sha256"], prior["size"]):
                     status, reason = "corrupt", "fingerprint_mismatch"
                 else:
-                    status, reason = "healthy", None
+                    status, reason = ("retention_pending", prior["error"]) if pending else ("healthy", None)
         except FileNotFoundError:
-            status, reason = "missing", "artifact_missing"
+            status, reason = ("retired", "retention") if pending else ("missing", "artifact_missing")
         except (OSError, ValueError, TypeError):
             status, reason = "unverifiable", "artifact_inaccessible_or_unsafe"
         checkpoint()
-        store.set_health(task, scope, date, status, now, reason)
+        if pending and status == "retired":
+            store.set_health(task, scope, date, status, now, reason, event="retention_deleted")
+        else:
+            store.set_health(task, scope, date, status, now, reason)
         outcomes[(scope, date)] = status
     return outcomes

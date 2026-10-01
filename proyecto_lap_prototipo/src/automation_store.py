@@ -107,15 +107,22 @@ class AutomationStore:
                              (task, scope, date)).fetchone()
             return dict(row) if row else None
 
-    def set_health(self, task, scope, date, status, now, error=None):
+    def set_health(self, task, scope, date, status, now, error=None, *, connection=None, event=None):
         # Never derive a missing historical fingerprint from today's file.
-        with self.connect() as db:
+        if connection is None:
+            with self.connect() as db:
+                return self.set_health(task, scope, date, status, now, error, connection=db, event=event)
+        else:
+            db = connection
             prior = db.execute("SELECT status,error FROM artifact_health WHERE task=? AND scope=? AND date=?",
                                (task, scope, date)).fetchone()
             db.execute("INSERT INTO artifact_health(task,scope,date,sha256,size,status,checked_at,error) "
                 "VALUES (?,?,?,NULL,NULL,?,?,?) ON CONFLICT(task,scope,date) DO UPDATE SET "
                 "status=excluded.status,checked_at=excluded.checked_at,error=excluded.error",
                 (task, scope, date, status, now.timestamp(), error))
-            if prior != (status, error):
+            if prior is None or tuple(prior) != (status, error):
+                detail = dict(scope=scope, date=date, artifact_health=status, reason=error)
+                if event:
+                    detail["event"] = event
                 db.execute("INSERT INTO audit(at,task,detail) VALUES (?,?,?)", (now.timestamp(), task,
-                    json.dumps(dict(scope=scope, date=date, artifact_health=status, reason=error))))
+                    json.dumps(detail)))
