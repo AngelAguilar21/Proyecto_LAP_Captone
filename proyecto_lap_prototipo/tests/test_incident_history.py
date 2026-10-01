@@ -26,6 +26,7 @@ class IncidentHistoryTests(unittest.TestCase):
         db = sqlite3.connect(business_data.path_for(self.path))
         self.addCleanup(db.close)
         db.executescript(business_data.ESQUEMA)
+        db.execute("DROP TABLE incident_replay_links")  # absent in the actual pre-migration schema
         db.executescript(business_data.NEGOCIOS_ESQUEMA)
         db.execute("INSERT INTO incidentes VALUES ('legacy','aglomeracion','zone','C',0,8,10,?,'{}',100,200)", (state,))
         db.commit()

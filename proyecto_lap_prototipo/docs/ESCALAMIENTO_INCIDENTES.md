@@ -29,8 +29,8 @@ de correo habilitada; los destinatarios de escalamiento se pasan como alternativ
 y nunca sustituyen `correo.recipients` en disco. El equipo debe configurar la
 lista de supervisores apropiada; no se impone que ambas listas sean disjuntas.
 
-`live_server.main()` registra explícitamente solo `reports`, `backups` y
-`escalation`. Los constructores siguen inertes y no hay tarea de cleanup. El
+Desde Fase 7, `live_server.main()` registra explícitamente `reports`, `backups`,
+`escalation` y `cleanup` (ver `UPLOADS_CLEANUP.md`). Los constructores siguen inertes. El
 runtime secuencial comprueba las tareas cada 60 segundos por defecto. El momento
 de envío puede ser posterior al umbral por ese intervalo o por otras tareas.
 
@@ -188,5 +188,6 @@ No se usan SMTP, cámaras, RTSP ni bases de usuario reales.
 
 Pendientes de producto/UX: alcance futuro a proyectos distintos del activo, UI
 de validación legacy/configuración y tratamiento humano de uncertain. Esta fase
-no decide una política de supervisión global. Fase 7 y la integración final siguen
-pendientes; no se habilita cleanup general, mejoras de uploads ni restore.
+no decide una política de supervisión global. Fase 7 añadió uploads durables y
+cleanup conservador, deshabilitado por defecto. Restore e integración final siguen
+fuera de esta entrega.

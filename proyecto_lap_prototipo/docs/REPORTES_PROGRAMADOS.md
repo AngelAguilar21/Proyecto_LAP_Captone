@@ -1,8 +1,8 @@
 # Reportes programados — integración Fase 4
 
-Fase 4 introdujo `reports`; desde Fase 6 el arranque de `live_server.main()`
-registra explícitamente `reports`, `backups` y `escalation` (ver
-`BACKUPS_PROYECTOS.md` y `ESCALAMIENTO_INCIDENTES.md`).
+Fase 4 introdujo `reports`; desde Fase 7 el arranque de `live_server.main()`
+registra explícitamente `reports`, `backups`, `escalation` y `cleanup` (ver
+`BACKUPS_PROYECTOS.md`, `ESCALAMIENTO_INCIDENTES.md` y `UPLOADS_CLEANUP.md`).
 Construir `Engine` o `AutomationService` no genera PDFs. Todas las
 automatizaciones siguen deshabilitadas por defecto. No hay UI de configuración,
 listado ni descarga de estos artefactos en esta fase.
@@ -176,7 +176,8 @@ lectura/transmisión.
   discrepancias observables al volver a ejecutar.
 - No hay retención de PDFs/auditoría, reparación automática, UI ni alertas SMTP
   de salud en esta fase. Los backups de proyectos tienen su propia retención
-  acotada en Fase 5; escalamiento, cleanup general y restauración siguen pendientes.
+  acotada en Fase 5. Escalamiento se integró en Fase 6 y retención conservadora de
+  replays/uploads en Fase 7; restauración y retención de PDFs siguen pendientes.
 
 ## Verificación
 

@@ -1,6 +1,6 @@
 """Process-local file leases and ownership of asynchronous resources.
 
-Future deletion must hold lock while checking protected() and deleting. Leases
+Retention holds lock while checking protected resources and deleting. Leases
 protect ancestors/descendants; they are not an inter-process filesystem lock.
 """
 import os
@@ -21,6 +21,7 @@ class ResourceRegistry:
         self.lock = threading.RLock()
         self.users = Counter()
         self.activities = Counter()
+        self.activity_owners = Counter()
         self.components = set()
         self.threads = set()
         self.closing = False
@@ -57,10 +58,12 @@ class ResourceRegistry:
     @contextmanager
     def activity(self, writer=True):
         kind = "writer" if writer else "reader"
+        owner = (threading.get_ident(), kind)
         with self.lock:
             if self.closing and CURRENT.get() is not self:
                 raise ValueError("Runtime is closing")
             self.activities[kind] += 1
+            self.activity_owners[owner] += 1
         token = CURRENT.set(self)
         try:
             with ExitStack() as stack:
@@ -73,6 +76,9 @@ class ResourceRegistry:
             CURRENT.reset(token)
             with self.lock:
                 self.activities[kind] -= 1
+                self.activity_owners[owner] -= 1
+                if not self.activity_owners[owner]:
+                    del self.activity_owners[owner]
 
     def start_thread(self, target, args=(), name=None):
         def run():

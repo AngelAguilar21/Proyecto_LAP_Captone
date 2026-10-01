@@ -13,9 +13,13 @@ import json
 import sqlite3
 import time
 import math
+import re
+import threading
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
+
+reference_lock = threading.RLock()
 
 ESQUEMA = """
 CREATE TABLE IF NOT EXISTS negocios (
@@ -68,6 +72,14 @@ CREATE TABLE IF NOT EXISTS incident_notifications (
            (status <> 'sent' AND sent_at IS NULL))
 );
 CREATE INDEX IF NOT EXISTS idx_notification_status ON incident_notifications(status);
+
+CREATE TABLE IF NOT EXISTS incident_replay_links (
+    incident_id TEXT PRIMARY KEY REFERENCES incidentes(id),
+    resolution TEXT NOT NULL CHECK(resolution IN ('linked','unknown')),
+    session_id TEXT,
+    CHECK ((resolution='linked' AND session_id IS NOT NULL) OR
+           (resolution='unknown' AND session_id IS NULL))
+);
 
 CREATE TABLE IF NOT EXISTS trafico_historico (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -130,6 +142,11 @@ def connect(project_path):
         conexion.execute("INSERT OR IGNORE INTO negocio_puertas SELECT id, camara_id, linea_id FROM negocios WHERE camara_id IS NOT NULL AND linea_id IS NOT NULL")
         conexion.commit()
         _migrate_incident_history(conexion)
+        with reference_lock, conexion:
+            for iid, detail in conexion.execute(
+                    "SELECT id,detalle FROM incidentes WHERE id NOT IN "
+                    "(SELECT incident_id FROM incident_replay_links)").fetchall():
+                _link_incident_replay(conexion, iid, detail)
     except Exception:
         conexion.close()
         raise
@@ -282,7 +299,30 @@ def ventas_por_fecha(conexion, negocio_id, fecha):
 
 # --- Incidentes ---
 
+def replay_session(detail):
+    try:
+        value = json.loads(detail) if isinstance(detail, str) else detail
+        session = value.get("sesion") if isinstance(value, dict) else None
+        return session if isinstance(session, str) and re.fullmatch(r"[a-f0-9]{8,32}", session) else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _link_incident_replay(conexion, iid, detail):
+    session = replay_session(detail)
+    conexion.execute("INSERT OR IGNORE INTO incident_replay_links VALUES (?,?,?)",
+                     (iid, "linked" if session else "unknown", session))
+
+
 def registrar_incidente(conexion, id_incidente, tipo, zona, camara_id, inicio,
+                        pico=None, duracion=None, detalle=None, commit=True):
+    # With commit=False the caller must hold reference_lock through commit/rollback.
+    with reference_lock:
+        return _registrar_incidente(conexion, id_incidente, tipo, zona, camara_id, inicio,
+                                    pico, duracion, detalle, commit)
+
+
+def _registrar_incidente(conexion, id_incidente, tipo, zona, camara_id, inicio,
                         pico=None, duracion=None, detalle=None, commit=True):
     if tipo not in TIPOS_VALIDOS:
         raise ValueError(f"Tipo de incidente inválido: {tipo}")
@@ -300,6 +340,8 @@ def registrar_incidente(conexion, id_incidente, tipo, zona, camara_id, inicio,
         "UPDATE incidentes SET pico = ?, duracion = ?, actualizado = ? "
         "WHERE id = ? AND estado = 'pendiente'",
         (pico, duracion, ahora, id_incidente))
+    stored = conexion.execute("SELECT detalle FROM incidentes WHERE id=?", (id_incidente,)).fetchone()[0]
+    _link_incident_replay(conexion, id_incidente, stored)
     if commit:
         conexion.commit()
 

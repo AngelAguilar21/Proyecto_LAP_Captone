@@ -404,15 +404,17 @@ class ScheduledReportTests(unittest.TestCase):
                     text.append(contents.get_text_bounded())
         self.assertIn("VIDEOS DE PRUEBA", " ".join(text))
 
-    def test_startup_registers_reports_backups_escalation_and_keeps_default_inert(self):
+    def test_startup_registers_four_tasks_and_keeps_default_inert(self):
         import live_server
         def serve():
             from automation_backups import ProjectBackups
             from automation_escalation import AlertEscalation
-            self.assertEqual(set(self.engine.automation.tasks), {"reports", "backups", "escalation"})
+            from automation_cleanup import RetentionCleanup
+            self.assertEqual(set(self.engine.automation.tasks), {"reports", "backups", "escalation", "cleanup"})
             self.assertIsInstance(self.engine.automation.tasks["reports"], ScheduledReports)
             self.assertIsInstance(self.engine.automation.tasks["backups"], ProjectBackups)
             self.assertIsInstance(self.engine.automation.tasks["escalation"], AlertEscalation)
+            self.assertIsInstance(self.engine.automation.tasks["cleanup"], RetentionCleanup)
             self.assertEqual(self.engine.automation.run_due_tasks(self.now), {})
         server = SimpleNamespace(socket=Mock(), server_bind=Mock(), server_activate=Mock(), server_close=Mock(), serve_forever=serve)
         with patch.object(live_server, "ManagedHTTPServer", return_value=server), \

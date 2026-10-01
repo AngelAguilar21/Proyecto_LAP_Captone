@@ -237,6 +237,7 @@ class ProjectBackupTests(unittest.TestCase):
                            "VALUES (?,'aglomeracion','zone','c',1,5,7,'revisado','{}',1,2,1,3,4)", (iid,))
                 db.execute("INSERT INTO incident_notifications VALUES (?,'original',?,2,1,?,NULL,'synthetic-owner')",
                            (iid, status, 2 if status == 'sent' else None))
+                db.execute("INSERT INTO incident_replay_links VALUES (?,'unknown',NULL)", (iid,))
             db.execute("INSERT INTO commercial_sales VALUES ('b','2026-10-01',1,12.5,2,'demo','i')")
             db.execute("INSERT INTO commercial_imports VALUES ('i','synthetic.csv','demo',1,'2026-10-01')")
             db.execute("INSERT INTO commercial_traffic VALUES ('s','b','2026-10-01',1,5,2,1,'demo')")
@@ -254,6 +255,8 @@ class ProjectBackupTests(unittest.TestCase):
             self.assertEqual(db.execute("SELECT empresa FROM negocios").fetchall(), [("Synthetic company",)])
             self.assertEqual(db.execute("SELECT review_history_known,reviewed_at,history_validated_at "
                                         "FROM incidentes ORDER BY id").fetchall(), [(1, 3., 4.)] * 4)
+            self.assertEqual(db.execute("SELECT resolution,session_id FROM incident_replay_links").fetchall(),
+                             [("unknown", None)] * 4)
             self.assertEqual(db.execute("SELECT status FROM incident_notifications ORDER BY incident_id").fetchall(),
                              [("sent",), ("uncertain",), ("failed",), ("attempting",)])
 

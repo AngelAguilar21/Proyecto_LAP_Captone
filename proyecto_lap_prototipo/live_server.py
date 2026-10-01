@@ -215,6 +215,7 @@ class Engine:
             return
         sesion = self.state.get("session", "sin-sesion")
         conexion = None
+        business_data.reference_lock.acquire()
         try:
             conexion = business_data.connect(self.config_path)
             conexion.execute("BEGIN IMMEDIATE")
@@ -229,8 +230,11 @@ class Engine:
             self.business_error = type(exc).__name__
             return  # Never send without a committed incident. A later dispatch may retry.
         finally:
-            if conexion:
-                conexion.close()
+            try:
+                if conexion:
+                    conexion.close()
+            finally:
+                business_data.reference_lock.release()
         if self.mailer.ready():
             for alerta in pendientes:
                 try:
@@ -1723,22 +1727,8 @@ class Handler(BaseHTTPRequestHandler):
                 suffix = Path(filename).suffix.lower()
                 if suffix not in (".mp4",".avi",".mov",".mkv",".webm",".m4v"):
                     raise ValueError("Formato de video no admitido.")
-                directory = ROOT / "data" / "uploads"
-                directory.mkdir(parents=True,exist_ok=True)
-                target = directory / (secrets.token_hex(16)+suffix)
-                hold_path(target, write=True)
-                try:
-                    remaining = size
-                    with target.open("xb") as output:
-                        while remaining:
-                            chunk = self.rfile.read(min(remaining,1024*1024))
-                            if not chunk:
-                                raise ValueError("La carga quedó incompleta.")
-                            output.write(chunk)
-                            remaining -= len(chunk)
-                except Exception:
-                    target.unlink(missing_ok=True)
-                    raise
+                from uploads import receive
+                target = receive(engine.data_root, self.rfile, size, suffix, resources=engine.resources)
                 with engine.lock:
                     engine.record("Video cargado",f"Archivo de prueba {suffix} · {size} bytes")
                 return self.send_data(200,{"path":str(target)})
@@ -2004,10 +1994,12 @@ def main():
         from automation_reports import ScheduledReports
         from automation_backups import ProjectBackups
         from automation_escalation import AlertEscalation
+        from automation_cleanup import RetentionCleanup
         service = server.engine.automation
         service.tasks = {"reports": ScheduledReports(server.engine, service.store),
                          "backups": ProjectBackups(server.engine, service.store),
-                         "escalation": AlertEscalation(server.engine)}
+                         "escalation": AlertEscalation(server.engine),
+                         "cleanup": RetentionCleanup(server.engine, service.store)}
         server.engine.automation.start()
         # La interfaz y la configuración pueden abrirse mientras P2PNet prepara sus
         # pesos en segundo plano. Así el primer monitoreo no paga toda la carga del
