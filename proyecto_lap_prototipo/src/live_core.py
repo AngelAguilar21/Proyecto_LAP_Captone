@@ -24,6 +24,25 @@ def valid_plan_id(value):
     )
 
 
+def validate_calibration_pairs(pairs, plan=None, *, require_complete=False):
+    """Shared geometry and contextual bounds used by save and calibration-check."""
+    if not isinstance(pairs, list) or len(pairs)>30 or (require_complete and len(pairs)<4):
+        raise ValueError("Usa entre 4 y 30 correspondencias para comprobar la calibración.")
+    if plan is not None and (not isinstance(plan,dict) or
+            any(not finite(plan.get(k),1,10000) for k in ('width','height'))):
+        raise ValueError("Dimensiones del plano inválidas para comprobar calibración.")
+    for p in pairs:
+        if not isinstance(p,list) or len(p)!=4 or not all(finite(v,-10000,10000) for v in p):
+            raise ValueError("Cada correspondencia contiene [u, v, x, y].")
+        if not (0<=p[0]<=1 and 0<=p[1]<=1) or (plan is not None and not (0<=p[2]<=plan['width'] and 0<=p[3]<=plan['height'])):
+            raise ValueError("Puntos fuera del video o del plano.")
+    if len(pairs)>=4:
+        calibration(pairs)
+        points=np.asarray(pairs,dtype=np.float32)
+        if cv2.contourArea(cv2.convexHull(points[:,:2].copy()))<.005:
+            raise ValueError("Referencias casi alineadas: distribuye los nodos por todo el suelo visible.")
+
+
 def validate_config(c):
     if not isinstance(c, dict):
         raise ValueError("La configuración debe ser un objeto.")
@@ -105,15 +124,7 @@ def validate_config(c):
         if "coverageWidth" in cam and not finite(cam["coverageWidth"],.01,10000):
             raise ValueError("Ancho de cobertura inválido.")
         pairs = cam.get("pairs", [])
-        if not isinstance(pairs, list) or len(pairs) > 30:
-            raise ValueError("Usa como máximo 30 correspondencias de calibración.")
-        for p in pairs:
-            if not isinstance(p, list) or len(p) != 4 or not all(finite(v, -10000, 10000) for v in p):
-                raise ValueError("Cada correspondencia contiene [u, v, x, y].")
-            if not 0 <= p[0] <= 1 or not 0 <= p[1] <= 1 or not 0 <= p[2] <= cam_plan["width"] or not 0 <= p[3] <= cam_plan["height"]:
-                raise ValueError("Puntos fuera del video o del plano.")
-        if len(pairs) >= 4:
-            calibration(pairs)
+        validate_calibration_pairs(pairs, cam_plan)
         for field, lo, hi in [('crowdThreshold',1,1000),('crowdDwell',0,3600)]:
             if field in cam and not finite(cam[field],lo,hi):
                 raise ValueError(f'{cid}: {field} fuera de rango.')

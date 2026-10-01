@@ -96,7 +96,8 @@ El servidor actual escucha solo en el equipo local y admite hasta 32 cámaras co
 
 FPS fuente, procesamiento e inferencia tienen regiones de medición diferentes;
 ninguno demuestra por sí solo latencia cámara-pantalla. El protocolo LIVE está
-preparado, no ejecutado: [PRUEBA_LIVE.md](PRUEBA_LIVE.md). Al finalizar se limpia
+preparado para revalidar la candidata integrada, todavía no ejecutado en Legion;
+se distingue del LIVE histórico MacBook reportado en [PRUEBA_LIVE.md](PRUEBA_LIVE.md). Al finalizar se limpia
 estado activo, pero se conservan observaciones individuales en replays y
 IdentityMemory: [INVENTARIO_PERSISTENCIA.md](INVENTARIO_PERSISTENCIA.md).
 

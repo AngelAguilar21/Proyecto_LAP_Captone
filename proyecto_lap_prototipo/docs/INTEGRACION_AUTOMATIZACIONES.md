@@ -61,6 +61,13 @@ referencias globales. No existe `escalation.project_ids` en este contrato.
 
 ## Operación y límites
 
+Correcciones posteriores de la candidata `9bc6988`: véase
+[CORRECCIONES_POST_AUDITORIA.md](CORRECCIONES_POST_AUDITORIA.md). No cambian
+defaults, alcance de las cuatro tareas, retención ni destinatarios. Los reportes
+de sesiones nuevas verifican completitud de JSONL contra finalización del writer;
+evidencia inconsistente no habilita publicación normal. Los históricos sin ese
+contrato siguen explícitamente no verificables, sin fabricar hashes de origen.
+
 - Un incidente revisado nunca vuelve a ser elegible aunque cambie a pendiente.
   Validar que un legacy nunca fue atendido no equivale a atenderlo. `sent` y
   `uncertain` bloquean reenvío automático; sólo `failed` puede reintentarse.

@@ -27,7 +27,8 @@ from cross_camera import GestorContinuidad
 def simular(pares_ab, umbral_distancia_metros=1.5):
     """pares_ab: lista de (t, xa, ya, xb, yb). Reproduce el bucle de
     reintento sin limite de edad, tal como quedo en main.py."""
-    camaras, _ = nodes.cargar_camaras(str(RAIZ / "config" / "camaras.json"))
+    camaras = {cid: nodes.NodoCamara(id=cid, video_path=f"synthetic-{cid}.mp4", vecinos=[other])
+               for cid, other in (("A", "B"), ("B", "A"))}
     gestor = GestorContinuidad(camaras, umbral_distancia_metros=umbral_distancia_metros)
     bd = persistence.crear_bd(":memory:")
     personas = {}

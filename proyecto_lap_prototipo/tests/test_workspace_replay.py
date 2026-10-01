@@ -32,7 +32,9 @@ class WorkspaceTests(unittest.TestCase):
 
  def test_video_ranges_allow_seeking_without_loading_whole_file(self):
   class Response:
-   def __init__(self,header):self.headers={'Range':header};self.wfile=BytesIO();self.result={}
+   def __init__(self,header):
+    self.headers={'Range':header};self.wfile=BytesIO();self.result={}
+    self.server=SimpleNamespace(engine=SimpleNamespace(lock=threading.RLock(),project_id=None,config={}))
    def send_response(self,status):self.status=status
    def send_header(self,key,value):self.result[key]=value
    def end_headers(self):pass

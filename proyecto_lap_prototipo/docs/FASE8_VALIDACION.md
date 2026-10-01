@@ -1,6 +1,12 @@
 # Fase 8: evidencia de integración y validación de candidata
 
 Fechas de ejecución y cierre: 2026-09-30 a 2026-10-01. No es la auditoría final ni autorización de piloto.
+
+Este documento conserva los resultados históricos de Fase 8. La auditoría de
+`9bc6988` y sus correcciones posteriores tienen validación separada en
+[CORRECCIONES_POST_AUDITORIA.md](CORRECCIONES_POST_AUDITORIA.md). El antecedente
+LIVE MacBook recuperado del chat está etiquetado en [PRUEBA_LIVE.md](PRUEBA_LIVE.md);
+las referencias aquí a MPS no probado describen esta ejecución Windows.
 Rama: `jose/automations-main-integration-v2`.
 SHA obligatorio de entrada verificado:
 `0b611e0c23f485103b7e51866f77967d06292d41`.

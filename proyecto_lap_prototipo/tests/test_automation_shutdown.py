@@ -133,6 +133,63 @@ class AutomationShutdownTests(unittest.TestCase):
         row = self.engine.automation.store.get("reports", "service", "2026-01-01")
         self.assertEqual(row["status"], "cancelled")
 
+    def test_registry_lock_cannot_delay_signals_or_exhaust_global_shutdown_budget(self):
+        entered, release, block = self.gate()
+        def writer():
+            with self.engine.resources.activity(), self.engine.resource_use("owned.json", write=True):
+                with self.engine.resources.lock:
+                    block()
+        holder = self.worker(writer)
+        self.assertTrue(entered.wait(2))
+        result, returned = [], threading.Event()
+        def stop():
+            result.append(stop_server(self.server, .02))
+            returned.set()
+        stopper = self.worker(stop)
+        try:
+            # Generous scheduling tolerance; holder remains blocked until finally.
+            # This checks ordering, not a fragile millisecond performance target.
+            timely = returned.wait(.5)
+            signals = [self.engine.stop_event.is_set(), self.engine.automation.stop_event.is_set(),
+                       self.engine.notifications.stop_event.is_set(), self.engine.mailer.stop_event.is_set()]
+            still_owned = holder.is_alive()
+            self.server.server_close.assert_not_called()
+        finally:
+            release.set()
+            holder.join(3)
+            stopper.join(3)
+        self.assertTrue(timely, "Registry lock prevented the coordinator returning at its deadline")
+        self.assertEqual(signals, [True] * 4)
+        self.assertTrue(still_owned)
+        self.assertEqual(result, [False])
+        self.assertTrue(stop_server(self.server, 1))
+        self.assertTrue(stop_server(self.server, 0))
+        self.assertTrue(quiescent(self.server))
+
+    def test_component_cancellation_lock_cannot_block_the_coordinator(self):
+        entered, release, block = self.gate()
+        class Component:
+            def is_alive(self): return not release.is_set()
+            def request_stop(self): block()
+        self.engine.resources.track(Component())
+        result, returned = [], threading.Event()
+        def stop():
+            result.append(stop_server(self.server, .02))
+            returned.set()
+        stopper = self.worker(stop)
+        try:
+            self.assertTrue(entered.wait(2))
+            timely = returned.wait(.5)
+            signaled = self.engine.stop_event.is_set()
+            self.server.server_close.assert_not_called()
+        finally:
+            release.set()
+            stopper.join(3)
+        self.assertTrue(timely)
+        self.assertTrue(signaled)
+        self.assertEqual(result, [False])
+        self.assertTrue(stop_server(self.server, 2))
+
     def prepare_mail(self):
         notifier.save(self.root, {"enabled": True, "user": "synthetic@example.invalid",
             "password": "synthetic-secret", "recipients": ["fake@example.invalid"]})

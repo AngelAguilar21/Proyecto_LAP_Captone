@@ -82,8 +82,14 @@ export function useSession() {
     return data;
   }, []);
   const calibrationValidator = useRef<CalibrationValidator>();
-  if (!calibrationValidator.current) calibrationValidator.current = new CalibrationValidator(pairs => post('calibration-check', { pairs }));
-  const calibrationScope = { projectId: projectId.current, serverInstance: instance.current };
+  if (!calibrationValidator.current) calibrationValidator.current = new CalibrationValidator((pairs,context) => post('calibration-check', { pairs, context }));
+  const getCalibrationScope = () => {
+    const value=current.current;
+    return { projectId: projectId.current, serverInstance: instance.current,
+      plan:value?{planId:value.planId,width:value.width,height:value.height,unit:value.unit}:undefined,
+      plans:value?.plans };
+  };
+  const calibrationScope = getCalibrationScope();
   const canValidateCalibration = connected && auth.cargado && auth.rol === 'operador';
   const calibrationInputs = JSON.stringify((config?.cameras || []).map(camera => calibrationKey(camera, calibrationScope)));
   useEffect(() => {
@@ -94,7 +100,7 @@ export function useSession() {
       return;
     }
     void validator.validate(current.current?.cameras || [],
-      { projectId: projectId.current, serverInstance: instance.current }, setCalibrationChecks);
+      getCalibrationScope(), setCalibrationChecks);
     return () => validator.cancel();
   }, [calibrationInputs, canValidateCalibration]);
 
@@ -105,11 +111,11 @@ export function useSession() {
     const cameras = current.current?.cameras || [];
     const camera = cameras.find(value => value.id === cameraId);
     if (!camera || camera.pairs.length < 4) throw new Error('Se necesitan al menos cuatro referencias.');
-    const scope = { projectId: projectId.current, serverInstance: instance.current };
+    const scope = getCalibrationScope();
     const checks = await calibrationValidator.current!.validate(cameras, scope, setCalibrationChecks, cameraId);
     const latest = current.current?.cameras.find(value => value.id === cameraId);
     const check = latest && checks && currentCalibration(latest,
-      { projectId: projectId.current, serverInstance: instance.current }, checks);
+      getCalibrationScope(), checks);
     if (!check) throw new Error('La configuración cambió durante la validación. Comprueba las referencias actuales.');
     if (check.status !== 'valid') throw new Error(check.message || 'No se pudo comprobar la calibración.');
     return check.diagnostics!;
@@ -142,6 +148,9 @@ export function useSession() {
       failed: message => { if (ownsFeedback()) { rejected.current = payload; setSaveError(message); } },
       finished: () => { pendingSaves.current -= 1; setSaving(pendingSaves.current > 0); },
     });
+    // Callers may start a session or show confirmation after saving. A response
+    // from another project must not authorize those follow-up operations.
+    if (!ownsProject()) throw new Error('El proyecto cambió durante el guardado. La respuesta corresponde al proyecto anterior.');
   }, [post]);
 
   // Autoguardado: cada cambio llega al proyecto activo sin pedir confirmación.

@@ -74,7 +74,6 @@ export default function PlanWorkspace({ session, selected, onSelected, startTest
     const next = { ...config, workArea: area, mapConfigured: true };
     void session.action(async () => {
       await session.save(next);
-      session.setConfig(next);
       setAreaEditing(false);
       setTool('select');
       session.setNotice('Límite del plano guardado.');
@@ -173,7 +172,6 @@ export default function PlanWorkspace({ session, selected, onSelected, startTest
     void session.action(async () => {
       const next = areaEditing && area.length >= 3 ? { ...config, workArea: area, mapConfigured: true } : config;
       await session.save(next);
-      session.setConfig(next);
       setAreaEditing(false);
       session.setNotice('Plano guardado.');
     });

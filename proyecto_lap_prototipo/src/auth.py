@@ -28,12 +28,41 @@ def path_for(settings_root):
     return Path(settings_root) / FILE
 
 
+class UserStoreError(ValueError):
+    """An existing account store is unavailable; it must never enable bootstrap."""
+
+
 def _read(settings_root):
+    path = path_for(settings_root)
     try:
-        data = json.loads(path_for(settings_root).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        if path.is_symlink():
+            raise UserStoreError("No se puede leer el almacén de usuarios. Requiere revisión local.") from None
         return {"usuarios": []}
-    return data if isinstance(data.get("usuarios"), list) else {"usuarios": []}
+    except (OSError, ValueError):
+        raise UserStoreError("No se puede leer el almacén de usuarios. Requiere revisión local.") from None
+    users = data.get("usuarios") if isinstance(data, dict) else None
+    valid = isinstance(users, list)
+    names = set()
+    for user in users if valid else ():
+        if (not isinstance(user, dict) or not isinstance(user.get("usuario"), str)
+                or not user["usuario"].strip() or user.get("rol") not in ROLES):
+            valid = False
+            break
+        name = user["usuario"].strip().lower()
+        if name in names:
+            valid = False
+            break
+        names.add(name)
+        for field, length in (("sal", 32), ("hash", 64)):
+            value = user.get(field)
+            if not isinstance(value, str) or len(value) != length or any(c not in "0123456789abcdefABCDEF" for c in value):
+                valid = False
+    if not valid:
+        raise UserStoreError("El almacén de usuarios tiene un formato inválido. Requiere revisión local.")
+    # A structurally valid empty list retains the existing bootstrap contract.
+    return data
 
 
 def _write(settings_root, data):

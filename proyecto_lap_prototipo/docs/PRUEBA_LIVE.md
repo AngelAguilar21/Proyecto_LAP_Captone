@@ -1,9 +1,34 @@
 # Protocolo LIVE — Lenovo Legion
 
-Estado: **PROPUESTA DE PRUEBA, NO EJECUTADA**. La evidencia sintética local de
+Estado de este protocolo Legion/candidata integrada: **PROPUESTA DE REVALIDACIÓN,
+NO EJECUTADA**. Sí existe el antecedente LIVE MacBook reportado más abajo.
+La evidencia sintética local de
 Fase 8 se separa al final. No acredita latencia LIVE, precisión, capacidad de
 cámaras ni aptitud para piloto. Base de inspección: `0b611e0`, rama candidata
 `jose/automations-main-integration-v2`. Registrar el SHA final al ejecutar.
+
+## Antecedente LIVE MacBook recuperado del chat
+
+**HISTÓRICO REPORTADO POR EL USUARIO**, mensaje `2026-09-16T04:45:21Z`
+(15 de septiembre, 23:45 en Perú), recuperado en el encargo posterior a la
+auditoría de `9bc6988`. No es una ejecución nueva de estas correcciones.
+
+- iPhone mediante OpenCV/AVFoundation, captura 1280×720; no se reportó RTSP.
+- YOLO11n, dispositivo reportado MPS, imgsz=640, confianza 0.10; ByteTrack e IDs temporales.
+- 35 s, 517 frames, 14.75 FPS; 26.98 ms de inferencia y 0.83 ms de tracking.
+- Máximo un track simultáneo, un ID y cero pérdidas/retomas en ese escenario.
+
+Logs originales, SHA/rama y modelo exacto de MacBook no se recuperaron. La búsqueda
+en las guías del repositorio no aportó esa trazabilidad. Los valores no son
+latencia cámara-pantalla ni prueban multitudes, Re-ID, sincronía multicámara,
+precisión física o el híbrido actual con P2PNet. Los avances ROI/IN-OUT/dwell
+reportados conservan pendiente la validación física de cruces, oclusiones e
+ID switches. MPS fue utilizado según el reporte histórico; la validación integral
+de macOS/Apple Silicon sigue pendiente.
+
+Se distinguen tres niveles: este LIVE histórico reportado, las grabaciones CPU
+de la auditoría/correcciones actuales y la revalidación LIVE de la candidata
+integrada aún pendiente. El perfil NVIDIA/CUDA de Windows es otro trabajo.
 
 ## Alcance y precondiciones humanas
 
@@ -43,8 +68,9 @@ P2PNet integrado selecciona CUDA si disponible, y YOLO integrado deja selecciona
 al backend. No existe selector UI de dispositivo. Un futuro perfil NVIDIA/CUDA
 debe conservar un perfil CPU reproducible, validar ambos modelos y medir CUDA
 con eventos o sincronización alrededor de la región de prueba; no añadir
-sincronización global permanente al pipeline. MPS queda pendiente y no acredita
-soporte Apple Silicon.
+sincronización global permanente al pipeline. La revalidación del pipeline
+integrado en MPS queda pendiente; el antecedente MacBook no acredita soporte
+integral Apple Silicon.
 
 ## Escenarios y duración propuesta
 
@@ -96,7 +122,7 @@ para revisión humana, sin forzar una supuesta recuperación exitosa.
 
 ## Qué mide realmente cada dato
 
-| Métrica | Inicio/fin y método | Estado LIVE actual |
+| Métrica | Inicio/fin y método | Estado LIVE de la candidata integrada/Legion |
 |---|---|---|
 | FPS fuente | `CAP_PROP_FPS`, con fallback 25 en seguimiento; mostrado como FPS fuente | NO MEDIDA en Legion; no equivale a FPS procesados |
 | Tasa efectiva por cámara | Contar actualizaciones nuevas, no polls repetidos, y dividir por tiempo de pared; conservar ventana y método | NO MEDIDA; hace falta registro de muestras/publicaciones por cámara |

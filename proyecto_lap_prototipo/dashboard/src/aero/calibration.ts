@@ -5,6 +5,7 @@ export class ApiError extends Error {
 }
 
 export interface CalibrationDiagnostics {
+  contextValidated?: boolean;
   rmse: number; warning?: string; spread: number;
   maxError: number; pointErrors: number[];
   validationError: number | null; validationPoints: number;
@@ -16,12 +17,21 @@ export interface CalibrationCheck {
   diagnostics?: CalibrationDiagnostics;
 }
 export type CalibrationChecks = Record<string, CalibrationCheck>;
-export type CalibrationScope = { projectId: string | null; serverInstance: string | undefined };
-export type CalibrationCamera = Pick<Camera, 'id' | 'planId' | 'pairs'>;
+type PlanContext = { planId?: string; width:number; height:number; unit:string };
+export type CalibrationScope = { projectId: string | null; serverInstance: string | undefined;
+  plan?:PlanContext; plans?:Record<string,Omit<PlanContext,'planId'>> };
+export type CalibrationCamera = Pick<Camera, 'id' | 'planId' | 'pairs'> & Partial<Pick<Camera,'source'>>;
+
+function planContext(camera:CalibrationCamera, scope:CalibrationScope):PlanContext|undefined {
+  if (!scope.plan) return undefined; // Compatibility for geometry-only consumers.
+  const planId=camera.planId||'custom';
+  const plan=planId===(scope.plan.planId||'custom')?scope.plan:scope.plans?.[planId];
+  return {planId,width:plan?.width as number,height:plan?.height as number,unit:plan?.unit||''};
+}
 
 // This is an identity for a backend result, not a second geometry validator.
 export function calibrationKey(camera: CalibrationCamera, scope: CalibrationScope): string {
-  return JSON.stringify([scope.projectId, scope.serverInstance, camera.id, camera.planId, camera.pairs]);
+  return JSON.stringify([scope.projectId, scope.serverInstance, camera.id, camera.planId, camera.source, camera.pairs, planContext(camera,scope)]);
 }
 
 export function currentCalibration(camera: CalibrationCamera, scope: CalibrationScope, checks: CalibrationChecks): CalibrationCheck | undefined {
@@ -50,7 +60,7 @@ export class CalibrationValidator {
   private generation = 0;
   private checks: CalibrationChecks = {};
 
-  constructor(private readonly request: (pairs: number[][]) => Promise<CalibrationDiagnostics>) {}
+  constructor(private readonly request: (pairs: number[][], context?:PlanContext) => Promise<CalibrationDiagnostics>) {}
 
   cancel(): void { this.generation += 1; }
 
@@ -78,7 +88,8 @@ export class CalibrationValidator {
     await Promise.all(pending.map(async ({ camera, key }) => {
       let check: CalibrationCheck;
       try {
-        const diagnostics = await this.request(camera.pairs);
+        const diagnostics = await this.request(camera.pairs,planContext(camera,scope));
+        if (scope.plan && diagnostics.contextValidated!==true) throw new Error('El servidor no confirmó las dimensiones del plano actual.');
         check = { key, status: 'valid', diagnostics };
       } catch (error) {
         check = { key, status: error instanceof ApiError && error.status === 400 ? 'invalid' : 'unavailable',

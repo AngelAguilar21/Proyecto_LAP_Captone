@@ -10,6 +10,18 @@ Una configuración alternativa cambia algunos roots; no convierte por sí sola
 todos los módulos/rutas en un entorno aislado. El usuario del SO que tenga acceso
 a los archivos puede leerlos; no se encontró cifrado de estos almacenes.
 
+Actualización posterior a `9bc6988`: los nuevos manifiestos replay añaden
+`evidenceVersion=1` y `completion` (conteo de muestras, bytes, SHA-256, último t,
+end y estado final). Se calculan durante escritura y se contrastan al reportar;
+no son firmas autenticadas. Un histórico sin ellos tiene completitud `unknown`,
+sin reescritura ni migración. Engine guarda las referencias geométricas y zona
+útil de cámara usadas al grabar para reproyección; continúa omitiendo URL/secretos
+de streams LIVE en ese manifiesto. Las rutas de replay aplican el mismo proyecto
+capturado; legacy sin pertenencia sigue consultable como desconocido, pero no
+se reproyecta con el proyecto seleccionado por suposición. No convierte proyectos
+en tenants ni implanta autenticación general para GET. Detalles y límites en
+[CORRECCIONES_POST_AUDITORIA.md](CORRECCIONES_POST_AUDITORIA.md).
+
 ## Individuales temporales y persistidos
 
 | Almacén / generación | Datos y persistencia | Lectores | Retención / eliminación | Evidencia |

@@ -59,8 +59,9 @@ frame reciente, con descarte de anteriores. El tiempo de seguimiento es el
 reloj monotónico local del ciclo, no timestamp autenticado de captura.
 
 Los requisitos fijan wheels PyTorch CPU. La revisión sintética observó CPU en
-ambos detectores. Una NVIDIA instalada no demuestra uso GPU; CUDA y MPS quedan
-pendientes de perfiles validados. Véanse [INSTALACION.md](../../INSTALACION.md)
+ambos detectores. Una NVIDIA instalada no demuestra uso GPU; CUDA y la
+revalidación integrada MPS quedan pendientes. Sí hubo un LIVE histórico MacBook
+con MPS reportado por el usuario. Véanse [INSTALACION.md](../../INSTALACION.md)
 y [PRUEBA_LIVE.md](PRUEBA_LIVE.md) para entorno y significado de métricas.
 
 AVIE entra en estado denso tras tres actualizaciones con evidencia de densidad

@@ -8,7 +8,7 @@ Videos y resultados permite revisar el historial y comparar varios análisis. El
 
 - Personas e IDs · YOLO + ByteTrack: cajas e identidades temporales del seguimiento.
 - Presencia acumulada · seguimiento: dónde permanecieron las detecciones durante el intervalo.
-- Conteo de multitudes · P2PNet: puntos estimados y conteo especializado, si ese análisis lo procesó. Activar el conteo especializado en la cámara y ejecutar un nuevo análisis si no hay estimaciones.
+- Conteo de multitudes · P2PNet: puntos estimados y conteo especializado, si ese análisis lo procesó. En monitoreo híbrido, AVIE solicita P2PNet al observar evidencia densa; no hay un interruptor `denseCounting` ni un intervalo `denseInterval` efectivo por cámara. Si no se activó AVIE, no se inventan estimaciones. Una muestra anterior conserva su timestamp y no demuestra ocupación actual.
 
 P2PNet localiza cabezas. Sus puntos no se proyectan mediante la calibración del suelo ni se suman al conteo de YOLO. El mapa de posiciones y recorridos corresponde al seguimiento calibrado.
 
@@ -34,9 +34,9 @@ Se registra un paso cuando una trayectoria cruza la línea y se observa en ambas
 
 «Eventos de accesos» muestra local, dirección y segundo del video. Si no hubo cruces confirmados, la tabla queda vacía; no se generan eventos de ejemplo. Ocupación, presencia por hora y trayectorias muestran sus propias fuentes de datos y explican cuando no están disponibles.
 
-## Verificación de esta revisión
+## Verificación histórica reportada de esta guía
 
-69 pruebas automatizadas superadas, comprobación TypeScript y compilación Vite correctas. Verificados en navegador el mapa sobre las cámaras, la ubicación de un sector y el guardado de áreas de confirmación en la cámara de tienda. Estas verificaciones comprueban funcionamiento; la precisión de detección y de los cruces requiere contrastar videos anotados manualmente.
+Antecedente reportado: 69 pruebas automatizadas superadas, comprobación TypeScript y compilación Vite correctas. Verificados en navegador el mapa sobre las cámaras, la ubicación de un sector y el guardado de áreas de confirmación en la cámara de tienda. No es el total de la candidata actual. Estas verificaciones comprueban funcionamiento; la precisión de detección y de los cruces requiere contrastar videos anotados manualmente. Cierre posterior: [CORRECCIONES_POST_AUDITORIA.md](CORRECCIONES_POST_AUDITORIA.md).
 
 
 ## Actualización de cámaras y calibración

@@ -10,7 +10,15 @@ def current_projection(meta, samples, config):
     result = copy.deepcopy(samples)
     config = copy.deepcopy(config)
     cameras = {c['id']: c for c in config['cameras']}
-    original = {c['id']: c for c in meta.get('config', {}).get('cameras', [])}
+    recorded = meta.get('cameras')
+    legacy = meta.get('config', {}).get('cameras')
+    if recorded is not None and legacy is not None:
+        # Two explicit but contradictory identities must not be guessed.
+        old = {c['id']: c for c in legacy}
+        if set(old)!={c['id'] for c in recorded} or any(c['id'] not in old or any(c[k] != old[c['id']][k]
+               for k in ('source','pairs','planId','detectionZone') if k in c and k in old[c['id']]) for c in recorded):
+            raise ValueError('Configuración histórica de cámaras ambigua.')
+    original = {c['id']: c for c in (recorded if recorded is not None else legacy or [])}
     matrices = {cid: calibration(c.get('pairs', [])) for cid, c in cameras.items()}
     counters, fields, camera_counters = {}, {}, {}
     for sample in result:
@@ -19,9 +27,13 @@ def current_projection(meta, samples, config):
         for observation in sample['cameras']:
             cid = observation['id']
             camera = cameras.get(cid)
+            if cid in original and original[cid].get('sourceKind') == 'live':
+                raise ValueError('La fuente LIVE histórica no tiene identidad verificable para reproyección actual.')
             if not camera or (cid in original and camera.get('source') != original[cid].get('source')):
                 observation['people'] = []
                 continue
+            if cid not in original:
+                raise ValueError('No hay configuración histórica verificable para esta cámara.')
             pid = camera.get('planId', 'custom')
             plan = {**config, **(config.get('plans', {}).get(pid, {}) if pid != config.get('planId') else {}), 'planId': pid}
             counters.setdefault(pid, Occupancy(plan, episode_namespace='projection:'+meta.get('session', 'legacy')))

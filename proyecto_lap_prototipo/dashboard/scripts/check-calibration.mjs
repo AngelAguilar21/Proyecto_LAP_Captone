@@ -106,6 +106,13 @@ try {
     assert.equal(published.A.status,'invalid');
     assert.equal(published.A.key,calibrationKey(changed,scope));
   });
+  await run('plan dimensions and video source invalidate the backend result', async () => {
+    const sized = {...scope, plan:{planId:'custom', width:12,height:8,unit:'meters'}};
+    const checks = await new CalibrationValidator(async () => ({...diagnostics,contextValidated:true})).validate([camera],sized,()=>{});
+    assert.equal(checks.A.status,'valid');
+    assert.equal(currentCalibration(camera,{...sized,plan:{...sized.plan,width:11}},checks),undefined);
+    assert.equal(currentCalibration({...camera,source:'other.mp4'},sized,checks),undefined);
+  });
   await run('a response from a previous project is discarded even with identical pairs', async () => {
     const first = deferred(), second = deferred(); let calls=0, published;
     const validator = new CalibrationValidator(() => (++calls === 1 ? first : second).promise);

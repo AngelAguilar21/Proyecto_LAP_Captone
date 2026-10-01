@@ -8,6 +8,7 @@ solo id_global, en vez de duplicarse.
 Corre con:  python tests/test_continuidad_sintetica.py
 """
 import sys
+import unittest
 from pathlib import Path
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -27,7 +28,8 @@ def _descriptor(hue_dominante):
 
 
 def _cargar_gestor(umbral_distancia_metros=1.5):
-    camaras, _ = nodes.cargar_camaras(str(RAIZ / "config" / "camaras.json"))
+    camaras = {cid: nodes.NodoCamara(id=cid, video_path=f"synthetic-{cid}.mp4", vecinos=[other])
+               for cid, other in (("A", "B"), ("B", "A"))}
     return GestorContinuidad(camaras, umbral_distancia_metros=umbral_distancia_metros), camaras
 
 
@@ -114,11 +116,16 @@ def test_kalman_mantiene_id_ante_oclusion_corta():
     print(f"[OK] ByteTrack+Kalman mantiene el mismo id ({ids_vistos[0]}) pese a 2 frames de oclusion")
 
 
+def load_tests(loader, tests, pattern):
+    return unittest.TestSuite(unittest.FunctionTestCase(case) for case in (
+        test_fusion_misma_persona_vista_por_dos_camaras,
+        test_no_fusiona_personas_lejanas,
+        test_no_fusiona_fuera_de_la_ventana_temporal,
+        test_desempate_por_descriptor_con_candidatos_ambiguos,
+        test_purgar_antiguos_libera_personas_que_ya_no_estan,
+        test_kalman_mantiene_id_ante_oclusion_corta,
+    ))
+
+
 if __name__ == "__main__":
-    test_fusion_misma_persona_vista_por_dos_camaras()
-    test_no_fusiona_personas_lejanas()
-    test_no_fusiona_fuera_de_la_ventana_temporal()
-    test_desempate_por_descriptor_con_candidatos_ambiguos()
-    test_purgar_antiguos_libera_personas_que_ya_no_estan()
-    test_kalman_mantiene_id_ante_oclusion_corta()
-    print("\nTodas las pruebas sinteticas pasaron.")
+    unittest.main()

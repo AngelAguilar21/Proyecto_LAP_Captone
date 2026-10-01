@@ -25,6 +25,7 @@ class ResourceRegistry:
         self.components = set()
         self.threads = set()
         self.closing = False
+        self._stop_requested = set()
 
     def identity(self, path):
         path = Path(path)
@@ -109,17 +110,45 @@ class ResourceRegistry:
         if closing:
             component.request_stop()
 
-    def request_stop(self):
-        with self.lock:
-            self.closing = True
+    def request_stop(self, *, blocking=True):
+        # Close admission immediately, even when retention currently owns lock.
+        self.closing = True
+        if not self.lock.acquire(blocking=blocking):
+            return False
+        try:
             components = tuple(self.components)
+            if not blocking:
+                # Component cancellation may itself acquire a condition/driver
+                # lock. It is an owned operation, never a coordinator wait.
+                for component in components:
+                    if component in self._stop_requested or not component.is_alive():
+                        continue
+                    worker = threading.Thread(target=component.request_stop,
+                                              name="resource-cancellation", daemon=True)
+                    self._stop_requested.add(component)
+                    self.threads.add(worker)
+                    try:
+                        worker.start()
+                    except Exception:
+                        self.threads.discard(worker)
+                        self._stop_requested.discard(component)
+                        raise
+                return True
+        finally:
+            self.lock.release()
         for component in components:
             component.request_stop()
+        return True
 
-    def busy(self):
-        with self.lock:
+    def busy(self, *, blocking=True):
+        # An unavailable registry is not evidence of quiescence.
+        if not self.lock.acquire(blocking=blocking):
+            return True
+        try:
             return bool(self.users or any(self.activities.values()) or
                         any(w.is_alive() for w in self.threads) or any(c.is_alive() for c in self.components))
+        finally:
+            self.lock.release()
 
     def snapshot(self):
         with self.lock:

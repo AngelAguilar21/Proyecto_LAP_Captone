@@ -166,7 +166,12 @@ checkpoint necesita ajuste con datos de la escena.
 
 Configuración local: `config/counting.local.json`. Métricas: `config/counting.sqlite`.
 Ambos se excluyen de Git. Se guardan agregados y muestras, no imágenes ni IDs de
-personas; los videos cargados permanecen en `data/uploads` hasta su gestión manual.
+personas. Los videos cargados permanecen en `data/uploads` salvo gestión manual
+o cleanup habilitado explícitamente. Cleanup está apagado por defecto: sólo
+puede eliminar uploads con completitud verificable, edad estrictamente superior
+a la retención y sin actividad ni referencias protegidas. Legacy sin marker,
+parciales o recursos inciertos se omiten. Véase [UPLOADS_CLEANUP.md](UPLOADS_CLEANUP.md);
+no modifica los defaults ni elimina todas las copias derivadas.
 El historial conserva las métricas; no vuelve a reproducir los fotogramas anteriores.
 
 ## Conexión futura con LAP

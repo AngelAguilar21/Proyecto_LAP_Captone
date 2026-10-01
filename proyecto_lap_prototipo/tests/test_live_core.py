@@ -2,9 +2,12 @@
 import copy
 import sys
 import unittest
+import tempfile
+from unittest.mock import patch
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import live_server
 from live_server import default_config
 from live_core import IdentityStore, Occupancy, calibration, project, validate_config
 
@@ -15,7 +18,12 @@ def obs(camera, local, x, y):
 
 class LiveCoreTests(unittest.TestCase):
     def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.enterContext(patch.object(live_server, 'ROOT', Path(temporary.name)))
         self.cfg = default_config()
+        self.cfg['cameras'] = [dict(id=cid, source='synthetic-'+cid+'.mp4', x=1, y=1,
+                                    pairs=[], links=[other]) for cid,other in [('A','B'),('B','A')]]
         self.cfg["clocksVerified"] = True
 
     def test_no_cross_camera_merging_without_clock_verification(self):

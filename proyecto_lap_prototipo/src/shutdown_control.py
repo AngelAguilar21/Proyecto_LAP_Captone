@@ -57,7 +57,6 @@ def request_stop(server):
     server.closing = True
     engine = server.engine
     engine.closing = True
-    engine.resources.request_stop()
     engine.stop_event.set()
     engine.pause_event.clear()
     engine.preview_stop_event.set()
@@ -65,12 +64,14 @@ def request_stop(server):
         event.set()
     counting = getattr(engine, "counting", None)
     if counting is not None:
-        counting.resources.request_stop()
         counting.stop_event.set()
         counting.pause_event.clear()
     engine.automation.stop_event.set()
     engine.notifications.stop_event.set()
     engine.mailer.stop_event.set()
+    engine.resources.request_stop(blocking=False)
+    if counting is not None:
+        counting.resources.request_stop(blocking=False)
 
 
 def quiescent(server):
@@ -80,8 +81,8 @@ def quiescent(server):
                engine.automation.worker, getattr(counting, "worker", None),
                getattr(server, "notification_flush_worker", None)]
     workers.extend(tuple(engine.preview_workers))
-    return not (any(alive(w) for w in workers) or engine.resources.busy() or
-                (counting is not None and counting.resources.busy()) or
+    return not (any(alive(w) for w in workers) or engine.resources.busy(blocking=False) or
+                (counting is not None and counting.resources.busy(blocking=False)) or
                 bool(getattr(server, "http_workers", ())) or engine.automation.run_lock.locked() or
                 engine.notifications.has_writers() or engine.notifications.pending_results() or
                 engine.mailer.has_writers())

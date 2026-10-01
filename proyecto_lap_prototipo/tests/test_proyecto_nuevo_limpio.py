@@ -56,8 +56,7 @@ class ProyectoNuevoTests(unittest.TestCase):
         # Object.keys(config.plans). Si new_project() no deja plans vacío, un
         # proyecto nuevo ofrece "LAP · Nivel 1" en ese desplegable aunque nunca
         # se haya tocado nada del LAP.
-        import importlib, live_server
-        importlib.reload(live_server)
+        import live_server
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / "config" / "projects").mkdir(parents=True)

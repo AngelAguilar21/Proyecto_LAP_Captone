@@ -15,6 +15,7 @@ class SavedReportTests(unittest.TestCase):
         self.folder = self.root / 'data' / 'replays' / 'abcd1234'
         self.folder.mkdir(parents=True)
         self.meta = {'session': 'abcd1234', 'projectId': 'principal',
+                     'created': '2026-10-01T00:00:00+00:00',
                      'status': 'ended', 'module': 'unified', 'end': 20,
                      'config': {'planId': 'lap-3', 'testRun': True},
                      'cameras': [{'id': 'one'}, {'id': 'two'}],

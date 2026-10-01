@@ -124,24 +124,6 @@ class Engine:
         self.state = {"status": "idle", "people": [], "cameras": [], "events": [], "t": 0,
                       "analytics": {"clusters": [], "zones": [], "heat": [], "mappedCount": 0}, "error": self.config_error}
 
-        # Restaura únicamente agregados finalizados; nunca reactiva una fuente ni IDs en vivo.
-        if not self.config_error:
-            summaries=[]
-            for path in (self.data_root/'data/replays').glob('*/manifest.json'):
-                try:
-                    meta=json.loads(path.read_text(encoding='utf-8'))
-                    if meta.get('projectId') not in (self.project_id, None):continue
-                    if meta.get('module') in ('unified','demo') and meta.get('status') in ('ended','stopped') and meta.get('cameraAnalytics'):
-                        summaries.append(meta)
-                except (OSError,ValueError):pass
-            if summaries:
-                last=max(summaries,key=lambda value:value['created']);pid=last['config'].get('planId','custom')
-                if any(c['id'] in last['cameraAnalytics'] for c in self.config['cameras']):
-                    analytics=copy.deepcopy(last.get('levelAnalytics',{}).get(pid,self.state['analytics']))
-                    analytics.update(clusters=[],mappedCount=0)
-                    for zone in analytics.get('zones',[]):zone.update(count=0,alert=False)
-                    self.state.update(status=last['status'],session=last['session'],mode='demo' if last['module']=='demo' else 'p2pnet',t=last['end'],planId=pid,analytics=analytics,levelAnalytics=last.get('levelAnalytics',{}),cameraAnalytics=last['cameraAnalytics'],identityDeleted=True)
-
         # Unifica la restauración para el arranque inicial y para el cambio de
         # proyecto, incluyendo sesiones con estado parcial o error recuperable.
         self.restore_last_result()
@@ -617,20 +599,23 @@ class Engine:
         if self.config_error:
             return
         summaries = []
+        from replay import validate_manifest
         for path in (self.data_root / 'data/replays').glob('*/manifest.json'):
             try:
                 meta = json.loads(path.read_text(encoding='utf-8'))
+                validate_manifest(meta, path.parent.name)
                 if meta.get('projectId') not in (self.project_id, None):
                     continue
                 if meta.get('module') not in ('unified', 'tracking', 'demo'):
                     continue
                 if meta.get('status') not in ('ended', 'stopped', 'error'):
                     continue
-                if float(meta.get('end') or 0) <= 0:
-                    continue
+                # A zero-duration result may still have a valid summary. Report
+                # eligibility separately requires usable samples and duration.
                 if meta.get('cameraAnalytics') or meta.get('reportAnalytics'):
                     summaries.append(meta)
-            except (OSError, ValueError, TypeError):
+            except (OSError, ValueError) as exc:
+                self.record("Histórico inválido", f"{path.parent.name}: {type(exc).__name__}; no se modificó el archivo.")
                 continue
         if not summaries:
             return
@@ -800,9 +785,11 @@ class Engine:
     def record(self, action, detail):
         self.audit.appendleft({"at":datetime.now(timezone.utc).isoformat(),"action":action,"detail":detail})
 
-    def configure(self, config):
+    def configure(self, config, *, expected_project=None):
         validate_config(config)
         with self.lock:
+            if expected_project and self.project_id and expected_project != self.project_id:
+                raise ValueError("Esos cambios pertenecen a otro proyecto y no se guardaron. Vuelve a abrirlo para editarlo.")
             if self.worker and self.worker.is_alive():
                 raise ValueError("Detén la sesión antes de cambiar el plano o la calibración.")
             con = business_data.connect(self.config_path)
@@ -1114,16 +1101,12 @@ class Engine:
             # Guardamos observaciones y métricas también para fuentes en vivo.
             # El video remoto no se archiva y la URL no se escribe en el
             # manifiesto para evitar conservar credenciales o enlaces efímeros.
-            from replay import ReplayWriter
+            from replay import ReplayWriter, camera_snapshot
             replay = ReplayWriter(
                 self.data_root,
                 self.state["session"],
                 "unified" if request.get("combined") else "tracking",
-                [{"id":c["id"],"name":c.get("name",c["id"]),
-                  "source":c["source"] if not (c.get("stream") or (isinstance(c.get("source"), str) and "://" in c["source"])) else "",
-                  "sourceKind":"live" if (c.get("stream") or (isinstance(c.get("source"), str) and "://" in c["source"])) else "recording",
-                  "offset":c.get("offset",0),"planId":c.get("planId","custom"),
-                  "countLines":c.get("countLines",[])} for c in cams],
+                camera_snapshot(cams),
                 {k:v for k,v in config.items() if k != "cameras"},
                 self.project_id,
             )
@@ -1536,6 +1519,12 @@ class Handler(BaseHTTPRequestHandler):
 
     @http_operation
     def do_GET(self):
+        try:
+            return self._get()
+        except auth.UserStoreError as exc:
+            return self.send_data(503, {"error": str(exc)})
+
+    def _get(self):
         if not self.allowed():
             return self.send_data(403, {"error": "Acceso local requerido."})
         url = urlparse(self.path)
@@ -1637,9 +1626,10 @@ class Handler(BaseHTTPRequestHandler):
                     snapshot=engine.snapshot()
                 if query.get('session'):
                     from replay import report_snapshot
-                    config,snapshot,meta=report_snapshot(engine.data_root,query['session'][0],engine.project_id)
+                    config,snapshot,meta=report_snapshot(engine.data_root,query['session'][0],engine.project_id,strict=True)
                 if url.path == '/api/report/session':
-                    return self.send_data(200, {'config':config,'state':snapshot,'created':meta['created'] if query.get('session') else None,'scope':'session'})
+                    return self.send_data(200, {'config':config,'state':snapshot,'created':meta['created'] if query.get('session') else None,'scope':'session',
+                                                'evidenceIntegrity':meta.get('evidenceIntegrity','unknown') if query.get('session') else 'in_memory'})
                 result,mime=export(config,snapshot,query.get("kind",["zones"])[0],query.get("format",["csv"])[0])
                 with engine.lock:
                     engine.record("Reporte exportado",query.get("kind",["zones"])[0]+" · "+query.get("format",["csv"])[0])
@@ -1698,7 +1688,11 @@ class Handler(BaseHTTPRequestHandler):
         try:
             parsed = urlparse(self.path)
             sesion = engine.sessions.leer(self.headers.get("X-LAP-Session", ""))
-            if parsed.path != "/api/auth" and auth.hay_usuarios(engine.settings_root):
+            try:
+                configured = auth.hay_usuarios(engine.settings_root)
+            except auth.UserStoreError as exc:
+                return self.reject(size, 503, str(exc))
+            if parsed.path != "/api/auth" and configured:
                 if not sesion:
                     return self.reject(size, 401, "Inicia sesión para continuar.")
                 if sesion["rol"] != "operador" and parsed.path in self.SOLO_OPERADOR:
@@ -1818,21 +1812,13 @@ class Handler(BaseHTTPRequestHandler):
                 from counting.api import post
                 return post(self, parsed.path, data, ROOT)
             if self.path == "/api/calibration-check":
-                import numpy as np
-                import cv2
+                from live_core import validate_calibration_pairs, calibration_diagnostics
                 pairs = data.get("pairs",[])
-                if not isinstance(pairs,list) or len(pairs)<4 or len(pairs)>30 or any(not isinstance(p,list) or len(p)!=4 for p in pairs):
-                    raise ValueError("Se necesitan entre 4 y 30 pares de referencias.")
-                points=np.asarray(pairs,dtype=float)
-                if not np.isfinite(points).all() or (points[:,:2]<0).any() or (points[:,:2]>1).any():
-                    raise ValueError("Referencias inválidas.")
-                h=calibration(pairs)
-                predicted=cv2.perspectiveTransform(points[:,:2].reshape(-1,1,2),h).reshape(-1,2)
-                spread=float(cv2.contourArea(cv2.convexHull(points[:,:2].astype(np.float32))))
-                if spread<.005:
-                    raise ValueError("Referencias casi alineadas: distribuye los nodos por todo el suelo visible.")
-                from live_core import calibration_diagnostics
-                return self.send_data(200,calibration_diagnostics(pairs))
+                context=data.get('context')
+                validate_calibration_pairs(pairs,context,require_complete=True)
+                # Old geometry-only callers remain supported, but that answer
+                # explicitly does not certify any plan dimensions.
+                return self.send_data(200,{**calibration_diagnostics(pairs),'contextValidated':context is not None})
             if self.path == "/api/camera-preview":
                 import cv2
                 cid=data.get("camera")
@@ -1965,9 +1951,7 @@ class Handler(BaseHTTPRequestHandler):
                 # cambios. Si no es el abierto, se rechazan: son el borrador del
                 # proyecto anterior y sobrescribirían el plano de este.
                 intended = parse_qs(parsed.query).get("project", [None])[0]
-                if intended and engine.project_id and intended != engine.project_id:
-                    raise ValueError("Esos cambios pertenecen a otro proyecto y no se guardaron. Vuelve a abrirlo para editarlo.")
-                engine.configure(data)
+                engine.configure(data, expected_project=intended)
             elif self.path == "/api/start":
                 engine.start(data)
             elif self.path == "/api/settings":
@@ -2013,7 +1997,8 @@ def main():
         # modelo después de que el operador pulsa «Iniciar».
         server.engine.warm_detector_async()
         from replay import recover_interrupted
-        recover_interrupted(server.engine.data_root)
+        recover_interrupted(server.engine.data_root,
+                            on_error=lambda sid: server.engine.record("Histórico inválido", f"{sid}: recuperación interrumpida; archivo conservado."))
         print(f"LAP: http://127.0.0.1:{args.port} — solo equipo local", flush=True)
         server.serve_forever()
     except KeyboardInterrupt:
