@@ -47,6 +47,8 @@ def analytics(value):
 def snapshot(engine):
     with engine.lock:
         state, config = engine.state, engine.config
+        if getattr(engine, "report_identity", None) == (engine.project_id, state.get("session")):
+            config = engine.report_config
         safe = scalars(state, ("session", "status", "mode", "t", "planId", "testRun", "updatedAt", "processingMs"))
         safe["testRun"] = bool(state.get("testRun", config.get("testRun", False)))
         safe["analytics"] = analytics(state.get("analytics"))

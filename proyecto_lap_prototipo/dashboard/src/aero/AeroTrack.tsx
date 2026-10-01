@@ -27,12 +27,13 @@ import ProjectsPanel from './ProjectsPanel';
 import SecurityAlerts from './SecurityAlerts';
 import Login from './Login';
 import BusinessesPanel from './BusinessesPanel';
+import { isCalibrationError } from './calibration';
 
 
 function explainError(msg: string): string {
   if(msg.includes('versión de seguimiento'))return 'No se pudo iniciar el seguimiento: el servidor usa un entorno incompatible. Reinicia AeroTrack con iniciar_sistema.ps1. Cerrar este aviso no inicia el análisis.';
   if (msg.includes('zona de detección es [u, v]')) return `Uno de los puntos de la zona de detección quedó fuera del video (por ejemplo, al marcar justo en el borde de la imagen). Vuelve a "Marcar zona", usa "Deshacer punto" para quitar el último y márcalo de nuevo dentro del video.\n${msg}`;
-  if (msg.includes('Correspondencias inconsistentes')) return `Los puntos de calibración no coinciden bien entre el video y el plano — probablemente están muy juntos o casi en línea recta. Bórralos con "Reiniciar calibración" y vuelve a marcar 6 a 8 puntos repartidos por toda el área visible.\n${msg}`;
+  if (msg.includes('Correspondencias inconsistentes')) return `${msg}\nComprueba que cada referencia corresponda al mismo punto físico del suelo en el video y en el plano.`;
   if (msg.includes('heading fuera de rango')) return `La dirección de la cámara quedó fuera de 0°-360°. Corrígela en "Configurar cámara", campo "Dirección de visión".\n${msg}`;
   if (msg.includes('Calibración degenerada')) return `Los puntos de calibración marcados están alineados o repetidos y no permiten calcular la posición real. Marca puntos que no estén todos sobre la misma línea.\n${msg}`;
   return msg;
@@ -44,7 +45,7 @@ function PanelHeader({number,title,color='blue',children}:{number?:number;title:
 }
 
 function BlockingError({message,onClose,onResolve}:{message:string;onClose:()=>void;onResolve?:()=>void}) {
-  const calibration=message.includes('Correspondencias inconsistentes')||message.includes('Calibración degenerada');
+  const calibration=isCalibrationError(message);
   return <div className="blocking-error-backdrop" role="presentation">
     <section className="blocking-error-dialog" role="alertdialog" aria-modal="true" aria-labelledby="blocking-error-title" aria-describedby="blocking-error-copy">
       <div className="blocking-error-symbol"><Icon name="alert" size={28}/></div>
@@ -134,7 +135,7 @@ export default function AeroTrack() {
       <div className="topbar-user" title={`${session.auth.usuario||'Sin sesión'} · ${session.auth.rol||'Sin rol'}`}><b>{(session.auth.usuario||'A').slice(0,2).toUpperCase()}</b><span><strong>{session.auth.usuario||'Usuario'}</strong><small>{session.auth.rol||'Sin rol'}</small></span></div>
     </header>
     {['setup','cameras','audit','lab'].includes(view)&&<nav className="product-subnav" aria-label="Herramientas del proyecto">{(['setup','lab','audit'] as View[]).map(id=>NAV.find(n=>n.id===id)!).map(n=><button key={n.id} className={view===n.id?'selected':''} onClick={()=>navigate(n.id)}>{n.id==='setup'?'Configurar proyecto':n.label}</button>)}</nav>}
-    <main id="main-content" className="aero-main" key={session.projects.active||'sin-proyecto'}>{['setup','lab','audit'].includes(view)&&<p className="settings-context">{{setup:'Configura únicamente el proyecto abierto: pisos, planos, cámaras, homografía, zonas y reglas.',lab:'Diagnóstico · Verifica P2PNet y la señal antes de monitorear.',audit:'Auditoría · Consulta las operaciones realizadas en el sistema.'}[view as 'setup'|'lab'|'audit']}</p>}
+    <main id="main-content" className="aero-main" key={session.projects.active||'sin-proyecto'}>{['setup','lab','audit'].includes(view)&&<p className="settings-context">{{setup:'Configura únicamente el proyecto abierto: pisos, planos, cámaras, homografía, zonas y reglas.',lab:'Diagnóstico · Comprueba señal y monitoreo híbrido: YOLO principal y densidad P2PNet cuando AVIE la solicita.',audit:'Auditoría · Consulta las operaciones realizadas en el sistema.'}[view as 'setup'|'lab'|'audit']}</p>}
       <Notifications session={session}/>
       {demo&&<div className="notice warning"><Icon name="lab"/><span>SIMULACIÓN · Datos sintéticos para probar las pantallas. No representan mediciones de un aeropuerto.</span></div>}
       {!['commercial','businesses','overview','setup','audit','reports','replay','lab'].includes(view)&&!ready&&<div className="setup-banner"><div><Icon name="settings" size={21}/><span><strong>Prepara el análisis sobre el plano</strong><small>{stages.filter(s=>s.done).length}/{stages.length} etapas preparadas · {stages.filter(s=>!s.done).map(s=>s.title.toLowerCase()).join(', ')} pendientes</small></span></div><button onClick={()=>{const pending=stages.find(s=>!s.done);setStep(Math.max(0,pending?PROJECT_STEPS.indexOf(pending.step):0));navigate('setup');}}>Continuar configuración <Icon name="arrow" size={15}/></button></div>}

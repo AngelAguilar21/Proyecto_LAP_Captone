@@ -1,5 +1,5 @@
 """Resultados reproducibles: video original y observaciones por tiempo de contenido."""
-import json,re,mimetypes
+import json,re,mimetypes,math
 from pathlib import Path
 from datetime import datetime,timezone
 from urllib.parse import parse_qs
@@ -115,7 +115,7 @@ def get(handler,url,root):
  except (ValueError,OSError) as exc:return handler.send_data(400,{'error':str(exc)})
 
 
-def report_snapshot(root, sid, project_id):
+def report_snapshot(root, sid, project_id, *, strict=False):
  """Reconstruye un informe de una sesión guardada, sin reactivar videos."""
  hold_path(directory(root,sid))
  meta=manifest(root,sid)
@@ -127,7 +127,14 @@ def report_snapshot(root, sid, project_id):
  with (directory(root,sid)/'samples.jsonl').open(encoding='utf-8') as source:
   for line in source:
    try:sample=json.loads(line)
-   except ValueError:continue
+   except ValueError:
+    if strict:raise
+    continue
+   if strict and (not isinstance(sample,dict) or type(sample.get('t')) not in (int,float)
+       or not math.isfinite(sample['t']) or sample['t']<0 or not isinstance(sample.get('cameras'),list)
+       or any(not isinstance(camera,dict) or not isinstance(camera.get('people'),list)
+              or any(not isinstance(person,dict) for person in camera['people']) for camera in sample['cameras'])):
+    raise ValueError('La sesión guardada contiene muestras incompletas o inválidas.')
    last=sample
    count=sum(len(c.get('people',[])) for c in sample.get('cameras',[]))
    series.append({'t':sample['t'],'count':count})

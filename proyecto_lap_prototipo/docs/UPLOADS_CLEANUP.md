@@ -187,4 +187,5 @@ postergar retención en almacenes grandes. Un sistema ocupado prefiere conservar
 Tests usan datos sintéticos y TemporaryDirectory. Hard links se prueban realmente;
 symlinks/reparse/junctions se simulan para no exigir privilegios de Windows. No hay
 SMTP real, cámaras, RTSP, cleanup de datos del usuario ni dependencias nuevas.
-Restore, UI extensa e integración final permanecen fuera de esta fase.
+Restore y UI extensa permanecen fuera de esta fase. El cierre de integración
+posterior se documenta en [INTEGRACION_AUTOMATIZACIONES.md](INTEGRACION_AUTOMATIZACIONES.md).

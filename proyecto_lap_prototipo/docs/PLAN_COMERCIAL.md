@@ -1,6 +1,11 @@
 # Negocios y análisis comercial
 
-Rama: `comercial-negocios-ventas`. Todo se prueba en **Proyecto principal**.
+Contrato comercial conservado en la candidata
+`jose/automations-main-integration-v2` (revisión Fase 8, base `0b611e0`).
+Las sesiones y ventas de ejemplo documentadas aquí son antecedentes reportados
+de `comercial-negocios-ventas`; no son fixtures garantizados de un clon ni permiso
+para usar el Proyecto principal del operador. Nuevos ensayos requieren un
+proyecto y datos de prueba aislados.
 
 ## A. Negocios y accesos
 
@@ -34,6 +39,9 @@ Se reportan salidas emparejadas, sin emparejar, cobertura y objetos nuevos. La g
 
 ## Prueba guardada y cómo verla
 
+Referencia del entorno del ensayo original; no ejecutar sobre datos actuales
+para reproducirla. La presencia de esos archivos/sesiones no se verificó en Fase 8.
+
 1. Reinicia con `iniciar_sistema.cmd` desde la raíz, si el servidor estaba abierto antes de estos cambios.
 2. Entra como operador y mantén **Proyecto principal**.
 3. Abre **Ventas y análisis → Ver prueba guardada**. Selecciona las pestañas para ver ventas, proyección, incidente y señal experimental.
@@ -44,7 +52,11 @@ CSV y resumen: `data/commercial-tests/ventas_prueba_comercial.csv` y `validacion
 
 ## Verificación
 
-131 pruebas automatizadas pasan, incluidos vínculos de negocios, importación atómica, duplicados, separación de orígenes, proyección con historial insuficiente, fechas de grabación, comparación horaria y emparejamientos ambiguos/caducados. TypeScript y compilación de producción pasan. Se comprobó la selección de negocios y las pestañas comerciales en navegador. YOLO11n cargó y procesó un primer frame real de una cámara; esto comprueba ejecución, no precisión de la señal de compra.
+El ensayo original reportó 131 pruebas aprobadas, TypeScript, build y revisión
+comercial en navegador, además de un frame de cámara con YOLO. Es **RESULTADO
+HISTÓRICO REPORTADO**, no ejecución LIVE de Fase 8 ni total actual de la suite.
+La evidencia de la candidata está en [FASE8_VALIDACION.md](FASE8_VALIDACION.md).
+Ejecutar un modelo no demuestra precisión de la señal comercial.
 
 Desde CMD, para repetir las pruebas:
 
@@ -52,14 +64,20 @@ Desde CMD, para repetir las pruebas:
 cd proyecto_lap_prototipo
 ..\.venv\Scripts\python.exe -m unittest discover -s tests -p "test_*.py"
 cd dashboard
-npx tsc --noEmit
+.\node_modules\.bin\tsc.cmd --noEmit
 npm run build
 ```
 
 
 ## Pruebas con tus videos (27/09/2026)
 
-En **Vista general**, activa **Prueba con videos** y pulsa **Analizar videos de prueba**. El selector Cámara permite analizar una sola; Todas las cámaras procesa las activas. Esta opción permite el plano ilustrativo sin presentarlo como medición real del LAP. Para asociar IDs entre vistas se necesitan geometría coherente, desfases correctos y sincronización declarada. El detector operativo de esta versión de main es P2PNet con tracking de puntos de cabeza; no es el antiguo seguimiento corporal YOLO. La señal opcional de objetos sí carga YOLO11n y ByteTrack.
+El modo de videos de prueba permite geometría ilustrativa sin presentarla como
+medición real del LAP; no aísla datos ni filesystem. Para asociar IDs entre vistas
+se necesitan geometría coherente, desfases correctos y sincronización declarada.
+En la candidata actual el monitoreo integrado solicita `hybrid`: YOLO principal
+con `ByteTrackPuntos`, más P2PNet adaptativo para densidad. El backend también
+admite P2PNet directo, que es un contrato distinto. La señal opcional de objetos
+añade su propia inferencia YOLO. Véase [GUIA_SEGUIMIENTO.md](GUIA_SEGUIMIENTO.md).
 
 Sesión guardada **6aa427dd**, dos videos originales CAM-1/CAM-2, P2PNet real, análisis de cruces y ocupación, sin error. Disponible en **Videos y resultados**. Resumen local en `data/commercial-tests/videos_actuales.json`. La reproducción de prueba dura aproximadamente 32 segundos de fuente analizada; no se validó manualmente la precisión de sus conteos ni la reidentificación.
 
@@ -89,7 +107,15 @@ En **Reportes**, el selector **Monitoreo guardado** determina qué ejecución se
 
 **Ventas y análisis** agrega tráfico por negocio, fecha y hora; las ventas vienen del CSV. El enlace del reporte abre la fecha y hora correspondientes. Para videos reales debe declararse la fecha de grabación; para videos de prueba se usa la fecha de ejecución y el origen Datos de prueba. Las ventas de prueba no se presentan como ventas reales.
 
-Las grabaciones se procesan con tiempo de fuente independiente del coste de inferencia, a intervalos de 0.2 segundos. Esto conserva las muestras necesarias para cruces, promedios y alertas, aunque procesar en CPU tarde más que la duración del video. En vivo se mantiene el reloj real.
+Las grabaciones usan una rejilla de muestras de contenido cada 0.2 s independiente
+del coste de inferencia; no procesan cada frame ni garantizan capturar todo cruce.
+LIVE usa el reloj monotónico local del ciclo y frames recientes, con descarte
+de anteriores; no demuestra sincronización de captura entre cámaras. Definiciones
+y protocolo no ejecutado en [PRUEBA_LIVE.md](PRUEBA_LIVE.md).
+
+Las observaciones y recorridos pueden quedar persistidos, además de agregados
+comerciales. La retención parcial de replays/uploads no elimina todas las copias:
+[INVENTARIO_PERSISTENCIA.md](INVENTARIO_PERSISTENCIA.md).
 
 La cámara 1 tiene el acceso de Tanta To Go vinculado. La cámara 2 no tiene línea de conteo. La cámara 3 tiene una línea sin negocio asociado. No se inventa un vínculo comercial a partir de la imagen. Para vincularlo: Negocios y accesos → seleccionar tienda → Cámara del acceso → marcar su línea → Guardar negocio. También puede vincularse al editar la línea en la configuración de cámara.
 

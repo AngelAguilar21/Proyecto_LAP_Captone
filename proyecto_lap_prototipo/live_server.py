@@ -611,6 +611,8 @@ class Engine:
 
     def restore_last_result(self):
         """Carga el último análisis terminado del proyecto sin reactivar fuentes."""
+        self.report_config = None
+        self.report_identity = None
         hold_path(self.data_root / "data" / "replays")
         if self.config_error:
             return
@@ -666,6 +668,19 @@ class Engine:
             identityDeleted=True,
             error=None,
         )
+        # The scheduler requires the same saved evidence as the session report.
+        # Keep its configuration separate from today's editable project and do
+        # not make incomplete or unscoped legacy results reportable by inference.
+        from replay import report_snapshot
+        try:
+            report_config, report_state, _ = report_snapshot(
+                self.data_root, last['session'], self.project_id, strict=True)
+        except (OSError, ValueError, KeyError, TypeError, OverflowError):
+            return
+        self.state.update({key: copy.deepcopy(report_state[key])
+                           for key in ('totals', 'series', 'testRun')})
+        self.report_config = report_config
+        self.report_identity = (self.project_id, last['session'])
 
     def open_project(self, pid):
         with self.lock:
@@ -839,12 +854,12 @@ class Engine:
             mode = request.get("detector", "hybrid")
             test_run = request.get('testRun') is True
             if mode not in ("hybrid", "yolo", "p2pnet", "demo"):
-                raise ValueError("AeroTrack opera únicamente con P2PNet.")
+                raise ValueError("Detector no soportado. Usa hybrid, yolo, p2pnet o demo.")
             requested_size = int(request.get("inferenceSize") or (256 if mode == "p2pnet" else 640))
             if mode in ("hybrid", "yolo") and requested_size == 256:
                 requested_size = 640
             if mode in ("hybrid", "yolo") and requested_size not in (320, 480, 640, 960):
-                raise ValueError("El tamaÃ±o YOLO debe ser 320, 480, 640 o 960 pÃ­xeles.")
+                raise ValueError("El tamaño YOLO debe ser 320, 480, 640 o 960 píxeles.")
             if mode == "p2pnet" and requested_size not in (128, 256, 384, 512):
                 raise ValueError("El tamaño de inferencia debe ser 128, 256, 384 o 512 píxeles.")
             if not self.config["cameras"]:
@@ -974,27 +989,18 @@ class Engine:
                 else:
                     self.detector_cache.lado_max = lado_max
                 return self.detector_cache
-        raise ValueError("AeroTrack opera únicamente con P2PNet.")
-
-        if mode in ("hybrid", "yolo"):
-            key = ("yolo", int(request.get("inferenceSize") or 640))
-            with self.detector_lock:
-                if key not in self.detector_caches:
-                    from following.detector import YoloPersonDetector
-                    self.detector_caches[key] = YoloPersonDetector(ROOT / "models" / "yolo11n.pt", imgsz=key[1])
-                return self.detector_caches[key]
-        raise ValueError("Detector no soportado.")
+        raise ValueError("Detector no soportado. Usa hybrid, yolo o p2pnet; demo no carga un modelo.")
 
     def warm_detector_async(self, mode="yolo"):
-        """Prepara P2PNet después de comprobar una fuente, antes de pulsar Probar."""
+        """Anticipa la carga del detector solicitado (YOLO por defecto)."""
         if self.closing or (mode == "p2pnet" and self.detector_cache_key == ("p2pnet",)) or (mode != "p2pnet" and ("yolo", 640) in self.detector_caches) or (self.detector_warmup and self.detector_warmup.is_alive()):
             return
         def warm():
             try:
                 self.load_detector(mode, {"inferenceSize": 256 if mode == "p2pnet" else 640})
             except Exception as exc:
-                self.record("Preparación de P2PNet", f"No se pudo anticipar la carga: {exc}")
-        self.detector_warmup = self.resources.start_thread(warm, name="p2pnet-warmup")
+                self.record(f"Preparación de {mode.upper()}", f"No se pudo anticipar la carga: {exc}")
+        self.detector_warmup = self.resources.start_thread(warm, name="detector-warmup")
 
     @managed_operation
     def run(self, config, request):
@@ -1626,7 +1632,8 @@ class Handler(BaseHTTPRequestHandler):
             query=parse_qs(url.query)
             try:
                 with engine.lock:
-                    config=copy.deepcopy(engine.config)
+                    config=copy.deepcopy(engine.report_config if engine.report_identity ==
+                                         (engine.project_id, engine.state.get("session")) else engine.config)
                     snapshot=engine.snapshot()
                 if query.get('session'):
                     from replay import report_snapshot
@@ -2001,7 +2008,7 @@ def main():
                          "escalation": AlertEscalation(server.engine),
                          "cleanup": RetentionCleanup(server.engine, service.store)}
         server.engine.automation.start()
-        # La interfaz y la configuración pueden abrirse mientras P2PNet prepara sus
+        # La interfaz y la configuración pueden abrirse mientras YOLO prepara sus
         # pesos en segundo plano. Así el primer monitoreo no paga toda la carga del
         # modelo después de que el operador pulsa «Iniciar».
         server.engine.warm_detector_async()

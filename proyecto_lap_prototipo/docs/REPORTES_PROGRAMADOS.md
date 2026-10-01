@@ -28,8 +28,8 @@ hora devuelve `not_due`; desde la hora configurada intenta la fecha Lima actual.
 No recupera días perdidos ni activa otros proyectos en segundo plano.
 
 Este documento describe cómo funciona la opción; no habilita ningún servicio.
-Los campos históricos de configuración de otras tareas no significan que esas
-tareas estén integradas en esta fase.
+La vista vigente de todas las tareas y sus consumidores está en
+[INTEGRACION_AUTOMATIZACIONES.md](INTEGRACION_AUTOMATIZACIONES.md).
 
 ## Datos y elegibilidad
 
@@ -50,6 +50,21 @@ Si faltan datos, registra `no_data` y permite otro intento después. Una ejecuci
 sin proyecto administrado deja un registro de auditoría sin inventar un scope.
 El timestamp `generated` corresponde al tick recibido. Una sesión anterior que
 siga en el snapshot puede ser elegible: no se exige que haya empezado ese día.
+
+Desde el cierre de integración Fase 8, reiniciar Engine o volver a abrir un
+proyecto también reconstruye `series`, `totals` y `testRun` desde la última
+sesión guardada con evidencia válida. Se reutiliza `replay.report_snapshot`
+con lectura estricta y se asocia la configuración histórica a proyecto/sesión,
+sin sobrescribir la configuración editable ni restaurar personas en vivo.
+Los snapshots de automatización mantienen su whitelist agregada. El reporte
+manual de ese resultado usa la misma configuración histórica.
+
+Muestras ausentes, incompletas o con JSON inválido no se convierten en un reporte
+parcial exitoso durante la restauración. Tampoco se adopta automáticamente una
+sesión legacy sin proyecto conocido. El resumen UI puede estar disponible y el
+reporte seguir en `no_data`; no se inventan KPI faltantes. Esta lectura recorre
+el JSONL al abrir el proyecto: un historial largo puede aumentar el tiempo de
+arranque/apertura. No es un rollup diario ni una restauración de backup.
 
 La etiqueta moderna `VIDEOS DE PRUEBA - PLANO ILUSTRATIVO` se conserva para
 `testRun`; el modo demo usa `SIMULACIÓN SINTÉTICA`. Se exportan agregados, nunca

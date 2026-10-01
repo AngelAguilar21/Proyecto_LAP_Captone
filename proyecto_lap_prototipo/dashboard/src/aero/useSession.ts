@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { EMPTY_STATE, isActive } from './types';
-import type { Config, ProjectListing, SessionState } from './types';
+import type { Camera, Config, ProjectListing, SessionState } from './types';
+import { ApiError, CalibrationValidator, calibrationKey, currentCalibration } from './calibration';
+import type { CalibrationChecks } from './calibration';
+import { ConfigSaveQueue, saveWithFeedback } from './sessionSave';
 
 type AuthState = { configurado: boolean; usuario: string | null; rol: string | null; usuarios: { usuario: string; rol: string }[]; cargado: boolean };
 
@@ -16,6 +19,11 @@ export function useSession() {
   const sessionToken = useRef<string>(localStorage.getItem('aero.session') || '');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [calibrationChecks, setCalibrationChecks] = useState<CalibrationChecks>({});
+  const pendingSaves = useRef(0);
+  const saveSequence = useRef(0);
+  const saveQueue = useRef(new ConfigSaveQueue());
+  const projectGeneration = useRef(0);
   const token = useRef('');
   const saved = useRef('');
   const rejected = useRef('');
@@ -48,6 +56,7 @@ export function useSession() {
           // servidor abrió otro, ese borrador pertenece al anterior y mezclarlo
           // sobrescribiría su plano.
           const switched = projectId.current !== data.projectId;
+          if (switched) projectGeneration.current += 1;
           projectId.current = data.projectId ?? null;
           if (switched || !current.current || isActive(next.status) || JSON.stringify(current.current) === saved.current) setConfig(data.config);
           else setNotice('Otra ventana actualizó la configuración. Tu borrador se conserva; guárdalo o recarga para usar los cambios del servidor.');
@@ -69,9 +78,42 @@ export function useSession() {
   const post = useCallback(async (path: string, body: unknown, binary = false) => {
     const response = await fetch(`/api/${path}`, { method: 'POST', headers: { 'Content-Type': binary ? 'application/octet-stream' : 'application/json', 'X-LAP-Token': token.current, 'X-LAP-Session': sessionToken.current }, body: binary ? body as Blob : JSON.stringify(body), signal: AbortSignal.timeout(binary ? 180000 : 15000) });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'No se pudo completar la operación');
+    if (!response.ok) throw new ApiError(data.error || 'No se pudo completar la operación', response.status);
     return data;
   }, []);
+  const calibrationValidator = useRef<CalibrationValidator>();
+  if (!calibrationValidator.current) calibrationValidator.current = new CalibrationValidator(pairs => post('calibration-check', { pairs }));
+  const calibrationScope = { projectId: projectId.current, serverInstance: instance.current };
+  const canValidateCalibration = connected && auth.cargado && auth.rol === 'operador';
+  const calibrationInputs = JSON.stringify((config?.cameras || []).map(camera => calibrationKey(camera, calibrationScope)));
+  useEffect(() => {
+    const validator = calibrationValidator.current!;
+    if (!canValidateCalibration) {
+      validator.clear();
+      setCalibrationChecks({});
+      return;
+    }
+    void validator.validate(current.current?.cameras || [],
+      { projectId: projectId.current, serverInstance: instance.current }, setCalibrationChecks);
+    return () => validator.cancel();
+  }, [calibrationInputs, canValidateCalibration]);
+
+  const calibrationFor = (camera: Camera) => canValidateCalibration
+    ? currentCalibration(camera, calibrationScope, calibrationChecks) : undefined;
+  const validateCalibration = async (cameraId: string) => {
+    if (!canValidateCalibration) throw new Error('Conecta el servidor e inicia sesión como operador para comprobar la calibración.');
+    const cameras = current.current?.cameras || [];
+    const camera = cameras.find(value => value.id === cameraId);
+    if (!camera || camera.pairs.length < 4) throw new Error('Se necesitan al menos cuatro referencias.');
+    const scope = { projectId: projectId.current, serverInstance: instance.current };
+    const checks = await calibrationValidator.current!.validate(cameras, scope, setCalibrationChecks, cameraId);
+    const latest = current.current?.cameras.find(value => value.id === cameraId);
+    const check = latest && checks && currentCalibration(latest,
+      { projectId: projectId.current, serverInstance: instance.current }, checks);
+    if (!check) throw new Error('La configuración cambió durante la validación. Comprueba las referencias actuales.');
+    if (check.status !== 'valid') throw new Error(check.message || 'No se pudo comprobar la calibración.');
+    return check.diagnostics!;
+  };
   const action = useCallback(async (operation: () => Promise<void>) => {
     setBusy(true); setError(''); setNotice('');
     try { await operation(); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
@@ -81,11 +123,25 @@ export function useSession() {
     const before = current.current;
     const value = draft || current.current;
     if (!value) throw new Error('Todavía no hay configuración');
-    await post(projectId.current ? `config?project=${encodeURIComponent(projectId.current)}` : 'config', value);
-    saved.current = JSON.stringify(value);
-    rejected.current = '';
-    setSaveError('');
-    setConfig(latest => latest === before ? value : latest);
+    const owner = projectId.current;
+    const generation = projectGeneration.current;
+    const sequence = ++saveSequence.current;
+    const payload = JSON.stringify(value);
+    const ownsProject = () => projectId.current === owner && projectGeneration.current === generation && !switching.current;
+    const ownsFeedback = () => ownsProject() && saveSequence.current === sequence;
+    await saveWithFeedback(() => saveQueue.current.enqueue(value, ownsProject,
+      snapshot => post(owner ? `config?project=${encodeURIComponent(owner)}` : 'config', snapshot)), {
+      started: () => { pendingSaves.current += 1; setSaving(true); if (ownsFeedback()) setSaveError(''); },
+      saved: () => {
+        if (!ownsFeedback()) return;
+        saved.current = payload;
+        rejected.current = '';
+        setSaveError('');
+        setConfig(latest => latest === before ? JSON.parse(payload) as Config : latest);
+      },
+      failed: message => { if (ownsFeedback()) { rejected.current = payload; setSaveError(message); } },
+      finished: () => { pendingSaves.current -= 1; setSaving(pendingSaves.current > 0); },
+    });
   }, [post]);
 
   // Autoguardado: cada cambio llega al proyecto activo sin pedir confirmación.
@@ -99,17 +155,16 @@ export function useSession() {
       // Entre programar el guardado y ejecutarlo se puede haber abierto otro
       // proyecto: entonces este borrador ya no es de nadie y se descarta.
       if (switching.current || projectId.current !== owner) return;
-      setSaving(true);
-      post(owner ? `config?project=${encodeURIComponent(owner)}` : 'config', config)
-        .then(() => { saved.current = payload; rejected.current = ''; setSaveError(''); })
-        .catch(e => { rejected.current = payload; setSaveError(e instanceof Error ? e.message : String(e)); })
-        .finally(() => setSaving(false));
+      void save(config).catch(() => { /* save already preserves the rejected draft and concrete cause. */ });
     }, 900);
     return () => clearTimeout(timer);
-  }, [config, dirty, busy, saving, state.status, post]);
+  }, [config, dirty, busy, saving, state.status, save]);
 
   const projectAction = useCallback(async (operation: string, payload: Record<string, unknown> = {}) => {
     switching.current = true;
+    // Invalidate outstanding ownership even if the user opens the same project
+    // again before an older queued request gets its turn.
+    if (operation !== 'rename') projectGeneration.current += 1;
     try {
       const listing: ProjectListing = await post('projects', { action: operation, ...payload });
       setProjects(listing);
@@ -162,7 +217,7 @@ export function useSession() {
   }, [post, refreshAuth]);
 
   return { config, setConfig, state, connected, busy, error, setError, notice, setNotice, post, action, save, dirty,
-    projects, projectAction, saving, saveError, auth, login, logout, userAction, refreshAuth };
+    projects, projectAction, saving, saveError, calibrationFor, validateCalibration, auth, login, logout, userAction, refreshAuth };
 }
 export type Session = ReturnType<typeof useSession>;
 

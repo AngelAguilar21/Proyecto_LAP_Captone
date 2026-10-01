@@ -11,9 +11,10 @@ import time
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path('proyecto_lap_prototipo').resolve()))
-sys.path.insert(0, str(Path('proyecto_lap_prototipo/src').resolve()))
-sys.path.insert(0, str(Path('proyecto_lap_prototipo/external/P2PNet').resolve()))
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / 'src'))
+sys.path.insert(0, str(ROOT / 'external' / 'P2PNet'))
 
 import live_server  # noqa: E402
 
@@ -54,7 +55,7 @@ class DetectorCacheTests(unittest.TestCase):
     def test_p2pnet_de_verdad_detecta_igual_con_el_detector_reutilizado(self):
         # No basta con que sea el mismo objeto: tiene que seguir funcionando.
         import cv2
-        frame = cv2.imread(str(Path('external/P2PNet/vis/demo1.jpg')))
+        frame = cv2.imread(str(ROOT / 'external/P2PNet/vis/demo1.jpg'))
         self.assertIsNotNone(frame)
 
         self.engine.load_detector("p2pnet", {})  # primera carga, se descarta
@@ -64,7 +65,7 @@ class DetectorCacheTests(unittest.TestCase):
 
     def test_p2pnet_procesa_dos_camaras_en_un_solo_lote(self):
         import cv2
-        frame = cv2.imread(str(Path('external/P2PNet/vis/demo1.jpg')))
+        frame = cv2.imread(str(ROOT / 'external/P2PNet/vis/demo1.jpg'))
         detector = self.engine.load_detector("p2pnet", {"inferenceSize": 128})
         batches = detector.detectar_lote([frame, frame])
         self.assertEqual(len(batches), 2)

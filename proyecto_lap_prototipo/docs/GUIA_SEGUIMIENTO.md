@@ -1,60 +1,97 @@
-# Seguimiento de personas
+# Seguimiento de personas: contrato de la candidata
 
-## Uso desde AeroTrack
+Revisión Fase 8 sobre `jose/automations-main-integration-v2`, base `0b611e0`.
+La implementación es la fuente para describir los modos; los resultados de
+precisión requieren mediciones independientes.
 
-1. Iniciar el sistema con `iniciar_sistema.ps1` desde la raíz (levanta ambos módulos en el entorno correcto).
-2. En **Configuración → Cámaras**, cargar un video o configurar una URL RTSP/IP o cámara USB. Guardar.
-3. Ir a **Seguimiento → Pruebas de seguimiento**, seleccionar la cámara e **Iniciar seguimiento**. El modelo predeterminado ya está instalado; no escribir una ruta de pesos.
-4. Revisar cajas, IDs temporales y trazos recientes. Pausar para inspeccionar. El tiempo mostrado corresponde al contenido del video.
-5. Para el plano y la asociación entre cámaras: usar cámaras fijas, definir área útil, calibrar al menos cuatro puntos de suelo bien distribuidos por cámara, declarar cámaras vecinas y verificar sincronización/desfases sobre el mismo contenido. Iniciar todas las cámaras desde Seguimiento.
-6. Dibujar zonas sobre el plano (por ejemplo, interior de un comercio). **Flujo y ocupación** muestra entradas y salidas confirmadas en dos observaciones; **Reportes → Seguimiento → Entradas y salidas** exporta agregados.
+## Uso y modelos
 
-Una persona que ya aparece dentro no se registra como entrada. Una pérdida de detección no se registra como salida. Una desaparición superior a un segundo reinicia la evidencia del cruce. Los cruces son eventos, no visitantes únicos. Los IDs pueden fragmentarse o confundirse; medir la precisión con anotaciones antes de interpretar resultados comerciales.
+Configura fuentes autorizadas, guarda el proyecto y delimita zona útil. Para
+medir sobre el plano, coloca al menos cuatro correspondencias válidas del mismo
+suelo, comprueba geometría y define vecindad/desfases. Tener suficientes puntos
+no demuestra que la calibración sea válida. La asociación entre cámaras necesita
+calibración y sincronización fiables.
 
-## Instalación en otra laptop
+| Ruta | Solicitud y comportamiento efectivo |
+|---|---|
+| Obtener imagen / preview | Lee la fuente para mostrar imagen; no es una medición de precisión del detector |
+| Prueba de cámara del asistente | `SetupFlow.startCameraTest()` solicita `yolo`, `inferenceSize:640`, `testRun:true` |
+| Monitoreo integrado | `MonitoringWorkspace` solicita `hybrid`, `combined:true` y tamaño seleccionado; YOLO es primario |
+| `yolo` explícito backend | Detector primario YOLO para seguimiento; sin sampler adaptativo P2PNet |
+| `hybrid` | YOLO más densidad P2PNet asíncrona cuando AVIE la solicita; no suma conteos ni reemplaza IDs |
+| `p2pnet` explícito backend | Seguimiento de puntos de cabeza con corrección geométrica para suelo; requiere altura válida al proyectar |
+| `demo` | Simulación; no prueba ejecución ni precisión de un modelo |
 
-Desde la raíz, con el servidor detenido y el entorno Python creado:
+La pantalla principal remapea una solicitud `p2pnet` a `hybrid`; no existe un
+selector global de modelos que exponga necesariamente todos los modos backend.
+No hay fallback de YOLO faltante a P2PNet. Un fallo de carga debe conservarse
+como error; un fallo de densidad puede aparecer como `dense.status=error` mientras
+el seguimiento primario continúa. `testRun` flexibiliza ciertas precondiciones
+de geometría; no aísla filesystem, datos ni persistencia.
 
-```powershell
-.venv/Scripts/python.exe -m pip install -r proyecto_lap_prototipo/requirements-tracking.txt
-.venv/Scripts/python.exe proyecto_lap_prototipo/setup_tracking.py --download
-```
-
-No instalar simultáneamente `opencv-python-headless` y `opencv-python`: comparten `cv2`. Si el entorno anterior usa headless, desinstalarlo antes de instalar los requisitos. El script descarga YOLO11n oficial, comprueba inferencia CPU y guarda origen y SHA-256 en `models/yolo11n.json`. Los pesos `.pt` no se suben a Git.
-
-## Componentes
+## Componentes actuales
 
 | Código | Responsabilidad |
 |---|---|
-| `src/counting/` | Conteo P2PNet, mapas y episodios de multitudes |
-| `src/following/detector.py` | YOLO11n preentrenado COCO: personas, CPU, imagen 960 px |
-| `src/following/tracker.py` | ByteTrack oficial: Kalman, asociación IoU en dos etapas, estado por cámara |
-| `src/following/appearance.py` | Histograma HSV del torso como apoyo entre cámaras |
-| `src/following/source.py` | Recepción IP de imagen reciente con el lector compartido de conteo |
-| `src/following/flow.py` | Cruces de zonas con confirmación temporal |
-| `src/live_core.py` | Homografía, asociación global por espacio/tiempo/vecindad/apariencia, rechazo de ambigüedades y ocupación |
-| `src/live_metrics.py`, `src/live_reports.py` | Agregación y exportación |
-| `live_server.py` | Orquesta fuentes, modelos, algoritmos y API de ambos módulos |
-| `dashboard/src/aero/CameraPanel.tsx` | Selección, controles, imagen y tiempo de fuente |
-| `src/tracking.py`, `src/cross_camera.py` | Implementación histórica por puntos/offline; YOLO web no usa ese tracker |
+| `src/following/detector.py` | YOLO11n COCO, personas, cajas y centro inferior como punto de apoyo |
+| `src/tracking.py:ByteTrackPuntos` | Tracker empleado por `Engine.run()` para YOLO y P2PNet; instancia por cámara |
+| `src/following/appearance.py` | Firma de color HSV y Lab en dos franjas del cuerpo |
+| `src/live_core.py:IdentityStore` | Asociación global estimada por posición, tiempo, vecindad, apariencia y rechazo de ambigüedad |
+| `src/following/adaptive.py` | AVIE y sampler asíncrono de densidad P2PNet |
+| `src/following/source.py`, `src/counting/source.py` | Recepción de frame reciente y reconexión de fuentes LIVE |
+| `src/following/combined.py`, `line_counter.py`, `flow.py` | Ocupación, episodios, cruces y flujo |
+| `src/counting/` | Módulo independiente de conteo P2PNet, sin IDs de personas |
+| `src/identity_memory.py`, `src/replay.py` | Persistencia de observaciones y reproducción |
+| `src/live_metrics.py`, `src/live_reports.py` | Agregados y exportación |
 
-Flujo: fuente → YOLO → filtro de área útil → ByteTrack por cámara → pies/homografía → asociación global → ocupación y cruces → video/plano/reportes. No se suman resultados P2PNet y YOLO. En CPU se ejecuta un módulo a la vez.
+El tracker web actual no es `src/following/tracker.py` ni una llamada a
+`YOLO.track()`. Engine construye `ByteTrackPuntos` con umbral alto `.6` y
+`max_frames_perdido=45`; el umbral bajo de su constructor es `.1`. El detector
+YOLO filtra a `.25` por defecto, de modo que no entrega detecciones de `.1` a
+`.25` al tracker. Los 45 corresponden a actualizaciones perdidas, no a una
+garantía fija de 1.8 segundos: el muestreo efectivo importa.
 
-## Modelos y límites
+## Muestreo, dispositivo y límites
 
-YOLO es un modelo existente; ByteTrack es un algoritmo que no requiere entrenamiento. No necesitan dataset para iniciar. UCF-QNRF sirve para conteo de cabezas, pero no aporta identidades temporales para evaluar seguimiento. Anotar cajas e IDs en fragmentos de sus videos y revisar precisión de detección, cambios de ID, IDF1/HOTA y errores de cruces.
+Archivos: muestras de contenido cada `.2` segundos, independientemente de lo
+que tarde procesarlas; no se infiere cada frame. LIVE: recepción continua del
+frame reciente, con descarte de anteriores. El tiempo de seguimiento es el
+reloj monotónico local del ciclo, no timestamp autenticado de captura.
 
-Ultralytics 8.3.203 fijado y YOLO11n. ByteTrack: umbral alto 0.25, bajo 0.1, creación de ID 0.35, coste de asociación 0.8, retención 3 s a 5 muestras/s. Base funcional, todavía no optimizada con anotaciones LAP. Las grabaciones pueden tardar más que su duración real en CPU.
+Los requisitos fijan wheels PyTorch CPU. La revisión sintética observó CPU en
+ambos detectores. Una NVIDIA instalada no demuestra uso GPU; CUDA y MPS quedan
+pendientes de perfiles validados. Véanse [INSTALACION.md](../../INSTALACION.md)
+y [PRUEBA_LIVE.md](PRUEBA_LIVE.md) para entorno y significado de métricas.
 
-La apariencia es un histograma, **no ReID neuronal**. La continuidad entre cámaras es estimada y requiere calibración/sincronización fiables. No resuelve de manera fiable huecos grandes sin cobertura o ropa idéntica. Los videos grabados caminando permiten probar detección, pero una homografía fija y ByteTrack sin compensación de movimiento no son adecuados para medir flujo con una cámara móvil.
+AVIE entra en estado denso tras tres actualizaciones con evidencia de densidad
+según cantidad, solapamiento, proporción de tracks o presupuesto de inferencia.
+El sampler conserva a lo sumo una pendiente por cámara y reemplaza anteriores.
+No hay intervalo `denseInterval` efectivo: la validación elimina ese campo
+legacy y `denseCounting`. Cada resultado especializado conserva su propio
+instante y puede estar retrasado respecto al frame actual.
 
-Con LAP deben acordar acceso RTSP/VMS o entrega de grabaciones y marcas de tiempo; muchas cámaras requieren dimensionar servidor/GPU, red y permisos. La laptop no garantiza procesar todas las cámaras del aeropuerto. Las fuentes IP usan hora de recepción local: por sí sola no verifica sincronización del contenido.
+El módulo de conteo independiente y el tracking no se inician simultáneamente;
+el modo híbrido sí puede ejecutar su densidad P2PNet mientras sigue YOLO. La
+capacidad y precisión multicámara no se deducen del límite de cámaras configurables.
 
-Los IDs/recorridos se eliminan al terminar; los agregados de seguimiento permanecen en memoria hasta otra sesión o reinicio. Exportar antes de reiniciar. El video del operador no está difuminado: IDs anónimos no equivalen a anonimización de la imagen.
+La apariencia es un histograma, no Re-ID neuronal ni reconocimiento facial.
+Los IDs se reinician por sesión; ropa similar, oclusión, cámara móvil o mala
+calibración pueden fragmentar o confundir trayectorias. Se requieren anotaciones
+para medir detecciones, cambios de ID, cruces y error espacial.
 
-## Fuentes
+## Persistencia
 
-- https://docs.ultralytics.com/models/yolo11/
-- https://github.com/ultralytics/ultralytics/tree/v8.3.203/ultralytics/trackers
-- ByteTrack, ECCV 2022: https://arxiv.org/abs/2110.06864
-- Licencia del código/modelos Ultralytics: AGPL-3.0 o Enterprise; revisar https://www.ultralytics.com/license al definir distribución comercial.
+Finalizar limpia el estado activo, pero **no elimina todos los IDs/recorridos
+persistidos**. IdentityMemory conserva muestras individuales en SQLite; replays
+conservan posiciones, IDs, historia y agregados incluso de fuentes LIVE. El video
+remoto no se graba automáticamente; los uploads sí conservan videos originales.
+La imagen del operador no está difuminada. No se declara anonimización ni
+cumplimiento de privacidad: véase [INVENTARIO_PERSISTENCIA.md](INVENTARIO_PERSISTENCIA.md).
+
+## Referencias de los algoritmos
+
+- [YOLO11](https://docs.ultralytics.com/models/yolo11/).
+- [ByteTrack, ECCV 2022](https://arxiv.org/abs/2110.06864).
+
+Estas referencias no sustituyen la descripción del tracker realmente conectado
+en esta versión ni una evaluación propia con el dominio aeroportuario.

@@ -1,61 +1,120 @@
-# Ejecutar AeroTrack desde cero
+# Ejecutar la versión candidata de AeroTrack
 
-Requisitos: Windows de 64 bits, Git, Python 3.12 de 64 bits con el lanzador `py`, Node.js 22 LTS con npm, conexión a Internet y varios GB libres. No se requiere GPU. La instalación descarga dependencias y pesos; la velocidad de análisis depende del equipo.
+Esta guía describe la rama de desarrollo `jose/automations-main-integration-v2`,
+con base de revisión Fase 8 en `0b611e0`. No es una versión declarada de producción
+ni una afirmación de que estos cambios estén integrados en `main`.
 
-Puedes usar PowerShell o CMD. Los archivos `.ps1` son scripts de PowerShell; si los escribes directamente en una consola que los tenga asociados al Bloc de notas, Windows los abrirá como texto. Los archivos `.cmd` evitan ese problema.
+## Plataforma y preparación
 
-## Primera instalación
+La plataforma documentada es Windows de 64 bits con Git, Python 3.12 AMD64 y su
+lanzador `py`, Node.js con `npm`, acceso a Internet para preparar dependencias y
+espacio para entorno, modelos, interfaz y datos. Python y Node deben instalarse
+previamente: `preparar_sistema.ps1` comprueba que existan; no instala sus runtimes.
 
-Clona el repositorio con Git y entra a la carpeta:
+Entorno observado en la revisión Fase 8: Windows 11 build 26200 AMD64,
+Python 3.12.10 en `.venv`, Node 24.19.0 y npm 11.17.0. No se ha demostrado aquí
+un pipeline equivalente en macOS/Apple Silicon. Estos datos no fijan hardware
+mínimo ni capacidad de cámaras.
+
+Para una **instalación nueva** de esta candidata:
 
 ```powershell
-git clone --branch monitoreo-integrado --recurse-submodules https://github.com/AngelAguilar21/Proyecto_LAP_Captone.git
+git clone --branch jose/automations-main-integration-v2 --recurse-submodules https://github.com/AngelAguilar21/Proyecto_LAP_Captone.git
 cd Proyecto_LAP_Captone
+git rev-parse HEAD
 ```
 
-Después ejecuta según tu terminal:
+La rama puede avanzar: conserva el SHA usado en cada validación. No uses estos
+pasos para reemplazar un checkout con trabajo local. Los parches del instalador
+en P2PNet pueden dejar ese submódulo modificado; no deben limpiarse como parte de
+la preparación de esta candidata.
 
-| Terminal | Primera vez: prepara dependencias, modelos y mapa | Cada vez: inicia AeroTrack |
+| Terminal | Preparar instalación nueva | Iniciar después |
 |---|---|---|
 | CMD | `preparar_sistema.cmd` | `iniciar_sistema.cmd` |
 | PowerShell | `powershell -NoProfile -ExecutionPolicy Bypass -File .\preparar_sistema.ps1` | `powershell -NoProfile -ExecutionPolicy Bypass -File .\iniciar_sistema.ps1` |
 
-`preparar_sistema` se usa una sola vez por computadora, o cuando cambien las dependencias. Crea `.venv`, instala Python y Node, descarga YOLO, prepara P2PNet, verifica ambos modelos y compila la interfaz. Puede tardar varios minutos y necesita Internet.
+La preparación crea `.venv` si falta, comprueba Python 3.12, instala las
+dependencias declaradas, ejecuta `pip check`, aplica la compatibilidad de P2PNet,
+comprueba su inferencia CPU, descarga/carga YOLO, prepara mapas y ejecuta
+`npm ci` y `npm run build`. Requiere Internet y escribe en el entorno/proyecto;
+no es una comprobación de sólo lectura. No se ejecutó nuevamente durante la
+revisión documental Fase 8.
 
-`iniciar_sistema` se usa cada vez que quieras trabajar. Inicia el backend y la interfaz compilada en un solo proceso. Deja esa terminal abierta y abre http://127.0.0.1:8765/?view=overview. Para cerrarlo, vuelve a la terminal y presiona `Ctrl + C`.
+## Dependencias, modelos y dispositivo
 
-La instalación conserva una configuración existente. En una instalación nueva prepara los cuatro mapas, selecciona nivel 3 y deja vacía la lista de cámaras. Agrega tus videos o cámaras desde Configuración, delimita sus zonas y calibra las referencias. Los videos, rutas personales y resultados de otro equipo no se distribuyen.
-
-## Código y pesos
-
-| Componente | Cómo llega al equipo |
+| Componente | Contrato actual |
 |---|---|
-| P2PNet, código oficial | Submódulo Git `proyecto_lap_prototipo/external/P2PNet`, fijado a un commit |
-| P2PNet, pesos SHTechA | El submódulo incluye `weights/SHTechA.pth`, aproximadamente 86 MB |
-| Compatibilidad P2PNet | `setup_counting.py` aplica el parche versionado y verifica una inferencia CPU |
-| YOLO y ByteTrack | Dependencia Ultralytics fijada en `proyecto_lap_prototipo/requirements-commercial.txt`; integración en `src/following` |
-| YOLO11n, pesos COCO | `setup_objects.py --download` descarga el archivo oficial y comprueba una inferencia |
-| Mapas LAP y frontend | Archivos versionados; `npm ci` instala dependencias y `npm run build` compila la interfaz |
+| Python | `requirements.txt` incluye los requisitos de conteo y comerciales |
+| PyTorch | `torch==2.14.0+cpu` y `torchvision==0.29.0+cpu` en `requirements-counting.txt`; perfil CPU |
+| P2PNet | Código oficial en submódulo fijado; pesos `external/P2PNet/weights/SHTechA.pth`; `setup_counting.py` aplica el parche y prueba un frame sintético en CPU |
+| YOLO11n | Ultralytics 8.3.203; `setup_objects.py --download` prepara `models/yolo11n.pt`, carga el modelo y verifica clases; ese script no ejecuta una inferencia |
+| Seguimiento integrado | YOLO proporciona cajas; `src/tracking.py:ByteTrackPuntos` asocia detecciones por cámara; `src/live_core.py` hace asociación entre cámaras |
+| Frontend | Dependencias del lockfile con `npm ci`; TypeScript/Vite mediante los scripts existentes |
 
-No necesitas UCF-QNRF para ejecutar los modelos preentrenados. Ese dataset se utiliza para experimentos de evaluación o entrenamiento. Descargar un ZIP de GitHub no incorpora el contenido de los submódulos: utiliza Git.
+No hace falta UCF-QNRF para ejecutar pesos preentrenados. Un ZIP del repositorio
+no sustituye la inicialización del submódulo mediante Git.
 
-## Modo normal y modo de desarrollo
+La inferencia sintética de revisión observó **CPU para YOLO y P2PNet**, aun con
+una GPU NVIDIA presente. El entorno instalado es CPU-only: no es el caso de
+CUDA instalado pero temporalmente indisponible. El conteo independiente pide
+CPU explícitamente; P2PNet integrado puede elegir CUDA si otro entorno lo
+ofrece; YOLO integrado delega dispositivo al backend porque Engine no lo fija.
+Eso no acredita un perfil CUDA reproducible. No hay selector CPU/GPU en la UI.
+NVIDIA/CUDA y Apple Silicon/MPS quedan como trabajos posteriores, sin cambiar
+dependencias ni drivers en esta fase. Evidencia y límites en
+[PRUEBA_LIVE.md](proyecto_lap_prototipo/docs/PRUEBA_LIVE.md).
 
-El modo normal con `iniciar_sistema` es el recomendado para usar y demostrar el sistema. No requiere abrir el puerto 5173.
+## Arranque y uso
 
-El modo de desarrollo se usa solo si vas a modificar código de la interfaz y quieres ver cambios al guardar. Primero inicia el backend en una terminal con `iniciar_sistema.cmd` o su comando PowerShell. En una segunda terminal ejecuta:
+`iniciar_sistema` sirve backend e interfaz compilada en el equipo local.
+Mantén abierta la terminal y visita [AeroTrack local](http://127.0.0.1:8765/?view=overview).
+`Ctrl+C` solicita cierre cooperativo. Si aparece «Cierre incompleto», todavía
+pueden existir trabajadores: no borres ni reemplaces sus archivos mientras
+sigan activos. Un timeout no puede interrumpir por sí mismo una llamada nativa.
 
-Mantén `iniciar_sistema.ps1` abierto. En otra terminal:
+La preparación conserva configuración existente. Una instalación nueva prepara
+mapas y deja las cámaras por configurar. Rutas, videos y resultados locales
+de otro equipo no constituyen fixtures garantizados de instalación.
+
+La prueba de cámara del asistente usa YOLO a 640. El monitoreo integrado solicita
+`hybrid`: YOLO principal y P2PNet de densidad bajo demanda de AVIE. El backend
+también acepta `yolo`, `p2pnet` y `demo`; son contratos distintos, no un modelo
+único. Véase [GUIA_SEGUIMIENTO.md](proyecto_lap_prototipo/docs/GUIA_SEGUIMIENTO.md).
+Arranque e inferencia correcta no demuestran precisión de conteo o asociación.
+
+Las automatizaciones permanecen deshabilitadas por defecto. El arranque normal
+lee configuración y datos existentes: no sirve como smoke test aislado. No
+activar tareas ni cámaras reales para comprobar la instalación sin el alcance
+operativo correspondiente. La persistencia efectiva está inventariada en
+[INVENTARIO_PERSISTENCIA.md](proyecto_lap_prototipo/docs/INVENTARIO_PERSISTENCIA.md).
+
+## Desarrollo frontend y comprobaciones
+
+Con backend local iniciado y sólo si necesitas desarrollo de interfaz:
 
 ```powershell
 cd proyecto_lap_prototipo/dashboard
 npm run dev -- --port 5173 --strictPort
 ```
 
-Abre http://127.0.0.1:5173. Al terminar cambios de interfaz, ejecuta `npm run build` desde `proyecto_lap_prototipo/dashboard` para actualizar el modo normal de 8765. Para verificar el backend: `.venv/Scripts/python.exe -m unittest discover -s proyecto_lap_prototipo/tests`.
+Abre [Vite local](http://127.0.0.1:5173). `npm run build`, desde ese directorio,
+actualiza la interfaz servida en 8765. `.\node_modules\.bin\tsc.cmd --noEmit`
+comprueba tipos con el ejecutable local instalado. Para
+la suite Python, desde la raíz del repositorio:
 
-La inferencia CPU y el arranque están separados de la precisión: P2PNet puede sobreestimar en escenas distintas de sus datos de entrenamiento. Contrasta las estimaciones con anotaciones manuales antes de usar umbrales operativos.
+```powershell
+.\.venv\Scripts\python.exe -B -m unittest discover -s proyecto_lap_prototipo\tests
+```
+
+Registra SHA, directorio, intérprete y resultado real; el número de tests de una
+guía histórica no acredita la versión actual. No hacen falta instalaciones
+adicionales ni iniciar cámaras para ejecutar los tests aislados del proyecto.
 
 ## Negocios y ventas
 
-La rama comercial añade **Negocios y accesos** y **Ventas y análisis**. Se inicia con los mismos comandos CMD; no necesita un servidor de BD adicional. Se guarda en SQLite por proyecto. Reinicia el servidor después de actualizar. El detector opcional de objetos usa YOLO11n y ByteTrack; la preparación descarga sus pesos oficiales. Consulta `proyecto_lap_prototipo/docs/PLAN_COMERCIAL.md` para importar ventas, vincular accesos y ver la prueba guardada en Proyecto principal.
+Negocios, accesos, ventas e incidentes usan SQLite por proyecto. Reinicia el
+servidor tras actualizar código. La señal opcional de objetos añade inferencia
+YOLO aparte del seguimiento y sigue siendo experimental. Consulta
+[PLAN_COMERCIAL.md](proyecto_lap_prototipo/docs/PLAN_COMERCIAL.md); sus sesiones
+de ejemplo son antecedentes locales, no datos que deban existir en un clon nuevo.

@@ -189,5 +189,6 @@ No se usan SMTP, cámaras, RTSP ni bases de usuario reales.
 Pendientes de producto/UX: alcance futuro a proyectos distintos del activo, UI
 de validación legacy/configuración y tratamiento humano de uncertain. Esta fase
 no decide una política de supervisión global. Fase 7 añadió uploads durables y
-cleanup conservador, deshabilitado por defecto. Restore e integración final siguen
-fuera de esta entrega.
+cleanup conservador, deshabilitado por defecto. Restore sigue fuera de esta entrega.
+La integración posterior y sus verificaciones se documentan en
+[INTEGRACION_AUTOMATIZACIONES.md](INTEGRACION_AUTOMATIZACIONES.md).

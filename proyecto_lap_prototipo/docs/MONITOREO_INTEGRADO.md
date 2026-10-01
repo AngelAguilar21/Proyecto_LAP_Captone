@@ -1,8 +1,13 @@
 # Monitoreo integrado sobre el mapa LAP
 
+Contrato actualizado en Fase 8 para la candidata
+`jose/automations-main-integration-v2`, base `0b611e0`. Los ejemplos de sesiones
+al final son antecedentes reportados de otros ensayos; no son validaciones LIVE
+de esta candidata ni recursos garantizados en una instalación nueva.
+
 ## Uso habitual
 
-1. Abre **Configuración → Mapa y cámaras**. Selecciona el nivel (3 por defecto en Vista general).
+1. Abre **Configuración → Mapa y cámaras**. Selecciona el nivel que corresponde al proyecto; no hay un nivel operativo universal para todos los proyectos.
 2. Añade una cámara en ese nivel y usa **Colocar cámara** para situarla. **Centrar cámara seleccionada** permite trabajar con detalle.
 3. Arrastra el icono para trasladar su cobertura orientativa. El punto frontal gira y cambia el alcance; los cuadrados ajustan ancho y longitud. La rueda hace zoom dentro del mapa y desplaza la página fuera. La brújula alterna norte arriba y horizontal.
 4. Abre **Editar fuente, zona útil y accesos**. Configura un archivo, USB o RTSP una sola vez. **Obtener imagen** permite ajustar el polígono. Los dos análisis comparten esta fuente y la zona útil. Puedes crear zonas interiores con nombre.
@@ -18,22 +23,34 @@ La calibración relaciona el **mismo punto físico del suelo** en dos representa
 
 No son cuatro esquinas arbitrarias del encuadre. No deben marcarse cabezas, mostradores, una planta superior o escalones como si pertenecieran al mismo suelo. La homografía es válida para una superficie aproximadamente plana. Verificar algebraicamente cuatro puntos no demuestra precisión: comprueba otros puntos y mide el error en el lugar real. Si cambia la posición, orientación o zoom físico de la cámara, hay que recalibrar.
 
-La posición del icono y su rectángulo son orientación visual para el operador; moverlos no recalcula automáticamente las correspondencias del suelo. Altura e inclinación son metadatos de instalación. El video puede ser horizontal, vertical o cuadrado: sigue siendo una matriz rectangular de píxeles. Un cono dibujado representa cobertura, no el formato del video.
+La posición del icono y su rectángulo orientan al operador; moverlos no recalcula
+automáticamente las correspondencias del suelo. En P2PNet directo, posición y
+altura sí participan en la corrección de cabeza a suelo; no son sólo decoración.
+El video puede ser horizontal, vertical o cuadrado: sigue siendo una matriz
+rectangular de píxeles. Un cono dibujado representa cobertura, no el formato
+del video ni una calibración automática de la cámara.
 
 ## Modelos y responsabilidades
 
 | Componente | Función | Archivo |
 |---|---|---|
 | YOLO11n preentrenado | Detectar personas y cajas | `src/following/detector.py`, `models/yolo11n.pt` |
-| ByteTrack | Mantener trayectorias dentro de cada cámara, incluso con detecciones débiles | `src/following/tracker.py` |
-| P2PNet preentrenado, opcional por cámara | Estimar localizaciones de cabezas y conteo en multitudes | `src/detection.py`, `external/P2PNet/weights/SHTechA.pth` |
+| ByteTrackPuntos | Tracker conectado por Engine para mantener trayectorias dentro de cada cámara | `src/tracking.py` |
+| P2PNet preentrenado, adaptativo en hybrid | Estimar localizaciones de cabezas y conteo en multitudes cuando AVIE solicita densidad | `src/detection.py`, `src/following/adaptive.py` |
 | Análisis integrado | Ocupación, zonas, episodios, calor y coordinación del conteo especializado | `src/following/combined.py` |
 | Cruces de acceso | Contar cambios de lado que atraviesan el segmento, con tolerancia a oscilaciones y pérdidas | `src/following/line_counter.py` |
 | Flujo del plano | Cruces de zonas y direcciones acumuladas de movimiento | `src/following/flow.py` |
 | Asociación entre cámaras | Hipótesis conservadoras por suelo, tiempo, vecindad y apariencia de color | `src/live_core.py` |
 | Persistencia y reproducción | Manifest de sesión, muestras temporales y lectura parcial del video original | `src/replay.py` |
 
-YOLO y ByteTrack se complementan: el detector no conserva por sí solo una identidad temporal. ByteTrack tampoco sustituye a P2PNet. P2PNet proporciona puntos de conteo, no una identidad multicámara fiable. No se suman sus conteos a los de YOLO porque describen personas potencialmente iguales. La homografía del suelo se aplica a los pies estimados por las cajas; no se proyectan cabezas de P2PNet como si fueran puntos del suelo.
+El monitoreo integrado solicita `hybrid`: YOLO principal y P2PNet asíncrono bajo
+demanda de AVIE. El detector no conserva por sí solo una identidad temporal;
+Engine usa `ByteTrackPuntos`, no `YOLO.track()`. La densidad P2PNet no sustituye
+IDs ni se suma a YOLO. En este modo el suelo se estima desde los pies de las
+cajas. El backend también admite `p2pnet` directo, que sí proyecta cabezas con
+corrección geométrica y altura válida; no confundirlo con la señal de densidad.
+La prueba de cámara del asistente pide `yolo` a 640. Contratos completos en
+[GUIA_SEGUIMIENTO.md](GUIA_SEGUIMIENTO.md).
 
 La reconciliación tardía exige coincidencia mutua sostenida, apariencia compatible, nivel idéntico y tiempos verificados. Rechaza ambigüedad y fusiones que pondrían dos trayectorias de una cámara bajo el mismo ID. Sigue siendo una asociación estimada, no reconocimiento de identidad. No se añadió un modelo profundo de ReID ni caracterización demográfica. Vestimenta similar, oclusión y errores de calibración pueden producir cambios de ID.
 
@@ -59,15 +76,36 @@ La orientación horizontal es una transformación de visualización; no modifica
 
 ## Rendimiento y conexión en vivo
 
-La fuente se abre una sola vez por cámara en el monitoreo integrado. El seguimiento usa muestras de 0.2 s en archivos. Se reduce la imagen de trabajo a 1280 px de ancho y se elige entrada del detector de 480, 640 o 960. Menos resolución puede perder personas pequeñas: no equivale a la misma precisión más rápido. Se limitan los hilos de CPU para evitar sobrecarga.
+Durante procesamiento estable una captura alimenta cada cámara; reconexiones o
+preview son etapas distintas. El seguimiento usa muestras de 0.2 s en archivos.
+Frames con ancho mayor a 1280 se reducen antes del detector. El backend YOLO
+acepta 320/480/640/960; la UI expone sus opciones. Menor resolución puede perder
+personas pequeñas. Los requisitos fijan PyTorch CPU, pero no debe inferirse el
+dispositivo sólo del nombre del modo: véase [PRUEBA_LIVE.md](PRUEBA_LIVE.md).
 
-P2PNet se activa por cámara y trabaja en una cola de tamaño uno, con intervalo configurable. No acumula trabajos ilimitados ni detiene el seguimiento para cada estimación. Cada resultado especializado conserva su instante; puede ser anterior a la imagen actual. En este equipo de aproximadamente 8 GB se deja desactivado inicialmente para priorizar respuesta; está instalado y se probó su ejecución conjunta.
+En hybrid, AVIE solicita P2PNet al detectar evidencia densa. El sampler conserva
+una muestra pendiente por cámara, reemplazada por la más reciente, y un trabajo
+en curso. No hay intervalo configurable efectivo mediante `denseInterval` ni
+activación mediante `denseCounting`: ambos campos legacy se eliminan al validar.
+Cada resultado especializado conserva su instante y puede ser anterior al frame
+actual. No se cambia el detector principal mientras se calcula la densidad.
 
 USB y RTSP conservan el fotograma reciente para evitar una cola creciente de retraso. Se omiten fotogramas cuando la inferencia tarda más que la llegada de video. El panel recibe actualizaciones mientras se procesa; no necesita esperar el final del archivo. La reproducción usa el video original y superpone muestras guardadas: no implica inferencia a los FPS originales.
 
 El servidor actual escucha solo en el equipo local y admite hasta 32 cámaras configuradas. Eso no garantiza capacidad para procesarlas simultáneamente. Para LAP hacen falta fuentes RTSP/substreams o acceso al VMS autorizado, sincronización, calibración real y pruebas de carga. Una instalación aeroportuaria completa requiere dimensionar servidores y distribución del procesamiento. No se verificó una conexión a cámaras reales de LAP ni se promete 30 FPS multicámara en laptops sin GPU.
 
+FPS fuente, procesamiento e inferencia tienen regiones de medición diferentes;
+ninguno demuestra por sí solo latencia cámara-pantalla. El protocolo LIVE está
+preparado, no ejecutado: [PRUEBA_LIVE.md](PRUEBA_LIVE.md). Al finalizar se limpia
+estado activo, pero se conservan observaciones individuales en replays y
+IdentityMemory: [INVENTARIO_PERSISTENCIA.md](INVENTARIO_PERSISTENCIA.md).
+
 ## Validación realizada y pendientes
+
+**RESULTADOS HISTÓRICOS REPORTADOS**, no reproducidos por la revisión documental
+Fase 8. Las rutas/sesiones dependen de aquel entorno; no cargar ni sustituir
+datos del operador para hacerlas aparecer. Evidencia de la candidata actual:
+[FASE8_VALIDACION.md](FASE8_VALIDACION.md).
 
 La configuración anterior se respaldó en `config/backups/live-before-unified-20260914-125735.json`. Se reemplazó por CAM-1, CAM-2 y CAM-3 (tienda). Los originales no se eliminaron. Sus posiciones y referencias en LAP son **ilustrativas** y se indican en el panel; no permiten validar asociaciones reales entre cámaras.
 
@@ -89,6 +127,8 @@ La revisión final de tienda con zona «Frente a tienda» es `e7fef254`: 394 mue
 
 Se verificaron los cuatro niveles en la interfaz y el estado vacío de resultados para un nivel sin análisis. Ambos videos quedaron pausados en `currentTime=5` al reiniciar y adelantar cinco segundos; también se comprobó el final independiente del video más corto. El resumen integrado exportó CSV, XLSX y PDF con respuestas HTTP 200. Los cuatro análisis anteriores a la reorganización están conservados en `data/archived-before-map-unification/`.
 
-La suite final incluye 65 pruebas, además de TypeScript y compilación de Vite. La prueba funcional no acredita todavía precisión de conteo, seguimiento ni calibración sobre LAP.
+La suite de aquel ensayo incluía 65 pruebas, además de TypeScript y compilación
+de Vite. No es el total actual de la candidata. La prueba funcional no acredita
+precisión de conteo, seguimiento ni calibración sobre LAP.
 
 La cuadrícula cartográfica usa celdas de hasta 2 m en planos métricos; no depende de dividir todo el aeropuerto en 24 columnas. Los mapas derivados se recalcularon desde las observaciones guardadas con `tools/rebuild_replay_maps.py`, conservando los archivos previos en `data/replay-map-v1/`. Los conteos y cruces se mantuvieron. Al reiniciar se recuperan los agregados finalizados para reportes, sin encender cámaras ni restaurar personas como si estuvieran en vivo.

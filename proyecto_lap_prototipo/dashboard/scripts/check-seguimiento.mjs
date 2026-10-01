@@ -19,12 +19,12 @@ ok(/function startCameraTest/.test(asistente),
    'no existe la funcion que inicia la prueba de seguimiento');
 ok(/session\.post\(['"]start['"]/.test(asistente),
    'startCameraTest no llama al endpoint que inicia el analisis');
-ok(/detector:['"]p2pnet['"]/.test(asistente),
-   'la prueba del asistente ya no fija P2PNet');
+ok(/detector:['"]yolo['"]/.test(asistente),
+   'la prueba del asistente ya no utiliza su contrato YOLO');
 ok(/PROJECT_STEPS[^\n]*\['project','plan','source','test','calibrate','zones','review'\]/.test(asistente),
    'el asistente no respeta el flujo simplificado proyecto-plano-camara-zona-homografia-zonas-revision');
-ok(/inferenceSize:256/.test(asistente),
-   'la prueba de camara ya no usa el perfil P2PNet de baja latencia');
+ok(/inferenceSize:640/.test(asistente) && /testRun:true/.test(asistente),
+   'la prueba de camara ya no usa YOLO 640 con testRun');
 ok(!/equipaje|luggage/i.test(asistente),
    'el asistente todavia expone el modulo de equipaje retirado');
 
