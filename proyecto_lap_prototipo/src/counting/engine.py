@@ -10,6 +10,7 @@ import time
 import uuid
 
 import cv2
+from resource_control import ResourceRegistry, managed_operation, hold_source
 
 from .analytics import CountingAnalytics, validate
 from .source import VideoSource
@@ -28,6 +29,7 @@ class CountingEngine:
     def __init__(self, root, config_path=None, detector_factory=None):
         self.root = root
         self.data_root = Path(config_path).parent if config_path else root
+        self.resources = ResourceRegistry(self.data_root)
         self.path = config_path or root/"config"/"counting.local.json"
         self.store = CountStore(self.path.parent/"counting.sqlite")
         self.store.recover_interrupted()
@@ -72,6 +74,7 @@ class CountingEngine:
             os.replace(temp, self.path)
             self.config = config
 
+    @managed_operation
     def preview(self, source, seconds=0):
         if not isinstance(source, str) or not source.strip() or len(source) > 2048:
             raise ValueError("Selecciona una fuente de video.")
@@ -92,6 +95,8 @@ class CountingEngine:
                 video.close()
 
     def start(self, data):
+        if self.resources.closing:
+            raise ValueError("Runtime is closing")
         self.configure(data)
         with self.lock:
             if self.active():
@@ -106,8 +111,7 @@ class CountingEngine:
                           "created": datetime.now(timezone.utc).isoformat(), "config": config, "model": "P2PNet",
                           "t": 0., "samples": 0, "points": [], "series": [], "error": None,
                           "note": "Conteo estimado sobre imagen. No son visitantes únicos ni personas/m²."}
-            self.worker = threading.Thread(target=self.run, args=(config,), daemon=True)
-            self.worker.start()
+            self.worker = self.resources.start_thread(self.run, args=(config,), name="counting")
 
     def pause(self, paused):
         with self.lock:
@@ -138,7 +142,9 @@ class CountingEngine:
             raise ValueError("No se pudo preparar la imagen de video.")
         return data.tobytes()
 
+    @managed_operation
     def run(self, config):
+        hold_source(config["source"], self.root)
         video = None
         replay = None
         analytics = CountingAnalytics(config)

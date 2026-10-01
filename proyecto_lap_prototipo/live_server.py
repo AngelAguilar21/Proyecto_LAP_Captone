@@ -37,6 +37,8 @@ import business_catalog
 import commercial
 import sqlite3
 import auth
+from resource_control import ResourceRegistry, managed_operation, http_operation, hold_source, hold_path
+from shutdown_control import ManagedHTTPServer, stop_server, defer_close
 from counting.source import is_youtube_url, low_latency_ffmpeg, resolve_stream_source
 
 CONFIG_PATH = ROOT / "config" / "live.local.json"
@@ -68,6 +70,11 @@ class Engine:
             self.project_id = None
             self.config_path = Path(config_path)
         self.data_root = ROOT if self.managed else self.config_path.parent
+        self.closing = False
+        self.resources = ResourceRegistry(self.data_root)
+        self.resource_lock = self.resources.lock
+        self.preview_lifecycle_lock = threading.RLock()
+        self.preview_workers = {}
         # Ajustes que no pertenecen a un proyecto (conteo especializado) siguen
         # viviendo en config/, no dentro de la carpeta de proyectos.
         self.settings_root = (ROOT / "config") if self.managed else self.config_path.parent
@@ -137,6 +144,20 @@ class Engine:
         # Unifica la restauración para el arranque inicial y para el cambio de
         # proyecto, incluyendo sesiones con estado parcial o error recuperable.
         self.restore_last_result()
+        from automation import AutomationService
+        self.automation = AutomationService(self, tasks={})
+
+    @property
+    def resource_users(self):
+        with self.resource_lock:
+            return sum(self.resources.users.values())
+
+    def resource_use(self, path, write=False):
+        return self.resources.use(path, write)
+
+    def automation_snapshot(self):
+        from automation_snapshot import snapshot
+        return snapshot(self)
 
     def dispatch_alerts(self, camera_analytics, analytics, level_analytics=None):
         """Guarda cada alerta nueva en la bitacora y, si el correo esta
@@ -324,21 +345,36 @@ class Engine:
     def preview_snapshot(self):
         return dict(self.preview_state)
 
-    def preview_stop(self):
+    def preview_stop(self, timeout=4):
         """Corta la vista en vivo y suelta la cámara.
 
         Nunca debe llamarse sosteniendo self.lock: espera a que termine el hilo
         de previsualización, que a su vez necesita ese mismo candado para
         escribir su última imagen."""
+        with self.preview_lifecycle_lock:
+            return self._stop_preview(timeout)
+
+    def _stop_preview(self, timeout):
         worker = self.preview_worker
+        event = self.preview_stop_event
+        event.set()
         if worker and worker.is_alive():
-            self.preview_stop_event.set()
-            worker.join(timeout=4)
-        with self.lock:
-            self.preview_worker = None
-            self.preview_state = {"camera": None, "playing": False, "t": 0., "duration": 0., "live": False, "error": None}
+            worker.join(timeout=max(0, timeout))
+        if worker and worker.is_alive():
+            return False
+        # Never wait behind an unrelated writer after spending the stop budget.
+        if self.lock.acquire(blocking=False):
+            try:
+                if self.preview_worker is worker:
+                    self.preview_worker = None
+                    self.preview_state = {"camera": None, "playing": False, "t": 0., "duration": 0., "live": False, "error": None}
+            finally:
+                self.lock.release()
+        return True
 
     def preview_start(self, cid, seconds=0.):
+        if self.closing:
+            raise ValueError("El servidor está cerrando.")
         with self.lock:
             if self.worker and self.worker.is_alive():
                 raise ValueError("Finaliza la sesión de seguimiento para usar la vista en vivo.")
@@ -349,15 +385,24 @@ class Engine:
                 raise ValueError("Configura una fuente antes de ver la cámara.")
             if not isinstance(seconds, (int, float)) or isinstance(seconds, bool) or not 0 <= seconds <= 86400:
                 raise ValueError("Instante inválido.")
-        self.preview_stop()
+        with self.preview_lifecycle_lock:
+            self.preview_stop()
+            self._start_preview(camera, seconds)
+
+    def _start_preview(self, camera, seconds):
         with self.lock:
+            if self.closing:
+                raise ValueError("El servidor está cerrando.")
+            cid = camera["id"]
             self.preview_stop_event = threading.Event()
             self.preview_pause_event = threading.Event()
             self.preview_seek_request = None
             self.preview_touch = time.time()
             self.preview_state = {"camera": cid, "playing": True, "t": float(seconds), "duration": 0., "live": False, "error": None}
-            self.preview_worker = threading.Thread(target=self._preview_loop, args=(copy.deepcopy(camera), float(seconds)), daemon=True)
-            self.preview_worker.start()
+            self.preview_worker = self.resources.start_thread(self._preview_loop,
+                args=(copy.deepcopy(camera), float(seconds), self.preview_stop_event, self.preview_pause_event), name="preview")
+            self.preview_workers = {w: event for w, event in self.preview_workers.items() if w.is_alive()}
+            self.preview_workers[self.preview_worker] = self.preview_stop_event
             self.record("Vista en vivo", f"{camera.get('name', cid)} abierta para revisión")
 
     def preview_control(self, action, seconds=None):
@@ -395,9 +440,13 @@ class Engine:
             raise ValueError("No se pudo preparar la imagen de video.")
         return data.tobytes()
 
-    def _preview_loop(self, camera, seconds):
+    @managed_operation
+    def _preview_loop(self, camera, seconds, stop_event=None, pause_event=None):
         """Refresca imágenes sin correr detección: es solo para ver la cámara."""
         import cv2
+        stop_event = stop_event if stop_event is not None else self.preview_stop_event
+        pause_event = pause_event if pause_event is not None else self.preview_pause_event
+        hold_source(camera["source"], ROOT)
         cid = camera["id"]
         source = camera["source"]
         if isinstance(source, str) and "://" not in source:
@@ -421,7 +470,8 @@ class Engine:
             frames = cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0
             live = remote or isinstance(source, int) or frames <= 1
             with self.lock:
-                self.preview_state.update(live=live, duration=0. if live else frames / max(1., fps))
+                if self.preview_stop_event is stop_event and not stop_event.is_set():
+                    self.preview_state.update(live=live, duration=0. if live else frames / max(1., fps))
             if seconds and not live:
                 cap.set(cv2.CAP_PROP_POS_MSEC, seconds * 1000)
 
@@ -438,43 +488,49 @@ class Engine:
                 newest = {"frame": None, "failed": False}
 
                 def drain():
-                    while not reader_stop.is_set() and not self.preview_stop_event.is_set():
-                        ok, frame = cap.read()
-                        if not ok:
-                            newest["failed"] = True
-                            return
-                        newest["frame"] = frame
+                    try:
+                        while not reader_stop.is_set() and not stop_event.is_set():
+                            ok, frame = cap.read()
+                            if not ok:
+                                newest["failed"] = True
+                                return
+                            newest["frame"] = frame
+                    finally:
+                        cap.release()
 
                 reader = threading.Thread(target=drain, daemon=True)
                 reader.start()
                 started_at = time.monotonic()
-                while not self.preview_stop_event.is_set():
+                while not stop_event.is_set():
                     if time.time() - self.preview_touch > 20:
                         break
                     if newest["failed"]:
                         raise ValueError("Se perdió la señal de la cámara.")
-                    if self.preview_pause_event.is_set():
-                        time.sleep(.15)
+                    if pause_event.is_set():
+                        stop_event.wait(.15)
                         continue
                     frame = newest["frame"]
                     if frame is None:
-                        time.sleep(.05)
+                        stop_event.wait(.05)
                         continue
                     encoded = self._preview_jpeg(frame)
                     with self.lock:
-                        self.frames[cid] = encoded
-                        self.preview_state["t"] = time.monotonic() - started_at
-                    time.sleep(1 / 15)
+                        if self.preview_stop_event is stop_event and not stop_event.is_set():
+                            self.frames[cid] = encoded
+                            self.preview_state["t"] = time.monotonic() - started_at
+                    stop_event.wait(1 / 15)
             else:
-                while not self.preview_stop_event.is_set():
+                while not stop_event.is_set():
                     if time.time() - self.preview_touch > 20:
                         break
-                    seek = self.preview_seek_request
+                    with self.lock:
+                        seek = self.preview_seek_request if self.preview_stop_event is stop_event else None
+                        if seek is not None:
+                            self.preview_seek_request = None
                     if seek is not None:
-                        self.preview_seek_request = None
                         cap.set(cv2.CAP_PROP_POS_MSEC, seek * 1000)
-                    if self.preview_pause_event.is_set():
-                        time.sleep(.15)
+                    if pause_event.is_set():
+                        stop_event.wait(.15)
                         continue
                     started = time.monotonic()
                     ok, frame = cap.read()
@@ -483,20 +539,26 @@ class Engine:
                         continue
                     encoded = self._preview_jpeg(frame)
                     with self.lock:
-                        self.frames[cid] = encoded
-                        self.preview_state["t"] = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
+                        if self.preview_stop_event is stop_event and not stop_event.is_set():
+                            self.frames[cid] = encoded
+                            self.preview_state["t"] = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
                     # Una grabación se reproduce a su velocidad real.
-                    time.sleep(max(0., 1 / max(1., min(fps, 30)) - (time.monotonic() - started)))
+                    stop_event.wait(max(0., 1 / max(1., min(fps, 30)) - (time.monotonic() - started)))
         except (ValueError, OSError, RuntimeError) as exc:
             with self.lock:
-                self.preview_state.update(playing=False, error=str(exc))
+                if self.preview_stop_event is stop_event and not stop_event.is_set():
+                    self.preview_state.update(playing=False, error=str(exc))
         finally:
             reader_stop.set()
-            if reader and reader.is_alive():
-                reader.join(timeout=2)
-            cap.release()
+            if reader:
+                # The owner remains alive while the native reader is blocked.
+                # Only the reader releases its capture; no read/release race.
+                reader.join()
+            else:
+                cap.release()
             with self.lock:
-                self.preview_state["playing"] = False
+                if self.preview_stop_event is stop_event:
+                    self.preview_state["playing"] = False
 
     def read_config_file(self):
         self.config = default_config()
@@ -532,6 +594,7 @@ class Engine:
 
     def restore_last_result(self):
         """Carga el último análisis terminado del proyecto sin reactivar fuentes."""
+        hold_path(self.data_root / "data" / "replays")
         if self.config_error:
             return
         summaries = []
@@ -656,6 +719,8 @@ class Engine:
             return self.projects_listing()
 
     def business_metrics(self):
+        # Reads persisted replay metadata while updating business SQLite.
+        hold_path(self.data_root / "data" / "replays")
         with self.lock:
             con = business_data.connect(self.config_path)
             try:
@@ -746,6 +811,8 @@ class Engine:
             self.record("Reglas actualizadas",f"Mínimo {draft['minPeople']} · radio {draft['radius']} · permanencia {draft['dwell']} s")
 
     def start(self, request):
+        if self.closing:
+            raise ValueError("El servidor está cerrando.")
         self.preview_stop()
         with self.lock:
             if getattr(self, "counting", None) and self.counting.active():
@@ -836,8 +903,7 @@ class Engine:
                 # coordenadas al frame original después de inferir.
                 "inferenceSize": min(requested_size, 256) if mode == "p2pnet" else requested_size,
             }
-            self.worker = threading.Thread(target=self.run, args=(self.runtime_config, runtime_request), daemon=True)
-            self.worker.start()
+            self.worker = self.resources.start_thread(self.run, args=(self.runtime_config, runtime_request), name="tracking")
             self.record("Sesión iniciada",f"{mode} · {camera_id or 'todas las cámaras'}")
 
     def pause(self, paused):
@@ -904,17 +970,19 @@ class Engine:
 
     def warm_detector_async(self, mode="yolo"):
         """Prepara P2PNet después de comprobar una fuente, antes de pulsar Probar."""
-        if (mode == "p2pnet" and self.detector_cache_key == ("p2pnet",)) or (mode != "p2pnet" and ("yolo", 640) in self.detector_caches) or (self.detector_warmup and self.detector_warmup.is_alive()):
+        if self.closing or (mode == "p2pnet" and self.detector_cache_key == ("p2pnet",)) or (mode != "p2pnet" and ("yolo", 640) in self.detector_caches) or (self.detector_warmup and self.detector_warmup.is_alive()):
             return
         def warm():
             try:
                 self.load_detector(mode, {"inferenceSize": 256 if mode == "p2pnet" else 640})
             except Exception as exc:
                 self.record("Preparación de P2PNet", f"No se pudo anticipar la carga: {exc}")
-        self.detector_warmup = threading.Thread(target=warm, daemon=True, name="p2pnet-warmup")
-        self.detector_warmup.start()
+        self.detector_warmup = self.resources.start_thread(warm, name="p2pnet-warmup")
 
+    @managed_operation
     def run(self, config, request):
+        for camera in config["cameras"]:
+            hold_source(camera.get("source"), ROOT)
         captures = {}
         replay = None
         combined = None
@@ -1072,6 +1140,7 @@ class Engine:
                         continue
                     source = camera.get("source")
                     try:
+                        hold_source(source, ROOT)
                         if source == "":
                             raise ValueError("Configura una fuente para esta cámara.")
                         if isinstance(source, str) and not source.lower().startswith(("rtsp://", "http://", "https://", "rtmp://")):
@@ -1309,7 +1378,7 @@ class Engine:
                     self.dispatch_alerts(camera_analytics, analytics, levels)
                     self.record_traffic(analytics, bool(active and active[0].get("stream")))
                     self.state.update(status="paused" if self.pause_event.is_set() else "running", people=people, cameras=list(statuses.values()), events=list(identities.events), t=t,
-                                      analytics=analytics, levelAnalytics=levels, cameraAnalytics=camera_analytics, synchronization={"mode":"live" if active[0]["stream"] else "recordings", "contentVerified":config["clocksVerified"], "sampleSkewSeconds":round(skew,5), "commonTime":t}, totals=metrics.update(people,analytics,t), series=list(metrics.series), processingMs=round(elapsed * 1000), updatedAt=time.time())
+                                      analytics=analytics, levelAnalytics=levels, cameraAnalytics=copy.deepcopy(camera_analytics), synchronization={"mode":"live" if active[0]["stream"] else "recordings", "contentVerified":config["clocksVerified"], "sampleSkewSeconds":round(skew,5), "commonTime":t}, totals=metrics.update(people,analytics,t), series=list(metrics.series), processingMs=round(elapsed * 1000), updatedAt=time.time())
                 timeline = round(timeline+.2,6)
                 self.stop_event.wait(max(0., .2 - elapsed))
         except Exception as exc:
@@ -1321,9 +1390,10 @@ class Engine:
             reason = "source_error" if self.state["status"] == "error" else "session_stopped" if self.stop_event.is_set() else "session_ended"
             for pid, counter in level_occupancy.items():
                 counter.zone_episodes.finish(reason)
-                snapshot = self.state.get('levelAnalytics', {}).get(pid)
-                if snapshot is not None:
-                    snapshot['zoneEpisodes'] = counter.zone_episodes.snapshot()
+                with self.lock:
+                    snapshot = self.state.get('levelAnalytics', {}).get(pid)
+                    if snapshot is not None:
+                        snapshot['zoneEpisodes'] = counter.zone_episodes.snapshot()
             if density_sampler:
                 density_sampler.close()
             if identity_memory:
@@ -1331,7 +1401,8 @@ class Engine:
             self.flush_traffic()
             if combined:
                 final_analytics=combined.close()
-                self.state['cameraAnalytics']=final_analytics
+                with self.lock:
+                    self.state['cameraAnalytics']=copy.deepcopy(final_analytics)
                 if replay:
                     replay.meta['cameraAnalytics']=final_analytics
                     replay.meta['levelAnalytics']=self.state.get('levelAnalytics',{})
@@ -1400,13 +1471,14 @@ class Engine:
             analytics = occupancy.update(people,t)
             replay.append({"t":t,"analytics":analytics,"levels":{config.get("planId","custom"):analytics},"cameras":[{"id":cid,"t":t,"analysis":a,"people":[p for p in people if p["camera"]==cid]} for cid,a in camera_analytics.items()]})
             with self.lock:
-                self.state["cameraAnalytics"] = camera_analytics
+                self.state["cameraAnalytics"] = copy.deepcopy(camera_analytics)
                 self.state.update(status="paused" if self.pause_event.is_set() else "running", people=people, t=t, analytics=analytics, totals=metrics.update(people,analytics,t), series=list(metrics.series), updatedAt=time.time(), cameras=[])
             self.stop_event.wait(.2)
             t += .2
         replay.meta["cameraAnalytics"] = camera_analytics if t else {}
         occupancy.zone_episodes.finish("session_stopped")
-        self.state['analytics']['zoneEpisodes'] = occupancy.zone_episodes.snapshot()
+        with self.lock:
+            self.state['analytics']['zoneEpisodes'] = occupancy.zone_episodes.snapshot()
         replay.meta['reportAnalytics'] = copy.deepcopy(self.state['analytics'])
         replay.meta['totals'] = copy.deepcopy(self.state.get('totals', {}))
         replay.finish("stopped")
@@ -1439,6 +1511,7 @@ class Handler(BaseHTTPRequestHandler):
             return False
         return self.headers.get("Sec-Fetch-Site", "same-origin") != "cross-site"
 
+    @http_operation
     def do_GET(self):
         if not self.allowed():
             return self.send_data(403, {"error": "Acceso local requerido."})
@@ -1592,6 +1665,7 @@ class Handler(BaseHTTPRequestHandler):
             pass
         return self.send_data(code, {"error": message})
 
+    @http_operation
     def do_POST(self):
         engine = self.server.engine
         size = int(self.headers.get("Content-Length", "0"))
@@ -1639,6 +1713,7 @@ class Handler(BaseHTTPRequestHandler):
                 directory = ROOT / "data" / "uploads"
                 directory.mkdir(parents=True,exist_ok=True)
                 target = directory / (secrets.token_hex(16)+suffix)
+                hold_path(target, write=True)
                 try:
                     remaining = size
                     with target.open("xb") as output:
@@ -1762,6 +1837,7 @@ class Handler(BaseHTTPRequestHandler):
                 source=data.get("source",camera["source"])
                 if not isinstance(source,(str,int)) or isinstance(source,bool):
                     raise ValueError("Fuente inválida.")
+                hold_source(source, ROOT)
                 if isinstance(source,str) and "://" not in source:
                     source=str((ROOT/source).resolve())
                 hls = isinstance(source, str) and is_youtube_url(source)
@@ -1893,32 +1969,31 @@ def main():
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--config-path", type=Path, help="Archivo de configuración alternativo para pruebas aisladas.")
     args = parser.parse_args()
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler, bind_and_activate=False)
+    server = ManagedHTTPServer(("127.0.0.1", args.port), Handler, bind_and_activate=False)
     if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
         server.allow_reuse_address = False
         server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
     server.server_bind()
     server.server_activate()
     server.engine = Engine(args.config_path)
-    # La interfaz y la configuración pueden abrirse mientras P2PNet prepara sus
-    # pesos en segundo plano. Así el primer monitoreo no paga toda la carga del
-    # modelo después de que el operador pulsa «Iniciar».
-    server.engine.warm_detector_async()
-    from replay import recover_interrupted
-    recover_interrupted(server.engine.data_root)
-    print(f"LAP: http://127.0.0.1:{args.port} — solo equipo local", flush=True)
     try:
+        server.engine.automation.start()
+        # La interfaz y la configuración pueden abrirse mientras P2PNet prepara sus
+        # pesos en segundo plano. Así el primer monitoreo no paga toda la carga del
+        # modelo después de que el operador pulsa «Iniciar».
+        server.engine.warm_detector_async()
+        from replay import recover_interrupted
+        recover_interrupted(server.engine.data_root)
+        print(f"LAP: http://127.0.0.1:{args.port} — solo equipo local", flush=True)
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
-        server.engine.stop()
-        server.engine.preview_stop()
-        if getattr(server.engine, "counting", None):
-            server.engine.counting.stop()
-            if server.engine.counting.worker:
-                server.engine.counting.worker.join(timeout=10)
-        server.server_close()
+        if stop_server(server):
+            server.server_close()
+        else:
+            print("Cierre incompleto: esperando trabajadores/recursos activos.", flush=True)
+            defer_close(server)
 
 
 if __name__ == "__main__":

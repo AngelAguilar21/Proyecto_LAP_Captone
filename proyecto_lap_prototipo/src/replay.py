@@ -3,21 +3,33 @@ import json,re,mimetypes
 from pathlib import Path
 from datetime import datetime,timezone
 from urllib.parse import parse_qs
+from contextlib import nullcontext
+from resource_control import CURRENT, hold_path
 
 class ReplayWriter:
  def __init__(self,root,sid,module,cameras,config,project_id=None):
   self.directory=root/'data'/'replays'/sid
-  self.directory.mkdir(parents=True,exist_ok=True)
-  self.meta={'session':sid,'module':module,'created':datetime.now(timezone.utc).isoformat(),'status':'running','cameras':cameras,'config':config,'end':0,'projectId':project_id}
-  self.path=self.directory/'manifest.json'
-  self.save()
-  self.output=(self.directory/'samples.jsonl').open('w',encoding='utf-8')
+  registry=CURRENT.get()
+  self.lease=registry.use(self.directory,write=True) if registry else nullcontext()
+  self.lease.__enter__()
+  try:
+   self.directory.mkdir(parents=True,exist_ok=True)
+   self.meta={'session':sid,'module':module,'created':datetime.now(timezone.utc).isoformat(),'status':'running','cameras':cameras,'config':config,'end':0,'projectId':project_id}
+   self.path=self.directory/'manifest.json'
+   self.save()
+   self.output=(self.directory/'samples.jsonl').open('w',encoding='utf-8')
+  except BaseException:
+   self.lease.__exit__(None,None,None)
+   raise
  def save(self):
   tmp=self.path.with_suffix('.tmp');tmp.write_text(json.dumps(self.meta,ensure_ascii=False),encoding='utf-8');tmp.replace(self.path)
  def append(self,sample):
   self.output.write(json.dumps(sample,ensure_ascii=False,allow_nan=False)+'\n');self.output.flush();self.meta['end']=sample['t']
  def finish(self,status):
-  self.output.close();self.meta['status']=status;self.save()
+  try:
+   self.output.close();self.meta['status']=status;self.save()
+  finally:
+   self.lease.__exit__(None,None,None)
 
 def directory(root,sid):
  if not re.fullmatch(r'[a-f0-9]{8,32}',sid):raise ValueError('Sesión inválida.')
@@ -75,6 +87,7 @@ def get(handler,url,root):
    source=camera['source']
    if not isinstance(source,str) or '://' in source:raise ValueError('Esta fuente en vivo no tiene video archivado.')
    path=(root/source).resolve()
+   hold_path(path)
    if not path.is_file():raise ValueError('El video original fue movido o eliminado. Restáuralo para reproducirlo.')
    size=path.stat().st_size;start=0;end=size-1;status=200
    header=handler.headers.get('Range')
@@ -104,6 +117,7 @@ def get(handler,url,root):
 
 def report_snapshot(root, sid, project_id):
  """Reconstruye un informe de una sesión guardada, sin reactivar videos."""
+ hold_path(directory(root,sid))
  meta=manifest(root,sid)
  if meta.get('projectId') != project_id:
   raise ValueError('La sesión no pertenece al proyecto abierto.')

@@ -139,6 +139,8 @@ class Mailer:
         self.error = None
         self.sent = 0
         self.lock = threading.RLock()
+        self.stop_event = threading.Event()
+        self.workers = set()
 
     def _configuration(self, recipients):
         data = load(self.settings_root)
@@ -159,6 +161,8 @@ class Mailer:
         if not (data.get("enabled") and data.get("password") and data.get("recipients")):
             return False
         with self.lock:
+            if self.stop_event.is_set():
+                return False
             now = time.time()
             if key and key in self.last and now - self.last[key] < COOLDOWN:
                 return False
@@ -177,11 +181,30 @@ class Mailer:
                 with self.lock:
                     self.error = str(error)
                 return error
+            finally:
+                with self.lock:
+                    self.workers.discard(threading.current_thread())
 
         if blocking:
+            with self.lock:
+                if self.stop_event.is_set():
+                    return False
+                self.workers.add(threading.current_thread())
             error = run()
             if error is not None:
                 raise error
             return True
-        threading.Thread(target=run, daemon=True).start()
+        with self.lock:
+            if self.stop_event.is_set():
+                return False
+            worker = threading.Thread(target=run, name="mailer", daemon=True)
+            self.workers.add(worker)
+            try:
+                worker.start()
+            except Exception:
+                self.workers.discard(worker)
+                raise
         return True
+
+    def has_writers(self):
+        return bool(self.workers)

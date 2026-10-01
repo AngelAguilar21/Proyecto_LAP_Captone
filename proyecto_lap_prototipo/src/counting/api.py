@@ -10,6 +10,7 @@ def engine_for(parent, root):
             settings = getattr(parent, "settings_root", None) or parent.config_path.parent
             parent.counting = CountingEngine(root, settings/"counting.local.json")
             parent.counting.data_root = parent.data_root
+            parent.counting.resources = parent.resources
         return parent.counting
 
 

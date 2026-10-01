@@ -174,6 +174,17 @@ class IncidentNotifications:
         # Snapshot without waiting behind a database write during bounded shutdown.
         return any(k[0] == self.process_id for k in tuple(ACTIVE)) or any(w.is_alive() for w in tuple(self.workers))
 
+    def pending_results(self):
+        # Non-blocking observation; retries themselves run in a tracked writer.
+        return sum(k[0] == self.process_id for k in tuple(PENDING))
+
+    def retry_pending(self):
+        """Only persist known outcomes. Never retries SMTP, even during shutdown."""
+        with ATTEMPT_LOCK:
+            for identity, result in list(PENDING.items()):
+                if identity[0] == self.process_id and self._persist(identity, result):
+                    PENDING.pop(identity, None)
+
     def join(self, timeout=30):
         deadline = time.monotonic() + max(0, timeout)
         with self.lock:

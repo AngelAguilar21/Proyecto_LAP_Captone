@@ -7,6 +7,7 @@ dense or heavily occluded scene.
 from collections import defaultdict
 import threading
 import time
+from resource_control import CURRENT
 
 
 class AdaptiveVisionController:
@@ -59,9 +60,13 @@ class AsyncDensitySampler:
         self._detector = None
         self._thread = threading.Thread(target=self._run, daemon=True, name="avie-p2p-density")
         self._thread.start()
+        if CURRENT.get() is not None:
+            CURRENT.get().track(self)
 
     def submit(self, camera_id, frame, timestamp):
         with self._condition:
+            if self._closed:
+                return
             self._pending[camera_id] = (frame.copy(), timestamp)
             self._condition.notify()
 
@@ -90,8 +95,16 @@ class AsyncDensitySampler:
             with self._condition:
                 self._latest[camera_id] = value
 
-    def close(self):
+    def request_stop(self):
         with self._condition:
             self._closed = True
+            self._pending.clear()
             self._condition.notify_all()
-        self._thread.join(timeout=2)
+
+    def is_alive(self):
+        return self._thread.is_alive()
+
+    def close(self, timeout=2):
+        self.request_stop()
+        self._thread.join(timeout=max(0, timeout))
+        return not self.is_alive()
