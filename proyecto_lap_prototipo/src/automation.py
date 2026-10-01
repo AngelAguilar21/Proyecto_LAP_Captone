@@ -1,4 +1,4 @@
-"""Sequential opt-in task runtime. The production registry is deliberately empty."""
+"""Sequential opt-in runtime. Productive tasks are injected by composition."""
 import threading
 import time
 from contextlib import nullcontext
@@ -48,9 +48,11 @@ class AutomationService:
                 if not settings[task]["enabled"]:
                     continue
                 status, error = "succeeded", None
+                records_execution = getattr(callback, "records_execution", False) is True
                 try:
                     # Refuse execution when its initial durable record cannot be written.
-                    self.store.record(task, "service", date, "running", now)
+                    if not records_execution:
+                        self.store.record(task, "service", date, "running", now)
                 except Exception as exc:
                     self.error = type(exc).__name__
                     outcomes[task] = "failed"
@@ -65,8 +67,10 @@ class AutomationService:
                 except Exception as exc:
                     status = outcomes[task] = "failed"
                     error = type(exc).__name__
+                    self.error = error  # Includes failures of task-owned persistence.
                 try:
-                    self.store.finish(task, "service", date, status, now, error)
+                    if not records_execution:
+                        self.store.finish(task, "service", date, status, now, error)
                 except Exception as exc:
                     self.error = type(exc).__name__
             return outcomes

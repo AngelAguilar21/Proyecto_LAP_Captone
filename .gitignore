@@ -89,3 +89,8 @@ proyecto_lap_prototipo/SCOUT/
 # Exportaciones generadas al validar la fase comercial; se regeneran desde la app.
 proyecto_lap_prototipo/data/commercial-tests/reportes/
 proyecto_lap_prototipo/data/identidad/
+
+# Configuración, registros y PDFs locales de automatización.
+proyecto_lap_prototipo/config/automation.local.json*
+proyecto_lap_prototipo/config/automation.sqlite*
+proyecto_lap_prototipo/data/reports/

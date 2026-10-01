@@ -119,9 +119,11 @@ def business_report_data(config, state):
     pass_zones=[z for z in zones if (z.get("visits") or 0)>=median_visits and (z.get("seconds") or 0)<median_seconds and z is not top]
     if pass_zones:
         recommendations.append(f"{', '.join(z['name'] for z in pass_zones)} tiene tráfico alto pero poca permanencia. Encaja mejor con publicidad o señalización de paso que con retail que dependa de tiempo de exposición.")
-    active_cameras=len([c for c in state.get('cameras',[]) if c.get('status')=='live']) if state['status'] in ('running','paused') else len(state.get('cameraAnalytics',{}))
+    active_cameras=(len([c for c in state['cameras'] if c.get('status')=='live']) if 'cameras' in state else None) if state['status'] in ('running','paused') else len(state.get('cameraAnalytics',{}))
     total_cameras=len(config['cameras'])
-    if total_cameras and active_cameras<total_cameras:
+    if total_cameras and active_cameras is None:
+        recommendations.append("El snapshot agregado no incluye el estado actual de las cámaras. La cobertura instantánea no se puede determinar con este reporte.")
+    elif total_cameras and active_cameras<total_cameras:
         recommendations.append(f"Solo {active_cameras} de {total_cameras} cámaras aportaron resultados en esta sesión. Antes de comparar zonas con confianza para una decisión comercial conviene ampliar la cobertura o repetir la medición con todas las fuentes activas.")
     if not recommendations:
         recommendations.append("Aún no hay suficientes datos en esta sesión para generar recomendaciones. Estas aparecen a medida que se observan zonas y accesos.")

@@ -1977,6 +1977,9 @@ def main():
     server.server_activate()
     server.engine = Engine(args.config_path)
     try:
+        from automation_reports import ScheduledReports
+        service = server.engine.automation
+        service.tasks = {"reports": ScheduledReports(server.engine, service.store)}
         server.engine.automation.start()
         # La interfaz y la configuración pueden abrirse mientras P2PNet prepara sus
         # pesos en segundo plano. Así el primer monitoreo no paga toda la carga del
