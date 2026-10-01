@@ -294,7 +294,7 @@ class IncidentNotificationTests(unittest.TestCase):
                 self.assertEqual(snapshot(db), before)
                 self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
                 self.assertEqual(db.execute("SELECT COUNT(*) FROM incident_notifications").fetchone()[0], 0)
-                self.assertNotIn("reviewed_at", [r[1] for r in db.execute("PRAGMA table_info(incidentes)")])
+                self.assertIn("reviewed_at", [r[1] for r in db.execute("PRAGMA table_info(incidentes)")])
 
     def test_dispatch_ignores_removed_detector_payload(self):
         engine = Engine(self.path)

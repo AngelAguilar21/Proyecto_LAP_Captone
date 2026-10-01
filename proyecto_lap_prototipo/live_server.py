@@ -37,6 +37,7 @@ import business_catalog
 import commercial
 import sqlite3
 import auth
+from contextlib import closing
 from resource_control import ResourceRegistry, managed_operation, http_operation, hold_source, hold_path
 from shutdown_control import ManagedHTTPServer, stop_server, defer_close
 from counting.source import is_youtube_url, low_latency_ffmpeg, resolve_stream_source
@@ -344,6 +345,18 @@ class Engine:
 
     def preview_snapshot(self):
         return dict(self.preview_state)
+
+    @managed_operation
+    def validate_incident_history(self, incident_id, never_attended, project_id):
+        with self.lock:
+            if project_id != self.project_id:
+                raise ValueError("El proyecto activo cambió. Recarga los incidentes antes de validar.")
+            path = self.config_path
+        with self.resource_use(business_data.path_for(path), write=True), closing(business_data.connect(path)) as db:
+            business_data.validar_historial_incidente(db, incident_id, never_attended)
+            result = business_data.listar_incidentes(db)
+        self.record("Historial de incidente validado", f"{incident_id}: nunca atendido={never_attended}")
+        return {"incidentes": result, "error": None}
 
     def preview_stop(self, timeout=4):
         """Corta la vista en vivo y suelta la cámara.
@@ -1921,6 +1934,17 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_data(200, {"ok": True})
             if parsed.path == "/api/incidents":
                 return self.send_data(200, engine.update_incident(data.get("id"), data.get("estado")))
+            if parsed.path == "/api/incidents/history":
+                # Same operational roles as incident review, but this explicit
+                # human assertion always requires a session, even before setup.
+                if not sesion:
+                    return self.send_data(401, {"error": "Inicia sesión para validar el historial."})
+                if sesion["rol"] not in auth.ROLES:
+                    return self.send_data(403, {"error": "Tu usuario no puede validar incidentes."})
+                if "projectId" not in data:
+                    raise ValueError("Indica el proyecto del incidente.")
+                return self.send_data(200, engine.validate_incident_history(
+                    data.get("id"), data.get("never_attended"), data["projectId"]))
             if self.path == "/api/mail":
                 import notifier
                 if data.get("action") == "test":
@@ -1979,9 +2003,11 @@ def main():
     try:
         from automation_reports import ScheduledReports
         from automation_backups import ProjectBackups
+        from automation_escalation import AlertEscalation
         service = server.engine.automation
         service.tasks = {"reports": ScheduledReports(server.engine, service.store),
-                         "backups": ProjectBackups(server.engine, service.store)}
+                         "backups": ProjectBackups(server.engine, service.store),
+                         "escalation": AlertEscalation(server.engine)}
         server.engine.automation.start()
         # La interfaz y la configuración pueden abrirse mientras P2PNet prepara sus
         # pesos en segundo plano. Así el primer monitoreo no paga toda la carga del

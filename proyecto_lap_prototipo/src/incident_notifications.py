@@ -1,5 +1,6 @@
 """Durable delivery identity. No message body, addresses or secrets are stored."""
 import json
+import math
 import sqlite3
 import threading
 import time
@@ -8,6 +9,7 @@ from contextlib import closing
 
 import business_data
 from notifier import DeliveryError
+from task_control import checkpoint, Cancelled
 
 
 PROCESS_ID = uuid.uuid4().hex
@@ -100,7 +102,7 @@ class IncidentNotifications:
             return dict(row) if row else None
 
     def send(self, project_path, incident_id, subject, body, kind="original", blocking=False,
-             recipients=None):
+             recipients=None, escalation_due_before=None):
         if self.stop_event.is_set():
             return False
         if kind not in ("original", "escalation"):
@@ -113,7 +115,7 @@ class IncidentNotifications:
             if self.stop_event.is_set():
                 return False
             self.recover(project_path)
-            claimed = self._claim(project_path, incident_id, kind)
+            claimed = self._claim(project_path, incident_id, kind, escalation_due_before)
             if claimed:
                 ACTIVE.add(identity)
         if not claimed:
@@ -122,9 +124,15 @@ class IncidentNotifications:
         def deliver():
             status, reason = "failed", "not_sent"
             accepted_at = None
+            cancelled = self.stop_event.is_set()
+            if escalation_due_before is not None and not cancelled:
+                try:
+                    checkpoint()
+                except Cancelled:
+                    cancelled = True
             try:
                 key = json.dumps([str(project_path), incident_id, kind])
-                if self.stop_event.is_set():
+                if cancelled or self.stop_event.is_set():
                     reason = "cancelled_before_smtp"
                 elif self.mailer.send(subject, body, key=key, blocking=True, **mail_options):
                     status, reason = "sent", None
@@ -155,10 +163,21 @@ class IncidentNotifications:
             raise
         return True
 
-    def _claim(self, project_path, incident_id, kind):
+    def _claim(self, project_path, incident_id, kind, escalation_due_before=None):
+        if escalation_due_before is not None:
+            if (kind != "escalation" or type(escalation_due_before) not in (int, float)
+                    or not math.isfinite(escalation_due_before)):
+                raise ValueError("Invalid escalation cutoff")
+            checkpoint()
         # SQLite serializes claims; Python locks alone are not the durable guard.
         with closing(business_data.connect(project_path)) as db, db:
             db.execute("BEGIN IMMEDIATE")
+            if escalation_due_before is not None:
+                checkpoint()
+                if not db.execute("SELECT 1 FROM incidentes WHERE id=? AND " +
+                                  business_data.ESCALATION_ELIGIBLE,
+                                  (incident_id, escalation_due_before)).fetchone():
+                    return False
             cursor = db.execute(
                 "INSERT INTO incident_notifications "
                 "(incident_id,notification_kind,status,attempted_at,owner) "

@@ -58,8 +58,9 @@ acceso al directorio requieren control del operador.
 }
 ```
 
-La ausencia de configuración deja todas las automatizaciones apagadas. El
-startup registra explícitamente solo `reports` y `backups`; los constructores de
+La ausencia de configuración deja todas las automatizaciones apagadas.
+Desde Fase 6, el arranque registra explícitamente solo `reports`, `backups` y
+`escalation` (ver `ESCALAMIENTO_INCIDENTES.md`); los constructores de
 `Engine` y `AutomationService` siguen sin iniciar tareas productivas. No se añade
 ningún worker al runtime secuencial de Fase 3.
 

@@ -51,7 +51,8 @@ def validate(value):
             raise ValueError("Invalid positive retention/delay")
     recipients = result["escalation"]["recipients"]
     if (not isinstance(recipients, list) or len(recipients) > 20 or
-            any(not isinstance(r, str) or "@" not in r or len(r) > 200 for r in recipients)):
+            any(not isinstance(r, str) or len(r) > 200 or
+                not re.fullmatch(r"[^@\s<>,;]+@[^@\s<>,;]+", r) for r in recipients)):
         raise ValueError("Invalid escalation recipients")
     if result["escalation"]["enabled"] and not recipients:
         raise ValueError("Escalation needs recipients")

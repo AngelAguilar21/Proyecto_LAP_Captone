@@ -231,7 +231,10 @@ class ProjectBackupTests(unittest.TestCase):
             db.execute("INSERT INTO negocio_estados VALUES ('b','cerrado')")
             for n, status in enumerate(("sent", "uncertain", "failed", "attempting")):
                 iid = f"incident-{n}"
-                db.execute("INSERT INTO incidentes VALUES (?,'aglomeracion','zone','c',1,5,7,'revisado','{}',1,2)", (iid,))
+                db.execute("INSERT INTO incidentes "
+                           "(id,tipo,zona,camara_id,inicio,pico,duracion,estado,detalle,creado,actualizado,"
+                           "review_history_known,reviewed_at,history_validated_at) "
+                           "VALUES (?,'aglomeracion','zone','c',1,5,7,'revisado','{}',1,2,1,3,4)", (iid,))
                 db.execute("INSERT INTO incident_notifications VALUES (?,'original',?,2,1,?,NULL,'synthetic-owner')",
                            (iid, status, 2 if status == 'sent' else None))
             db.execute("INSERT INTO commercial_sales VALUES ('b','2026-10-01',1,12.5,2,'demo','i')")
@@ -249,6 +252,8 @@ class ProjectBackupTests(unittest.TestCase):
             self.assertEqual(db.execute("PRAGMA integrity_check").fetchall(), [("ok",)])
             self.assertEqual(list(db.iterdump()), before)
             self.assertEqual(db.execute("SELECT empresa FROM negocios").fetchall(), [("Synthetic company",)])
+            self.assertEqual(db.execute("SELECT review_history_known,reviewed_at,history_validated_at "
+                                        "FROM incidentes ORDER BY id").fetchall(), [(1, 3., 4.)] * 4)
             self.assertEqual(db.execute("SELECT status FROM incident_notifications ORDER BY incident_id").fetchall(),
                              [("sent",), ("uncertain",), ("failed",), ("attempting",)])
 

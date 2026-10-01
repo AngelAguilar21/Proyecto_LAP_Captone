@@ -1,7 +1,8 @@
 # Reportes programados — integración Fase 4
 
-Fase 4 introdujo `reports`; desde Fase 5 el arranque de `live_server.main()`
-registra explícitamente `reports` y `backups` (ver `BACKUPS_PROYECTOS.md`).
+Fase 4 introdujo `reports`; desde Fase 6 el arranque de `live_server.main()`
+registra explícitamente `reports`, `backups` y `escalation` (ver
+`BACKUPS_PROYECTOS.md` y `ESCALAMIENTO_INCIDENTES.md`).
 Construir `Engine` o `AutomationService` no genera PDFs. Todas las
 automatizaciones siguen deshabilitadas por defecto. No hay UI de configuración,
 listado ni descarga de estos artefactos en esta fase.
