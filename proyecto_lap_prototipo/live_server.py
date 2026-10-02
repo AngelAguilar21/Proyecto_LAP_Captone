@@ -283,12 +283,15 @@ class Engine:
             if conexion:
                 conexion.close()
 
-    def update_alert_rules(self, data):
+    def update_alert_rules(self, data, *, expected_project=None):
         """Ajusta solo los umbrales de aglomeracion, sin tocar plano ni camaras.
 
         Existe aparte de /api/config para que el administrador pueda cambiar
         cuando le avisan sin tener acceso a la configuracion completa."""
         with self.lock:
+            if self.managed and (not isinstance(expected_project, str) or
+                                 expected_project != self.project_id):
+                raise ValueError("El proyecto cambió o no se indicó. Recarga los umbrales antes de guardar.")
             config = copy.deepcopy(self.config)
             for campo, minimo, maximo in (("radius", .01, 1000), ("minPeople", 2, 1000), ("dwell", 0, 3600)):
                 if campo in data:
@@ -304,9 +307,11 @@ class Engine:
                 for zona in config["zones"]:
                     if zona["name"] in por_nombre:
                         zona["rule"] = por_nombre[zona["name"]]
-        self.configure(config)
-        self.record("Umbrales de alerta actualizados",
-                    f"{config['minPeople']} personas · {config['dwell']} s · radio {config['radius']}")
+            # Keep the snapshot and write in the same project context. configure
+            # uses this RLock too, so opening another project cannot interleave.
+            self.configure(config, expected_project=expected_project)
+            self.record("Umbrales de alerta actualizados",
+                        f"{config['minPeople']} personas · {config['dwell']} s · radio {config['radius']}")
 
     def incidents(self, estado=None):
         conexion = None
@@ -1913,7 +1918,7 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path == "/api/alert-rules":
                 # Umbrales de aglomeración: es lo único de configuración que el
                 # administrador sí puede ajustar, porque define cuándo le avisan.
-                engine.update_alert_rules(data)
+                engine.update_alert_rules(data, expected_project=data.get("projectId"))
                 return self.send_data(200, {"ok": True})
             if parsed.path == "/api/incidents":
                 return self.send_data(200, engine.update_incident(data.get("id"), data.get("estado")))

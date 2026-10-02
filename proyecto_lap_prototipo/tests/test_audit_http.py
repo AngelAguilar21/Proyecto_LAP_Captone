@@ -127,6 +127,141 @@ class AuditHTTPTests(unittest.TestCase):
         self.assertEqual(self.request("/api/config", config)[0], 200)
         self.assertEqual(json.loads(self.engine.config_path.read_text())["airport"], config["airport"])
 
+    def alert_rule_projects(self):
+        """Two distinct persisted projects, including their business databases."""
+        self.login()
+        a = self.engine.new_project("Rules project A")["active"]
+        config_a = copy.deepcopy(self.engine.config)
+        config_a.update(width=12, height=8, radius=1)
+        self.engine.configure(config_a)
+        b = self.engine.new_project("Rules project B")["active"]
+        config_b = copy.deepcopy(self.engine.config)
+        config_b.update(width=25, height=15, radius=2)
+        self.engine.configure(config_b)
+        self.engine.open_project(a)
+        configs = [projects.project_path(self.root, pid) for pid in (a, b)]
+        paths = configs + [business_data.path_for(path) for path in configs]
+        return a, b, configs, {path: path.read_bytes() for path in paths}
+
+    def test_alert_rules_require_the_intended_project_and_preserve_other_fields(self):
+        a, b, configs, before = self.alert_rule_projects()
+        for owner in (None, "", b, 12):
+            with self.subTest(owner=owner):
+                payload = {"radius": 3, "minPeople": 7, "dwell": 9}
+                if owner is not None:
+                    payload["projectId"] = owner
+                self.assertEqual(self.request("/api/alert-rules", payload)[0], 400)
+                self.assertEqual({path: path.read_bytes() for path in before}, before)
+        self.assertEqual(self.request("/api/alert-rules", {
+            "projectId": a, "radius": 3, "minPeople": 7, "dwell": 9})[0], 200)
+        expected = json.loads(before[configs[0]])
+        expected.update(radius=3, minPeople=7, dwell=9)
+        self.assertEqual(json.loads(configs[0].read_text(encoding="utf-8")), expected)
+        self.assertEqual(configs[1].read_bytes(), before[configs[1]])
+        for path in before:
+            if path not in configs:
+                self.assertEqual(path.read_bytes(), before[path])
+
+    def test_alert_rules_reject_project_switch_before_snapshot(self):
+        a, b, configs, before = self.alert_rule_projects()
+        entered, release = threading.Event(), threading.Event()
+        original = self.engine.update_alert_rules
+        result, errors = [], []
+
+        def paused(data, *args, **kwargs):
+            entered.set()
+            if not release.wait(5):
+                raise AssertionError("Test barrier not released")
+            return original(data, *args, **kwargs)
+
+        def write():
+            try:
+                result.append(self.request("/api/alert-rules", {
+                    "projectId": a, "radius": 3, "minPeople": 7, "dwell": 9}))
+            except BaseException as exc:
+                errors.append(exc)
+
+        with patch.object(self.engine, "update_alert_rules", paused):
+            writer = threading.Thread(target=write, daemon=True)
+            writer.start()
+            try:
+                self.assertTrue(entered.wait(3))
+                self.assertEqual(self.request("/api/projects", {"action": "open", "id": b})[0], 200)
+            finally:
+                release.set()
+                writer.join(5)
+            self.assertFalse(writer.is_alive())
+        self.assertEqual(errors, [])
+        self.assertEqual(result[0][0], 400)
+        self.assertEqual(self.engine.project_id, b)
+        self.assertEqual({path: path.read_bytes() for path in before}, before)
+        self.assertEqual(self.request("/api/alert-rules", {
+            "projectId": b, "radius": 4, "minPeople": 8, "dwell": 10})[0], 200)
+        expected = json.loads(before[configs[1]])
+        expected.update(radius=4, minPeople=8, dwell=10)
+        self.assertEqual(json.loads(configs[1].read_text(encoding="utf-8")), expected)
+        self.assertEqual(configs[0].read_bytes(), before[configs[0]])
+
+    def test_alert_rules_snapshot_and_write_hold_the_project_lock(self):
+        a, b, configs, before = self.alert_rule_projects()
+        entered, release, opening = threading.Event(), threading.Event(), threading.Event()
+        original_configure, original_open = self.engine.configure, self.engine.open_project
+        writes, opens, errors = [], [], []
+
+        def paused(config, *args, **kwargs):
+            entered.set()
+            if not release.wait(5):
+                raise AssertionError("Test barrier not released")
+            return original_configure(config, *args, **kwargs)
+
+        def observed_open(pid):
+            opening.set()
+            return original_open(pid)
+
+        def request_into(target, path, data):
+            try:
+                target.append(self.request(path, data))
+            except BaseException as exc:
+                errors.append(exc)
+
+        with patch.object(self.engine, "configure", paused), patch.object(self.engine, "open_project", observed_open):
+            writer = threading.Thread(target=request_into, args=(writes, "/api/alert-rules", {
+                "projectId": a, "radius": 3, "minPeople": 7, "dwell": 9}), daemon=True)
+            opener = threading.Thread(target=request_into, args=(opens, "/api/projects", {
+                "action": "open", "id": b}), daemon=True)
+            writer.start()
+            try:
+                self.assertTrue(entered.wait(3))
+                # Probe from a different thread; RLock must still belong to the
+                # rule request after capturing A and before writing its draft.
+                acquired = self.engine.lock.acquire(blocking=False)
+                if acquired:
+                    self.engine.lock.release()
+                self.assertFalse(acquired, "Rules snapshot escaped its project lock")
+                opener.start()
+                self.assertTrue(opening.wait(3))
+            finally:
+                release.set()
+                writer.join(5)
+                if opener.ident is not None:
+                    opener.join(5)
+            self.assertFalse(writer.is_alive())
+            self.assertFalse(opener.is_alive())
+        self.assertEqual(errors, [])
+        self.assertEqual([item[0] for item in writes + opens], [200, 200])
+        self.assertEqual(self.engine.project_id, b)
+        expected = json.loads(before[configs[0]])
+        expected.update(radius=3, minPeople=7, dwell=9)
+        self.assertEqual(json.loads(configs[0].read_text(encoding="utf-8")), expected)
+        self.assertEqual(configs[1].read_bytes(), before[configs[1]])
+        for path in before:
+            if path not in configs:
+                self.assertEqual(path.read_bytes(), before[path])
+        normal = copy.deepcopy(self.engine.config)
+        normal["airport"] = "B saved after rules race"
+        self.assertEqual(self.request(f"/api/config?project={b}", normal)[0], 200)
+        self.assertEqual(json.loads(configs[1].read_text(encoding="utf-8"))["airport"], normal["airport"])
+
     def test_corrupt_or_invalid_users_cannot_bootstrap_or_mutate(self):
         self.login()
         path = auth.path_for(self.engine.settings_root)

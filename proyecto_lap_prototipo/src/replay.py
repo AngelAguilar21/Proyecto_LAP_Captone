@@ -59,6 +59,12 @@ def camera_snapshot(cameras):
 def public(meta):
  return {**meta,'cameras':[{**{k:v for k,v in c.items() if k!='source'},'sourceKind':c.get('sourceKind') or ('recording' if isinstance(c.get('source'),str) and '://' not in c['source'] else 'live')} for c in meta['cameras']], 'config':{k:v for k,v in meta.get('config',{}).items() if k not in ('cameras','source')}}
 
+def _valid_time(value):
+ """Reject unrepresentable JSON numbers at the stored timestamp boundary."""
+ if type(value) not in (int,float):return False
+ try:return math.isfinite(value) and value>=0
+ except OverflowError:return False
+
 def validate_manifest(meta, sid=None):
  """Validate stored structure without inventing values or rewriting history."""
  if not isinstance(meta,dict):raise ValueError('El manifiesto no es un objeto.')
@@ -70,7 +76,7 @@ def validate_manifest(meta, sid=None):
  except ValueError:raise ValueError('Fecha de sesión inválida.') from None
  if not isinstance(meta.get('config'),dict) or not isinstance(meta.get('cameras'),list) or any(not isinstance(c,dict) for c in meta['cameras']):
   raise ValueError('Configuración histórica inválida.')
- if type(meta.get('end')) not in (int,float) or not math.isfinite(meta['end']) or meta['end']<0:
+ if not _valid_time(meta.get('end')):
   raise ValueError('Final de sesión ausente o inválido.')
  if not isinstance(meta.get('module'),str) or not isinstance(meta.get('status'),str):
   raise ValueError('Estado de sesión inválido.')
@@ -100,7 +106,7 @@ def recover_interrupted(root, on_error=None):
     try:
      sample=json.loads(line)
      t=sample['t']
-     if type(t) not in (int,float) or not math.isfinite(t) or t<0:break
+     if not _valid_time(t):break
      meta['end']=t
     except (ValueError,KeyError,TypeError):break
    tmp=path.with_suffix('.tmp');tmp.write_text(json.dumps(meta,ensure_ascii=False),encoding='utf-8');tmp.replace(path)
@@ -189,8 +195,8 @@ def report_snapshot(root, sid, project_id, *, strict=False):
    except ValueError:
     if strict or verified_format:raise
     continue
-   if (strict or verified_format) and (not isinstance(sample,dict) or type(sample.get('t')) not in (int,float)
-       or not math.isfinite(sample['t']) or sample['t']<0 or not isinstance(sample.get('cameras'),list)
+   if (strict or verified_format) and (not isinstance(sample,dict) or not _valid_time(sample.get('t'))
+       or not isinstance(sample.get('cameras'),list)
        or any(not isinstance(camera,dict) or not isinstance(camera.get('people'),list)
               or any(not isinstance(person,dict) for person in camera['people']) for camera in sample['cameras'])):
     raise ValueError('La sesión guardada contiene muestras incompletas o inválidas.')

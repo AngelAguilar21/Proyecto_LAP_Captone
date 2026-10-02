@@ -32,6 +32,12 @@ function beep() {
 
 export default function SecurityAlerts({ session, onOpenCamera }: { session: Session; onOpenCamera: (id: string) => void }) {
   const { state, config } = session;
+  const ruleContext = useRef({ projectId: session.projects.active, serverInstance: state.serverInstance });
+  if (ruleContext.current.projectId !== session.projects.active || ruleContext.current.serverInstance !== state.serverInstance) {
+    ruleContext.current = { projectId: session.projects.active, serverInstance: state.serverInstance };
+  }
+  const mounted = useRef(false);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [sound, setSound] = useState(() => { try { return localStorage.getItem('aero.alerts.sound') !== 'off'; } catch { return true; } });
   const known = useRef(new Map<string, Alert>());
@@ -91,11 +97,19 @@ export default function SecurityAlerts({ session, onOpenCamera }: { session: Ses
   const [rules, setRules] = useState({ minPeople: 4, dwell: 3, radius: 1.5 });
   useEffect(() => {
     if (config) setRules({ minPeople: config.minPeople, dwell: config.dwell, radius: config.radius });
-  }, [config?.minPeople, config?.dwell, config?.radius]);
+  }, [session.projects.active, config?.minPeople, config?.dwell, config?.radius]);
   const rulesDirty = !!config && (rules.minPeople !== config.minPeople || rules.dwell !== config.dwell || rules.radius !== config.radius);
   function saveRules() {
+    const context = ruleContext.current;
+    const ownsContext = () => mounted.current && ruleContext.current === context;
     void session.action(async () => {
-      await session.post('alert-rules', rules);
+      try {
+        await session.post('alert-rules', { ...rules, projectId: context.projectId });
+      } catch (error) {
+        if (!ownsContext()) return;
+        throw error;
+      }
+      if (!ownsContext()) return;
       session.setNotice('Umbrales de alerta actualizados.');
     });
   }
@@ -118,7 +132,7 @@ export default function SecurityAlerts({ session, onOpenCamera }: { session: Ses
     <section className="aero-panel">
       <div className="panel-heading">
         <div><h2>Cuándo avisar</h2><p className="subtle">Define cuánta gente junta y por cuánto tiempo cuenta como aglomeración. No hace falta entrar a Configuración para cambiarlo.</p></div>
-        <button className="primary" disabled={session.busy || !rulesDirty} onClick={saveRules}>Guardar umbrales</button>
+        <button className="primary" disabled={session.busy || !rulesDirty || !session.projects.active} onClick={saveRules}>Guardar umbrales</button>
       </div>
       <div className="rules-form">
         <label>Personas mínimas<input type="number" min={2} max={1000} value={rules.minPeople} onChange={e => setRules({ ...rules, minPeople: +e.target.value })} /></label>

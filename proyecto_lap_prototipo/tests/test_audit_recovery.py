@@ -14,7 +14,7 @@ from replay import ReplayWriter
 from replay import report_snapshot, recover_interrupted
 from replay_projection import current_projection
 from automation import LIMA
-from automation_reports import ScheduledReports
+from automation_reports import ScheduledReports, eligible
 from automation_store import AutomationStore
 from datetime import datetime
 from unittest.mock import Mock
@@ -35,9 +35,11 @@ class AuditRecoveryTests(unittest.TestCase):
                                     "height": 3, "offset": 0, "links": [], "pairs": []}]
         self.engine.configure(self.config)
 
-    def saved(self, sid):
+    def saved(self, sid, *, created=None):
         writer = ReplayWriter(self.root, sid, "unified", self.config["cameras"],
                               {k: v for k, v in self.config.items() if k != "cameras"}, self.engine.project_id)
+        if created is not None:
+            writer.meta["created"] = created
         writer.append({"t": 10, "cameras": [{"id": "C", "people": [{"id": "synthetic"}]}]})
         writer.meta["cameraAnalytics"] = {"C": {"occupancy": {"count": 1}}}
         writer.meta["totals"] = {"meanObservedSeconds": 5, "alerts": 0}
@@ -54,7 +56,8 @@ class AuditRecoveryTests(unittest.TestCase):
             value.pop(key)
             variants.append(("missing_" + key, value))
         for key, value in (("created", 3), ("created", "not-a-date"), ("config", []),
-                           ("end", "bad"), ("end", True), ("cameraAnalytics", []),
+                           ("end", "bad"), ("end", True), ("end", 10**400), ("end", -(10**400)),
+                           ("cameraAnalytics", []),
                            ("cameraAnalytics", {"C": []}), ("levelAnalytics", [])):
             variants.append(("invalid_" + key, {**valid, key: value}))
         variants += [("array", []), ("null", None), ("malformed", "{broken")]
@@ -72,12 +75,66 @@ class AuditRecoveryTests(unittest.TestCase):
                 self.assertEqual(good.path.read_bytes(), good_bytes)
 
     def test_valid_writer_metadata_restores_latest_session(self):
-        first = self.saved("abcd0001")
-        second = self.saved("abcd0002")
+        first = self.saved("abcd0002", created="2026-10-01T10:00:00+00:00")
+        second = self.saved("abcd0001", created="2026-10-01T11:00:00+00:00")
+        before = {writer.path: writer.path.read_bytes() for writer in (first, second)}
+        original_glob = Path.glob
+        for order in ((first.path, second.path), (second.path, first.path)):
+            with self.subTest(enumeration=[path.parent.name for path in order]):
+                def ordered_glob(path, pattern):
+                    if path == self.root / "data/replays" and pattern == "*/manifest.json":
+                        return iter(order)
+                    return original_glob(path, pattern)
+                with patch.object(Path, "glob", ordered_glob):
+                    restored = live_server.Engine()
+                self.assertEqual(restored.state["session"], second.meta["session"])
+                self.assertEqual(restored.state["series"], [{"t": 10, "count": 1}])
+                self.assertEqual(restored.report_identity, (self.engine.project_id, second.meta["session"]))
+        self.assertEqual({path: path.read_bytes() for path in before}, before)
+
+    def test_zero_duration_writer_restores_summary_without_report_eligibility(self):
+        writer = ReplayWriter(self.root, "abcd0010", "unified", self.config["cameras"],
+                              {k: v for k, v in self.config.items() if k != "cameras"}, self.engine.project_id)
+        writer.append({"t": 0, "cameras": [{"id": "C", "people": []}]})
+        writer.meta["cameraAnalytics"] = {"C": {"occupancy": {"count": 0}}}
+        writer.meta["totals"] = {"meanObservedSeconds": 0, "alerts": 0}
+        writer.finish("ended")
+        samples = writer.directory / "samples.jsonl"
+        before = writer.path.read_bytes(), samples.read_bytes()
         restored = live_server.Engine()
-        self.assertEqual(restored.state["session"], second.meta["session"])
-        self.assertEqual(restored.state["series"], [{"t": 10, "count": 1}])
-        self.assertEqual(restored.report_identity, (self.engine.project_id, second.meta["session"]))
+        self.assertEqual(restored.state["session"], "abcd0010")
+        self.assertEqual(restored.state["t"], 0)
+        self.assertEqual(restored.state["series"], [{"t": 0, "count": 0}])
+        self.assertFalse(eligible(restored.automation_snapshot()))
+        self.assertEqual(report_snapshot(self.root, "abcd0010", self.engine.project_id, strict=True)[2]["evidenceIntegrity"], "verified")
+        self.assertEqual((writer.path.read_bytes(), samples.read_bytes()), before)
+
+    def test_overflowing_sample_time_is_rejected_without_changing_evidence(self):
+        writer = self.saved("abcd0011")
+        samples = writer.directory / "samples.jsonl"
+        for t in (10**400, -(10**400)):
+            samples.write_text(json.dumps({"t": t, "cameras": []}) + "\n", encoding="utf-8")
+            before = writer.path.read_bytes(), samples.read_bytes()
+            for strict in (False, True):
+                with self.subTest(negative=t < 0, strict=strict):
+                    with self.assertRaises(ValueError):
+                        report_snapshot(self.root, "abcd0011", self.engine.project_id, strict=strict)
+                    self.assertEqual((writer.path.read_bytes(), samples.read_bytes()), before)
+
+    def test_interrupted_recovery_stops_at_overflowing_sample_time(self):
+        writer = self.saved("abcd0012")
+        meta = copy.deepcopy(writer.meta)
+        meta.update(status="running", end=0, completion=None)
+        writer.path.write_text(json.dumps(meta), encoding="utf-8")
+        samples = writer.directory / "samples.jsonl"
+        samples.write_bytes(samples.read_bytes() + (json.dumps({"t": 10**400, "cameras": []}) + "\n").encode("utf-8"))
+        before = samples.read_bytes()
+        recover_interrupted(self.root)
+        recovered = json.loads(writer.path.read_text(encoding="utf-8"))
+        self.assertEqual(recovered["status"], "error")
+        self.assertEqual(recovered["end"], 10)
+        self.assertIsNone(recovered["completion"])
+        self.assertEqual(samples.read_bytes(), before)
 
     def two_samples(self):
         writer = ReplayWriter(self.root, "abcd0020", "unified", self.config["cameras"],

@@ -3,6 +3,7 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import PlanWorkspace from '../src/aero/PlanWorkspace';
+import SecurityAlerts from '../src/aero/SecurityAlerts';
 import { useSession } from '../src/aero/useSession';
 import { EMPTY_STATE } from '../src/aero/types';
 import type { Config } from '../src/aero/types';
@@ -17,6 +18,8 @@ const clone = <T,>(value:T):T => JSON.parse(JSON.stringify(value));
 let active = 'p-A', revision = 0;
 let stored: Record<string,Config>;
 let requests: { owner:string; payload:Config; finish:(status?:number)=>void }[];
+let ruleRequests: { owner:string; payload:Record<string,unknown>; commit:()=>void; finish:(status?:number)=>void }[];
+const withAlertRules = new URLSearchParams(location.search).has('alert-rules');
 let session: ReturnType<typeof useSession>;
 const nativeFetch=window.fetch.bind(window);
 let holdCalibration=false;
@@ -42,6 +45,14 @@ window.fetch = ((url: string, options?:RequestInit) => {
       resolve(new Response(JSON.stringify(status === 200 ? {ok:true} : {error:'Synthetic save rejected'}), {status}));
     }}));
   }
+  if (options?.method === 'POST' && path.pathname === '/api/alert-rules') {
+    const payload = JSON.parse(String(options.body));
+    const {projectId:owner,...rules} = payload;
+    return new Promise<Response>(resolve => ruleRequests.push({owner,payload,
+      commit:()=>{stored[owner]={...stored[owner],...rules};revision++;},
+      finish:(status=200)=>resolve(new Response(JSON.stringify(status===200?{ok:true}:{error:'Synthetic rules rejected'}),{status})),
+    }));
+  }
   if (options?.method === 'POST' && path.pathname === '/api/projects') {
     active = JSON.parse(String(options.body)).id; revision++;
   }
@@ -50,6 +61,8 @@ window.fetch = ((url: string, options?:RequestInit) => {
     case '/api/config': return response({config:clone(stored[active]), projectId:active, revision, token:'synthetic'});
     case '/api/projects': return response({active, projects:Object.keys(stored).map(id=>({id,name:id}))});
     case '/api/auth': return response({configurado:true, usuario:'synthetic', rol:'operador', usuarios:[]});
+    case '/api/incidents': return response({incidentes:[]});
+    case '/api/mail': return response({enabled:false,recipients:[],configured:false,host:'',port:587,user:''});
     default: return response({error:'Unexpected test request: '+path.pathname},404);
   }
 }) as typeof fetch;
@@ -68,6 +81,7 @@ function Fixture() {
       onChange={e=>session.setConfig({...session.config!,width:Number(e.target.value)})}/></label>
     <output id="geometry-readiness">{session.config.cameras[0]&&geometryReady(session.config.cameras[0],session.calibrationFor(session.config.cameras[0]))?'Preparado':'Pendiente'}</output>
     <PlanWorkspace session={session} selected={session.config.cameras[0]?.id||''} onSelected={()=>{}} startTest={()=>{throw Error('Inference forbidden');}} section={session.config.cameras.length?'calibration':'area'} embedded/>
+    {withAlertRules&&<SecurityAlerts key={session.projects.active||'none'} session={session} onOpenCamera={()=>{throw Error('Capture forbidden');}}/>}
   </>;
 }
 const results: {name:string; ok:boolean; detail?:string}[] = [];
@@ -96,11 +110,11 @@ async function pendingAreaSave() {
   expect(requests[0].payload.airport==='Original A','Frozen payload before newer edit');
 }
 async function run(name:string, operation:()=>Promise<void>) {
-  active='p-A';revision=0;stored={'p-A':clone(initial),'p-B':{...clone(initial),airport:'Project B'}};requests=[];calibrations=[];holdCalibration=false;
+  active='p-A';revision=0;stored={'p-A':clone(initial),'p-B':{...clone(initial),airport:'Project B'}};requests=[];ruleRequests=[];calibrations=[];holdCalibration=false;
   root=createRoot(target);
   try {
     await act(async()=>{root.render(<Fixture/>);await tick();});
-    await until(()=>!!session.config&&session.auth.cargado);
+    await until(()=>!!session.config&&session.auth.cargado&&session.projects.active==='p-A');
     await operation();results.push({name,ok:true});
   } catch(error) {results.push({name,ok:false,detail:String(error)});}
   finally {await act(async()=>{root.unmount();await tick();});}
@@ -136,6 +150,46 @@ await run('late successful response from A never confirms or replaces B',async()
   expect(!session.notice&&!session.dirty,'A response confirmed unrelated project');
   expect(stored['p-B'].airport==='Project B','B store changed');
 });
+if(withAlertRules) {
+  async function pendingRulesSave() {
+    await act(async()=>{
+      const input=target.querySelector('.rules-form input[type="number"]')!;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(input,'7');
+      input.dispatchEvent(new Event('input',{bubbles:true}));await tick();
+    });
+    await click('Guardar umbrales');await until(()=>ruleRequests.length===1);
+    expect(ruleRequests[0].owner==='p-A','Rules request omitted the intended project');
+    expect(ruleRequests[0].payload.minPeople===7,'Rules request omitted the edited value');
+    expect(!('cameras' in ruleRequests[0].payload),'Rules request must not send the complete configuration');
+  }
+  await run('real alert-rules caller sends project identity and confirms its own save',async()=>{
+    await pendingRulesSave();
+    await act(async()=>{ruleRequests[0].commit();ruleRequests[0].finish();await tick();});
+    await until(()=>!session.busy);
+    expect(session.notice==='Umbrales de alerta actualizados.','Own successful rules save was not confirmed');
+    expect(stored['p-A'].minPeople===7&&stored['p-B'].minPeople===2,'Rules changed the wrong project');
+  });
+  await run('late successful rules response from A cannot confirm project B',async()=>{
+    await pendingRulesSave();
+    // A accepted the update before B opened, but its HTTP response is delayed.
+    await act(async()=>{ruleRequests[0].commit();await tick();});
+    await click('Abrir B');await until(()=>session.config!.airport==='Project B'&&session.projects.active==='p-B');
+    await act(async()=>{ruleRequests[0].finish();await tick();});
+    await until(()=>!session.busy);
+    expect(session.notice!== 'Umbrales de alerta actualizados.','Old rules response confirmed B');
+    expect(!session.error,'Old successful rules response generated an error in B');
+    expect(session.config!.airport==='Project B'&&stored['p-B'].minPeople===2,'Old rules response replaced B');
+    expect(target.querySelector<HTMLInputElement>('.rules-form input[type="number"]')!.value==='2','B shows A rules draft');
+  });
+  await run('late rejected rules response from A cannot replace feedback in B',async()=>{
+    await pendingRulesSave();await click('Abrir B');
+    await until(()=>session.config!.airport==='Project B'&&session.projects.active==='p-B');
+    await act(async()=>{session.setNotice('Project B context');ruleRequests[0].finish(400);await tick();});
+    await until(()=>!session.busy);
+    expect(!session.error&&session.notice==='Project B context','Old rules rejection contaminated B feedback');
+    expect(stored['p-A'].minPeople===2&&stored['p-B'].minPeople===2,'Rejected rules request changed a store');
+  });
+}
 if(new URLSearchParams(location.search).has('calibration')) {
   const camera={id:'C',source:'synthetic.mp4',x:1,y:1,offset:0,links:[],height:3,planId:'custom',
     pairs:[[0,0,0,0],[1,0,12,0],[1,1,12,8],[0,1,0,8]]};
@@ -173,4 +227,4 @@ if(new URLSearchParams(location.search).has('calibration')) {
   });
 }
 document.body.dataset.result=results.every(result=>result.ok)?'PASS':'FAIL';
-document.title='AUD-05/08 '+document.body.dataset.result;
+document.title='AUD-05/08 / REV-01 '+document.body.dataset.result;
