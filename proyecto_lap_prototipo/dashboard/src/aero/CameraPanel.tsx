@@ -9,9 +9,10 @@ export function CameraVideo({ camera, state, connected, onPoint, mode, pending, 
   const [tick, setTick] = useState(0);
   const [failed, setFailed] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const retryFrame = useRef<number>();
   const [box, setBox] = useState<{ w: number; h: number; x: number; y: number } | null>(null);
   const status = state.cameras.find(c => c.id === camera?.id);
-  useEffect(()=>{ setFailed(false); setTick(Date.now()); },[camera?.id,state.session]);
+  useEffect(()=>{ setFailed(false); setTick(Date.now()); },[camera?.id,state.session,state.preview?.t,status?.status]);
   const previewSelected=state.preview?.camera===camera?.id&&!state.preview?.error;
   const previewing=previewSelected&&!!state.preview?.playing;
   const nextFrame=useRef<number>();
@@ -22,9 +23,23 @@ export function CameraVideo({ camera, state, connected, onPoint, mode, pending, 
     if(state.status!=='running')return;
     const id=setInterval(()=>{if(!document.hidden){setTick(Date.now());setFailed(false);}},400);
     return()=>clearInterval(id);},[state.status,mode,connected,previewing]);
-  useEffect(()=>()=>window.clearTimeout(nextFrame.current),[]);
+  useEffect(()=>()=>{window.clearTimeout(nextFrame.current);window.clearTimeout(retryFrame.current);},[]);
+  const handleFrameError = () => {
+    setFailed(true);
+    window.clearTimeout(retryFrame.current);
+    retryFrame.current = window.setTimeout(() => {
+      if (!document.hidden) {
+        setFailed(false);
+        setTick(Date.now());
+      }
+    }, 600);
+  };
+  const handleFrameLoad = () => {
+    setFailed(false);
+    chainFrame();
+  };
   const chainFrame=()=>{if(!previewing)return;window.clearTimeout(nextFrame.current);nextFrame.current=window.setTimeout(()=>{if(!document.hidden)setTick(Date.now());},40);};
-  const available = state.mode !== 'demo' && (previewSelected || !!status && ['ready','live','paused','stopped','ended'].includes(status.status));
+  const available = state.mode !== 'demo' && (previewSelected || !!status && ['ready','live','paused','stopped','ended'].includes(status.status) || (!!camera?.source && isActive(state.status)));
   // Entre pulsar "Iniciar" y que llegue la primera imagen, el servidor abre la
   // fuente y carga el detector; eso puede tardar unos segundos y hasta ese
   // momento no hay ningún dato nuevo de la cámara, así que un cuadro anterior
@@ -56,7 +71,7 @@ export function CameraVideo({ camera, state, connected, onPoint, mode, pending, 
   return <div className="camera-video" ref={ref}>
     <div className="video-frame" style={frameStyle}>
       {starting && <div className="video-starting" role="status"><i className="loader"/><strong>Iniciando la prueba…</strong><span>Conectando con la fuente{camera?.location?` (${camera.location})`:''} y preparando el detector. La primera vez que se usa un modelo tarda más porque hay que cargarlo; las siguientes veces es más rápido.</span><div className="indeterminate-bar"><i/></div></div>}
-      {available && !failed ? <img src={`/api/frame?camera=${encodeURIComponent(camera?.id||'')}&v=${tick}`} alt={`Seguimiento de ${camera?.name||camera?.id}`} onError={()=>setFailed(true)} onLoad={chainFrame} className={mode?'calibration-cursor':''} onClick={e=>{if(!mode||!onPoint)return;const r=e.currentTarget.getBoundingClientRect();if(!r.width||!r.height)return;const clamp=(v:number)=>Math.min(1,Math.max(0,v));onPoint([clamp((e.clientX-r.left)/r.width),clamp((e.clientY-r.top)/r.height)]);}}/> : <div className="video-empty"><Icon name="camera" size={38}/><strong>{!camera?'Añade una cámara':state.mode==='demo'?'Simulación de nodos':status?.status==='error'?'Cámara sin señal':state.status==='starting'?'Conectando con la fuente':'Vista de cámara'}</strong><span>{status?.error || (state.mode==='demo'?'No contiene grabación de personas. Prueba una fuente para ver video.':'Al iniciar una prueba verás el video procesado y los IDs temporales.')}</span></div>}
+      {available && !failed ? <img src={`/api/frame?camera=${encodeURIComponent(camera?.id||'')}&v=${tick}`} alt={`Seguimiento de ${camera?.name||camera?.id}`} onError={handleFrameError} onLoad={handleFrameLoad} className={mode?'calibration-cursor':''} onClick={e=>{if(!mode||!onPoint)return;const r=e.currentTarget.getBoundingClientRect();if(!r.width||!r.height)return;const clamp=(v:number)=>Math.min(1,Math.max(0,v));onPoint([clamp((e.clientX-r.left)/r.width),clamp((e.clientY-r.top)/r.height)]);}}/> : <div className="video-empty"><Icon name="camera" size={38}/><strong>{!camera?'Añade una cámara':state.mode==='demo'?'Simulación de nodos':status?.status==='error'?'Cámara sin señal':failed?'Esperando imagen…':state.status==='starting'?'Conectando con la fuente':'Vista de cámara'}</strong><span>{status?.error || (failed?'Reintentando la última imagen disponible…':state.mode==='demo'?'No contiene grabación de personas. Prueba una fuente para ver video.':'Al iniciar una prueba verás el video procesado y los IDs temporales.')}</span></div>}
       {pending && mode==='calibration' && <span className="calibration-marker" style={{left:`${pending[0]*100}%`,top:`${pending[1]*100}%`}}/>}
       {drawnZone && drawnZone.length>0 && <svg className="zone-overlay" viewBox="0 0 100 100" preserveAspectRatio="none">
         {drawnZone.length>1 && <polygon points={drawnZone.map(p=>`${p[0]*100},${p[1]*100}`).join(' ')}/>}
