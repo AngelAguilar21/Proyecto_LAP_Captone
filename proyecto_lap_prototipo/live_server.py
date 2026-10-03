@@ -26,6 +26,7 @@ project_python = project_env / ("Scripts/python.exe" if os.name == "nt" else "bi
 if __name__ == "__main__" and project_python.is_file() and Path(sys.prefix).resolve() != project_env.resolve():
     os.execv(str(project_python), [str(project_python), str(Path(__file__).resolve()), *sys.argv[1:]])
 sys.path.insert(0, str(ROOT / "src"))
+import hardware
 from live_core import (ESTATURA_MEDIA, IdentityStore, Occupancy, body_box, calibration,
                        estimate_height, ground_point, validate_config)
 from identity_memory import IdentityMemory, clamp_retention
@@ -861,11 +862,13 @@ class Engine:
         instancia ya cargada, que es barato.
         """
         if mode in ("hybrid", "yolo"):
-            key = ("yolo", int(request.get("inferenceSize") or 640))
+            profile = request.get("profile") or {}
+            weights = profile.get("weights") or str(ROOT / "models" / "yolo11n.pt")
+            key = ("yolo", int(request.get("inferenceSize") or 640), weights, profile.get("device"), bool(profile.get("half")))
             with self.detector_lock:
                 if key not in self.detector_caches:
                     from following.detector import YoloPersonDetector
-                    self.detector_caches[key] = YoloPersonDetector(ROOT / "models" / "yolo11n.pt", imgsz=key[1])
+                    self.detector_caches[key] = YoloPersonDetector(weights, imgsz=key[1], device=profile.get("device"), half=key[4])
                 return self.detector_caches[key]
         if mode == "p2pnet":
             key = ("p2pnet",)
@@ -884,11 +887,13 @@ class Engine:
         raise ValueError("AeroTrack opera únicamente con P2PNet.")
 
         if mode in ("hybrid", "yolo"):
-            key = ("yolo", int(request.get("inferenceSize") or 640))
+            profile = request.get("profile") or {}
+            weights = profile.get("weights") or str(ROOT / "models" / "yolo11n.pt")
+            key = ("yolo", int(request.get("inferenceSize") or 640), weights, profile.get("device"), bool(profile.get("half")))
             with self.detector_lock:
                 if key not in self.detector_caches:
                     from following.detector import YoloPersonDetector
-                    self.detector_caches[key] = YoloPersonDetector(ROOT / "models" / "yolo11n.pt", imgsz=key[1])
+                    self.detector_caches[key] = YoloPersonDetector(weights, imgsz=key[1], device=profile.get("device"), half=key[4])
                 return self.detector_caches[key]
         raise ValueError("Detector no soportado.")
 
@@ -920,11 +925,25 @@ class Engine:
             from types import SimpleNamespace
             from tracking import ByteTrackPuntos
             from following.appearance import torso_histogram
+            from following.reid import OSNetEmbedder, EmbeddingScheduler, occluded_ids
+            from following.clutter import SizeFilter, StaticClutter
             from following.flow import ZoneFlow, FlowField
             person_height = float(config.get("personHeight") or ESTATURA_MEDIA)
             primary_mode = "yolo" if mode == "hybrid" else mode
+            # Con cámaras elevadas (>= 3 m) las personas miden pocos píxeles y a 640 px
+            # YOLO casi no las detecta: se sube la resolución y se baja el umbral.
+            elevated = any(float(c.get("height") or 0) >= 3 for c in config["cameras"] if c.get("active", True))
+            profile = hardware.choose(config, elevated)
+            if primary_mode == "yolo":
+                # La interfaz envía 256 px (pensado para P2PNet); con YOLO eso pierde a las
+                # personas en grupos. El perfil del equipo fija modelo y resolución mínima.
+                request = {**request, "inferenceSize": max(int(request.get("inferenceSize") or 640), profile["imgsz"]), "profile": profile}
+                if profile["missingWeights"] or profile["hint"]:
+                    self.record("Hardware", profile["hint"] or f"Falta {profile['missingWeights']}: se usa {Path(profile['weights']).name}. Descárgalo con tools/preparar_hardware.py.")
             detector = self.load_detector(primary_mode, request)
-            cams = [c for c in config["cameras"] if c.get("active",True) and (not request.get("camera") or c["id"] == request["camera"])]
+            if primary_mode == "yolo":
+                detector.confidence = .15 if elevated else .25
+            cams =[c for c in config["cameras"] if c.get("active",True) and (not request.get("camera") or c["id"] == request["camera"])]
             statuses = {}
             for c in cams:
                 if self.stop_event.is_set():
@@ -970,7 +989,7 @@ class Engine:
                 c.update(cap=cap, fps=fps, stream=stream, duration=cap.get(cv2.CAP_PROP_FRAME_COUNT)/fps if not stream else None, frameIndex=-1,
                          # Mantiene el track durante 1.8 s a 25 FPS para
                          # recuperar la identidad tras una oclusión corta.
-                         tracker=ByteTrackPuntos(umbral_alto=.6,max_frames_perdido=45),
+                         tracker=ByteTrackPuntos(umbral_alto=.4,max_frames_perdido=45),
                          h=calibration(c.get("pairs", [])), headPoints=primary_mode=="p2pnet")
                 # P2PNet marca cabezas: se proyectan al suelo corrigiendo por la altura de la
                 # cámara, que por eso tiene que superar la estatura supuesta.
@@ -1001,6 +1020,12 @@ class Engine:
             if len({c["stream"] for c in active}) > 1:
                 raise ValueError("No mezcles archivos y cámaras en vivo en una sesión; sus relojes no son equivalentes.")
             identities, occupancy, metrics = IdentityStore(config), Occupancy(config), SessionMetrics()
+            # OSNet solo refuerza la asociación; sin modelo .onnx se conserva la firma de color.
+            embedder = OSNetEmbedder(config.get("reidModel"), providers=profile["osnetProviders"])
+            reid_interval = int(config.get("reidInterval") or profile["osnetInterval"])
+            size_filters = {c["id"]: SizeFilter() for c in active}
+            clutter = {c["id"]: StaticClutter() for c in active}
+            reid_schedulers = {c["id"]: EmbeddingScheduler(reid_interval) for c in active}
             # Posición, ropa y aspecto físico por ID temporal, con retención corta.
             # Un fallo al abrir la base no debe impedir el monitoreo.
             try:
@@ -1084,7 +1109,7 @@ class Engine:
                             cap=cap, fps=fps, stream=stream,
                             duration=cap.get(cv2.CAP_PROP_FRAME_COUNT) / fps if not stream else None,
                             frameIndex=-1,
-                            tracker=ByteTrackPuntos(umbral_alto=.6, max_frames_perdido=45),
+                            tracker=ByteTrackPuntos(umbral_alto=.4, max_frames_perdido=45),
                             h=calibration(camera.get("pairs", [])),
                             headPoints=primary_mode == "p2pnet",
                         )
@@ -1165,9 +1190,26 @@ class Engine:
                             keep.append(i)
                     excluded = len(detections)-len(keep)
                     detections = [detections[i] for i in keep]
+                    use_filters = config.get("clutterFilter", True) and primary_mode == "yolo"
+                    if use_filters:
+                        # Gorros, pósters y otros objetos pequeños que YOLO confunde con personas.
+                        detections, small = size_filters[c["id"]].apply(detections, (width, height))
+                        excluded += small
                     for detection in detections:
                         detection.appearance = torso_histogram(frame, getattr(detection, "box", None))
                     tracks, _, _ = c["tracker"].actualizar(detections, t)
+                    still = clutter[c["id"]].update(tracks, t, (width, height)) if use_filters else set()
+                    if still:
+                        tracks = [tr for tr in tracks if tr.id not in still]
+                        excluded += len(still)
+                    scheduler = reid_schedulers[c["id"]]
+                    if embedder.available:
+                        # OSNet cada N frames, al crear el track o si su confianza es baja.
+                        blocked = occluded_ids(tracks)
+                        due = [tr for tr in tracks if tr.ultima_caja is not None and tr.id not in blocked and scheduler.due(tr.id, c["frameIndex"], tr.score)]
+                        for tr, vec in zip(due, embedder.embed(frame, [tr.ultima_caja for tr in due])):
+                            scheduler.store(tr.id, c["frameIndex"], vec)
+                        scheduler.prune({tr.id for tr in c["tracker"].tracks_activos + c["tracker"].tracks_perdidos})
                     for tr in tracks:
                         px, py = tr.posicion
                         box = tr.ultima_caja
@@ -1184,13 +1226,13 @@ class Engine:
                         color = getattr(tr, "apariencia", None)
                         if color is None:
                             color = torso_histogram(frame, sample)
-                        observations.append({"camera": c["id"], "local": tr.id, "point": point, "pixel": [float(px), float(py)], "box": box, "color": color, "score": tr.score,
+                        observations.append({"camera": c["id"], "local": tr.id, "point": point, "pixel": [float(px), float(py)], "box": box, "color": color, "embedding": scheduler.get(tr.id) if embedder.available else None, "score": tr.score,
                                              "height": estimate_height(c, box, width, height)})
                     camera_count = sum(o["camera"] == c["id"] for o in observations)
                     avie_state = avie[c["id"]].update(detections, tracks, detector_ms / max(1, len(pending)))
                     if density_sampler and avie_state["p2pRequested"]:
                         density_sampler.submit(c["id"], frame, t)
-                    statuses[c["id"]] = {"id": c["id"], "status": "live", "width": width, "height": height, "fps":c["fps"], "duration":c.get("duration"), "calibrated": c["projects"], "count": camera_count, "excluded":excluded, "timestamp": t, "sourceTime":c["frameIndex"]/c["fps"] if not c["stream"] else None, "detector": primary_mode, "inferenceMs": round(detector_ms / max(1, len(pending)), 2), "avie": avie_state}
+                    statuses[c["id"]] = {"id": c["id"], "status": "live", "width": width, "height": height, "fps":c["fps"], "duration":c.get("duration"), "calibrated": c["projects"], "count": camera_count, "excluded":excluded, "timestamp": t, "sourceTime":c["frameIndex"]/c["fps"] if not c["stream"] else None, "detector": primary_mode, "hardware": {"tier": profile["tier"], "device": profile["device"], "model": Path(profile["weights"]).name, "imgsz": request.get("inferenceSize")}, "reid": "osnet" if embedder.available else "color", "inferenceMs": round(detector_ms / max(1, len(pending)), 2), "avie": avie_state}
                     with self.lock:
                         self.source_checks[c["id"]] = {"source":c["source"],"valid":True,"width":width,"height":height,"fps":c["fps"],"checkedAt":time.time()}
                 people = identities.update(observations, t)

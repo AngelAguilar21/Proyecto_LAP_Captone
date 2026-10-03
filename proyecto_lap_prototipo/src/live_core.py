@@ -391,6 +391,63 @@ def identity_appearance_distance(person, current):
     return min((color_distance(item, current) for item in gallery), default=.5)
 
 
+# Pesos iniciales de la puntuación de asociación; deben calibrarse con video real
+# (se pueden sobrescribir con config["reidWeights"]).
+REID_WEIGHTS = {"appearance": .40, "spatial": .30, "motion": .15, "time": .10, "size": .05}
+REID_MAX_EMBEDDING_DISTANCE = .45   # distancia coseno máxima aceptable con OSNet
+REID_MAX_CROSS_VIEW_DISTANCE = .65   # entre cámaras (otro ángulo) el embedding varía mucho: veto solo si es muy distinto
+REID_OVERLAP_VETO_DISTANCE = .85     # en solape solo una apariencia radicalmente distinta descarta la coincidencia
+REID_ACCEPT_SCORE = .40             # por debajo, la evidencia es débil: no se reutiliza el ID
+REID_AMBIGUITY_MARGIN = .04         # diferencia mínima de puntuación entre el 1.º y el 2.º candidato
+EMBEDDING_GALLERY_SIZE = 12
+EMBEDDING_NEW_VIEW = .12            # distancia mínima para guardar una vista nueva
+
+
+def embedding_distance(a, b):
+    """Distancia coseno entre vectores L2-normalizados, acotada a [0, 1]."""
+    return float(min(max(1. - float(np.dot(a, b)), 0.), 1.))
+
+
+def appearance_distance(person, observation):
+    """Distancia de apariencia contra la mejor vista de la galería.
+
+    Usa OSNet cuando ambos lados tienen embedding; si no, la firma de color.
+    Devuelve (distancia, usa_embedding).
+    """
+    embedding = observation.get("embedding")
+    gallery = person.get("embeddingGallery")
+    if embedding is not None and gallery:
+        return min(embedding_distance(item, embedding) for item in gallery), True
+    return identity_appearance_distance(person, observation.get("color")), False
+
+
+def height_agreement(person, observation, tolerance=.12, span=.3):
+    """1 si las estaturas coinciden, 0 si difieren mucho, None si falta el dato."""
+    a, b = person.get("height"), observation.get("height")
+    if a is None or b is None:
+        return None
+    return 1. - min(max(abs(a - b) - tolerance, 0.) / span, 1.)
+
+
+def association_score(cfg, appearance, distance_ratio, alignment, time_ratio, size):
+    """Puntuación de asociación en [0, 1]; mayor es más probable la misma persona.
+
+    appearance: distancia de apariencia; distance_ratio: distancia/umbral;
+    alignment: coseno entre desplazamiento y velocidad (None si se desconoce);
+    time_ratio: tiempo transcurrido/ventana; size: coincidencia de estatura.
+    """
+    weights = {**REID_WEIGHTS, **(cfg.get("reidWeights") or {})}
+    parts = {
+        "appearance": 1. - min(max(appearance, 0.), 1.),
+        "spatial": max(0., 1. - distance_ratio),
+        "motion": .5 if alignment is None else (max(-1., min(1., alignment)) + 1.) / 2.,
+        "time": 1. - min(max(time_ratio, 0.), 1.),
+        "size": .5 if size is None else size,
+    }
+    total = sum(weights.values()) or 1.
+    return sum(weights[key] * parts[key] for key in parts) / total
+
+
 def update_appearance(previous, current, weight=.25):
     """Suaviza la firma visual para que un reflejo o un frame no cambie el ID."""
     if current is None:
@@ -435,6 +492,13 @@ class IdentityStore:
                 # fusionar una multitud completa por proximidad.
                 gate=self.config['matchDistance']*1.6
                 distance=math.dist(a['point'],b['point'])/gate
+                if a.get('embedding') is not None and b.get('embedding') is not None:
+                    # Entre cámaras el ángulo cambia el embedding: en solape la posición
+                    # manda y la apariencia solo desempata o veta una diferencia enorme.
+                    appearance=embedding_distance(a['embedding'],b['embedding'])
+                    if appearance>REID_OVERLAP_VETO_DISTANCE:continue
+                    if distance<=1:scores.append((distance+appearance*.25,j))
+                    continue
                 appearance=color_distance(a.get('color'),b.get('color'))
                 if distance<=1 and (appearance<.6 or distance<=.3):scores.append((distance+appearance*.25,j))
             scores.sort()
@@ -482,6 +546,8 @@ class IdentityStore:
             if gid is not None and (gid, o["camera"]) in claimed:
                 gid = None
             association = "local"
+            reid_score = None
+            weak_evidence = False
             # Recupera una identidad cuando ByteTrack pierde una detección y
             # crea otro ID local en la misma cámara. Esto ocurre por oclusiones,
             # saltos de confianza o cambios bruscos de escala; no debe generar
@@ -505,9 +571,18 @@ class IdentityStore:
                                   p["point"][1] + p["velocity"][1] * dt)
                         gate = cfg["matchDistance"] * (2.2 + min(dt, 2) * .35)
                         dist = math.dist(o["point"], target)
-                        appearance = identity_appearance_distance(p, o.get("color"))
-                        if dist <= gate and (appearance <= .78 or dist <= gate * .35):
-                            candidates.append((dist / gate + appearance * .35 + height_penalty(p, o), pid, True))
+                        appearance, by_embedding = appearance_distance(p, o)
+                        if dist <= gate and by_embedding and appearance > REID_MAX_EMBEDDING_DISTANCE:
+                            weak_evidence = True
+                            continue
+                        if dist <= gate and (by_embedding or appearance <= .78 or dist <= gate * .35):
+                            shift = (o["point"][0] - p["point"][0], o["point"][1] - p["point"][1])
+                            shift_len, speed = math.hypot(*shift), math.hypot(*p["velocity"])
+                            alignment = (sum(shift[i] * p["velocity"][i] for i in (0, 1)) / (shift_len * speed)
+                                         if shift_len > .01 and speed > .05 else None)
+                            score = association_score(cfg, appearance, dist / gate, alignment,
+                                                      dt / max(float(cfg["handoffSeconds"]), .1), height_agreement(p, o))
+                            candidates.append((1. - score, pid, True, score))
                         continue
                     # Entre cámaras distintas solo se asocia identidad si el
                     # operador declaró verificada la sincronización de relojes
@@ -532,8 +607,8 @@ class IdentityStore:
                         # espacio sin cobertura sin recibir un ID nuevo.
                         gate = cfg["matchDistance"] * (2.0 + min(dt, 5) * .55) + speed * dt * .35
                     dist = math.dist(o["point"], target)
-                    appearance = identity_appearance_distance(p, o.get("color"))
-                    direction_penalty = 0.0
+                    appearance, by_embedding = appearance_distance(p, o)
+                    alignment = None
                     displacement = (o["point"][0] - p["point"][0], o["point"][1] - p["point"][1])
                     displacement_length = math.hypot(*displacement)
                     velocity_length = math.hypot(*p["velocity"])
@@ -541,16 +616,28 @@ class IdentityStore:
                         alignment = sum(displacement[i] * p["velocity"][i] for i in (0, 1)) / (displacement_length * velocity_length)
                         if alignment < -.35 and appearance > .45:
                             continue
-                        direction_penalty = (1 - max(-1.0, min(1.0, alignment))) * .1
-                    if dist <= gate and (appearance <= .82 or (overlap and dist <= gate*.3)):
-                        time_penalty = min(dt / max(float(cfg["handoffSeconds"]), .1), 1.0) * .12
-                        candidates.append((dist / gate * .55 + appearance * .35 + direction_penalty + time_penalty + height_penalty(p, o), pid, False))
+                    # Con solape la posición simultánea es la evidencia fuerte; sin solape
+                    # (traspaso con tiempo oculto) la apariencia pesa más, con tolerancia al ángulo.
+                    veto = REID_OVERLAP_VETO_DISTANCE if overlap else REID_MAX_CROSS_VIEW_DISTANCE
+                    if dist <= gate and by_embedding and appearance > veto:
+                        weak_evidence = True
+                        continue
+                    if dist <= gate and (by_embedding or appearance <= .82 or (overlap and dist <= gate*.3)):
+                        score = association_score(cfg, appearance, dist / gate, alignment,
+                                                  dt / max(float(cfg["handoffSeconds"]), .1), height_agreement(p, o))
+                        candidates.append((1. - score, pid, False, score))
                 candidates.sort()
-                if candidates and (len(candidates) == 1 or candidates[1][0] - candidates[0][0] > .12):
+                accept = float(cfg.get("reidAcceptScore", REID_ACCEPT_SCORE))
+                margin = float(cfg.get("reidAmbiguityMargin", REID_AMBIGUITY_MARGIN))
+                unambiguous = candidates and (len(candidates) == 1 or candidates[1][0] - candidates[0][0] > margin)
+                if unambiguous and 1. - candidates[0][0] >= accept:
                     gid = candidates[0][1]
-                    association = "estimated"
-                    self.events.appendleft({"type": "reidentification" if candidates[0][2] else "handoff", "id": gid, "from": self.people[gid]["camera"], "to": o["camera"], "t": t})
-                elif candidates:
+                    reid_score = candidates[0][3]
+                    # "reidentified": recupera un track perdido en la misma cámara.
+                    association = "reidentified" if candidates[0][2] else "estimated"
+                    self.events.appendleft({"type": "reidentification" if candidates[0][2] else "handoff", "id": gid, "from": self.people[gid]["camera"], "to": o["camera"], "t": t, "score": round(reid_score, 3)})
+                elif candidates or weak_evidence:
+                    # Ambigua o con evidencia débil: no se fuerza la coincidencia.
                     association = "uncertain"
             if gid is None:
                 self.serial += 1
@@ -564,6 +651,12 @@ class IdentityStore:
                 p["velocity"] = tuple(.5 * p["velocity"][i] + .5 * (o["point"][i] - p["point"][i]) / dt for i in (0, 1))
             if association != "local":
                 p["association"] = association
+                p["reidScore"] = reid_score
+            embedding = o.get("embedding")
+            if embedding is not None:
+                views = p.setdefault("embeddingGallery", deque(maxlen=EMBEDDING_GALLERY_SIZE))
+                if not views or min(embedding_distance(item, embedding) for item in views) > EMBEDDING_NEW_VIEW:
+                    views.append(embedding)
             appearance = update_appearance(p.get("color"), o.get("color"))
             gallery = p.setdefault("appearanceGallery", deque(maxlen=12))
             current_color = o.get("color")
@@ -584,7 +677,7 @@ class IdentityStore:
             if o["point"] is not None and math.hypot(*p["velocity"]) > .05 and neighbors:
                 future = (o["point"][0]+p["velocity"][0]*2,o["point"][1]+p["velocity"][1]*2)
                 next_camera = min((c for c in cfg["cameras"] if c["id"] in neighbors),key=lambda c:math.dist(future,(c["x"],c["y"])))["id"]
-            output.append({**{k: v for k, v in o.items() if k != "color"}, "id": gid, "association": p["association"], "history": list(p["history"]), "predicted": False, "velocity": list(p["velocity"]), "nextCamera": next_camera, "height": p.get("height")})
+            output.append({**{k: v for k, v in o.items() if k not in ("color", "embedding")}, "id": gid, "association": p["association"], "reidScore": p.get("reidScore"), "history": list(p["history"]), "predicted": False, "velocity": list(p["velocity"]), "nextCamera": next_camera, "height": p.get("height")})
         # Bound retention to the declared handoff window; no indefinite identities.
         expired = {pid for pid, p in self.people.items() if t - p["t"] > cfg["handoffSeconds"]}
         for pid in expired:

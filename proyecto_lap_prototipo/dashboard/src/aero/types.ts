@@ -72,5 +72,5 @@ export const EMPTY_STATE: SessionState = { status: 'idle', t: 0, people: [], cam
 export const isActive = (s: string) => ['starting', 'running', 'paused', 'stopping'].includes(s);
 export const isStream = (source: string | number) => typeof source === 'number' || /^(rtsp|https?|rtmp):\/\//i.test(source);
 export const formatTime = (value: number) => `${Math.floor(value / 60).toString().padStart(2, '0')}:${Math.floor(value % 60).toString().padStart(2, '0')}`;
-export const labelAssociation = (p: Person) => p.association === 'estimated' ? 'Asociación estimada' : p.association === 'uncertain' ? 'Confianza insuficiente para asociación' : p.association === 'synthetic' ? 'Simulación' : 'ID local confirmado';
+export const labelAssociation = (p: Person) => p.association === 'estimated' ? 'Asociación estimada' : p.association === 'reidentified' ? 'ID recuperado' : p.association === 'uncertain' ? 'Confianza insuficiente para asociación' : p.association === 'synthetic' ? 'Simulación' : 'ID local confirmado';
 export const freshCamera = (): Camera => ({ id: `C-${crypto.randomUUID().slice(0, 5).toUpperCase()}`, name: 'Nueva cámara', location: '', type: 'tilted', source: '', x: 0, y: 0, offset: 0, links: [], pairs: [], heading: 90, fov: 60, range: 3, height: 2, tilt: 45, coverageShape: 'free', coveragePolygon: [], coverageWidth: 2 });

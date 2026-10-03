@@ -18,7 +18,7 @@ class PersonDetection:
 
 
 class YoloPersonDetector:
-    def __init__(self, weights, confidence=.25, imgsz=640, device=None, model_factory=None):
+    def __init__(self, weights, confidence=.25, imgsz=640, device=None, model_factory=None, iou=.5, half=False):
         weights = Path(weights)
         if not weights.is_file():
             raise FileNotFoundError(f"No se encontraron los pesos YOLO: {weights}")
@@ -32,6 +32,9 @@ class YoloPersonDetector:
             raise ImportError("Instala ultralytics para activar el detector YOLO11.") from exc
         self.confidence = float(confidence)
         self.imgsz = int(imgsz)
+        # NMS más estricto que el 0.7 por defecto: en grupos evita cajas dobles de una misma persona.
+        self.iou = float(iou)
+        self.half = bool(half) and str(device or '').startswith('cuda')
         self.device = device
 
     @staticmethod
@@ -52,9 +55,11 @@ class YoloPersonDetector:
 
     def detectar_lote(self, frames_bgr):
         kwargs = {"source": frames_bgr, "classes": [0], "conf": self.confidence,
-                  "imgsz": self.imgsz, "verbose": False}
+                  "imgsz": self.imgsz, "iou": self.iou, "verbose": False}
         if self.device:
             kwargs["device"] = self.device
+        if self.half:
+            kwargs["half"] = True
         results = self.model.predict(**kwargs)
         return [self._convert(result) for result in results]
 
