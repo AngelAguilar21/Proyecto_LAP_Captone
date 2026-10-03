@@ -93,4 +93,3 @@ proyecto_lap_prototipo/data/identidad/
 # Salidas locales de evaluacion y registros del servidor; el modelo OSNet se baja con tools/preparar_hardware.py
 proyecto_lap_prototipo/data/*.log
 proyecto_lap_prototipo/data/salida_reid/
-proyecto_lap_prototipo/models/*.onnx

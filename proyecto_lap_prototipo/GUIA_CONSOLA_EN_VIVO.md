@@ -93,7 +93,7 @@ El servidor sirve la aplicación compilada en http://127.0.0.1:8765; no es neces
 
 ## Reidentificación con OSNet, filtros y hardware
 
-**OSNet.** Coloca un OSNet exportado a ONNX en `models/osnet.onnx` (o `python tools/preparar_hardware.py --osnet`, que baja el export de [anriha/osnet_x0_25_msmt17](https://huggingface.co/anriha/osnet_x0_25_msmt17); es de un tercero, revisa su licencia) e instala `onnxruntime` (`onnxruntime-gpu` con GPU NVIDIA). Cada cámara muestra `reid: osnet` o `reid: color` si no hay modelo. Medido en dos cámaras con ángulos muy distintos, la distancia entre embeddings de una misma persona fue casi igual a la de personas distintas (0.52 contra 0.54): entre cámaras la geometría (calibración) pesa más que la apariencia. Dentro de una misma cámara OSNet sí recupera tracks perdidos.
+**OSNet.** El repositorio incluye `models/osnet.onnx` (OSNet x0.25 entrenado con MSMT17, export de [anriha/osnet_x0_25_msmt17](https://huggingface.co/anriha/osnet_x0_25_msmt17), de un tercero: revisa su licencia antes de redistribuirlo). Si falta, `python tools/preparar_hardware.py --osnet` lo baja e instala `onnxruntime` (`onnxruntime-gpu` con GPU NVIDIA). Cada cámara muestra `reid: osnet` o `reid: color` si no hay modelo. Medido en dos cámaras con ángulos muy distintos, la distancia entre embeddings de una misma persona fue casi igual a la de personas distintas (0.52 contra 0.54): entre cámaras la geometría (calibración) pesa más que la apariencia. Dentro de una misma cámara OSNet sí recupera tracks perdidos.
 
 **Asociar recorridos.** En Monitoreo, ese interruptor activa la asociación entre cámaras. Arranca encendido si el proyecto tiene la sincronización verificada y 2 o más cámaras.
 
