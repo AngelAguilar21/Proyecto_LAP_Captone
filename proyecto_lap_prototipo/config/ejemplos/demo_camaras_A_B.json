@@ -1,0 +1,195 @@
+{
+  "airport": "Demo AeroTrack",
+  "floor": "Explanada (camera_A y camera_B)",
+  "sourceMode": "recordings",
+  "mapConfigured": true,
+  "setupComplete": true,
+  "width": 12,
+  "height": 8,
+  "unit": "meters",
+  "background": "",
+  "radius": 1.5,
+  "minPeople": 4,
+  "dwell": 3,
+  "handoffSeconds": 12,
+  "matchDistance": 1.0,
+  "personHeight": 1.7,
+  "clocksVerified": true,
+  "zones": [],
+  "cameras": [
+    {
+      "id": "A",
+      "name": "Cámara A",
+      "location": "",
+      "type": "tilted",
+      "source": "data/camera_A.mp4",
+      "x": 1.0,
+      "y": 1,
+      "offset": 0,
+      "links": [
+        "B"
+      ],
+      "pairs": [
+        [
+          0.5,
+          0.6118,
+          4.761,
+          2.984
+        ],
+        [
+          0.944,
+          0.6118,
+          6.069,
+          3.055
+        ],
+        [
+          0.056,
+          0.78,
+          3.065,
+          3.804
+        ],
+        [
+          0.5,
+          0.78,
+          4.492,
+          3.83
+        ],
+        [
+          0.944,
+          0.78,
+          5.767,
+          3.853
+        ],
+        [
+          0.056,
+          0.9483,
+          2.856,
+          4.634
+        ],
+        [
+          0.5,
+          0.9483,
+          4.242,
+          4.613
+        ],
+        [
+          0.944,
+          0.9483,
+          5.486,
+          4.595
+        ]
+      ],
+      "heading": 90,
+      "fov": 60,
+      "range": 4,
+      "height": 3,
+      "tilt": 45,
+      "detectionZone": [
+        [
+          0.0022,
+          0.6526
+        ],
+        [
+          0.0043,
+          0.9964
+        ],
+        [
+          0.9978,
+          0.9964
+        ],
+        [
+          0.9914,
+          0.5637
+        ]
+      ],
+      "restrictCoverage": false,
+      "planId": "custom"
+    },
+    {
+      "id": "B",
+      "name": "Cámara B",
+      "location": "",
+      "type": "tilted",
+      "source": "data/camera_B.mp4",
+      "x": 11.0,
+      "y": 1,
+      "offset": 0,
+      "links": [
+        "A"
+      ],
+      "pairs": [
+        [
+          0.0582,
+          0.4435,
+          2.997,
+          3.275
+        ],
+        [
+          0.0582,
+          0.6965,
+          2.986,
+          3.996
+        ],
+        [
+          0.4989,
+          0.6965,
+          4.718,
+          3.577
+        ],
+        [
+          0.9397,
+          0.6965,
+          6.592,
+          3.124
+        ],
+        [
+          0.0582,
+          0.9495,
+          2.974,
+          4.8
+        ],
+        [
+          0.4989,
+          0.9495,
+          4.809,
+          4.39
+        ],
+        [
+          0.9397,
+          0.9495,
+          6.806,
+          3.944
+        ]
+      ],
+      "heading": 90,
+      "fov": 60,
+      "range": 4,
+      "height": 3,
+      "tilt": 45,
+      "detectionZone": [
+        [
+          0.0065,
+          0.3954
+        ],
+        [
+          0.9935,
+          0.649
+        ],
+        [
+          0.9914,
+          0.9459
+        ],
+        [
+          0.9483,
+          0.994
+        ],
+        [
+          0.0043,
+          0.9976
+        ]
+      ],
+      "restrictCoverage": false,
+      "planId": "custom"
+    }
+  ]
+}

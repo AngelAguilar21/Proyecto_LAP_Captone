@@ -1,6 +1,6 @@
 # Ejecutar AeroTrack desde cero
 
-Requisitos: Windows de 64 bits, Git, Python 3.12 de 64 bits con el lanzador `py`, Node.js 22 LTS con npm, conexión a Internet y varios GB libres. No se requiere GPU. La instalación descarga dependencias y pesos; la velocidad de análisis depende del equipo.
+Requisitos: Windows de 64 bits, Git, Python 3.12 de 64 bits (con el lanzador `py` o como `python`/`python3.12` en el PATH), Node.js 22 LTS con npm, conexión a Internet y varios GB libres. No se requiere GPU. La instalación descarga dependencias y pesos; la velocidad de análisis depende del equipo.
 
 Puedes usar PowerShell o CMD. Los archivos `.ps1` son scripts de PowerShell; si los escribes directamente en una consola que los tenga asociados al Bloc de notas, Windows los abrirá como texto. Los archivos `.cmd` evitan ese problema.
 
@@ -9,7 +9,7 @@ Puedes usar PowerShell o CMD. Los archivos `.ps1` son scripts de PowerShell; si 
 Clona el repositorio con Git y entra a la carpeta:
 
 ```powershell
-git clone --branch monitoreo-integrado --recurse-submodules https://github.com/AngelAguilar21/Proyecto_LAP_Captone.git
+git clone --recurse-submodules https://github.com/AngelAguilar21/Proyecto_LAP_Captone.git
 cd Proyecto_LAP_Captone
 ```
 
@@ -59,3 +59,20 @@ La inferencia CPU y el arranque están separados de la precisión: P2PNet puede 
 ## Negocios y ventas
 
 La rama comercial añade **Negocios y accesos** y **Ventas y análisis**. Se inicia con los mismos comandos CMD; no necesita un servidor de BD adicional. Se guarda en SQLite por proyecto. Reinicia el servidor después de actualizar. El detector opcional de objetos usa YOLO11n y ByteTrack; la preparación descarga sus pesos oficiales. Consulta `proyecto_lap_prototipo/docs/PLAN_COMERCIAL.md` para importar ventas, vincular accesos y ver la prueba guardada en Proyecto principal.
+
+## Prueba rápida en un equipo nuevo (reidentificación OSNet)
+
+El repositorio incluye lo necesario para una prueba reproducible: los videos `data/camera_A.mp4` y `data/camera_B.mp4` (la misma explanada vista desde dos ángulos), su calibración (`config/calibracion.json`, `config/alcance.json`), el modelo `models/osnet.onnx` y una configuración demo (`config/ejemplos/demo_camaras_A_B.json`).
+
+Tras `preparar_sistema`, con el entorno `.venv` del proyecto:
+
+```powershell
+cd proyecto_lap_prototipo
+..\.venv\Scripts\python.exe tools\prueba_completa.py --seconds 120
+```
+
+Levanta su propio servidor en el puerto 8799 con una configuración aislada (no toca tus proyectos), inicia una sesión unificada A+B y comprueba que el servidor responde, que se detectan personas, que OSNet está activo (`reid: osnet`) y que alguna persona se asocia entre cámaras. Termina con `PRUEBA COMPLETA OK` o con el motivo del fallo.
+
+Para verlo en la interfaz: inicia el sistema, crea un proyecto nuevo, importa `config/ejemplos/demo_camaras_A_B.json` desde Configuración y pulsa Iniciar con **Asociar recorridos** encendido.
+
+Otras comprobaciones: pruebas unitarias (`..\.venv\Scripts\python.exe -m pytest tests -q`), `tools\probar_reid.py` (compara OSNet contra color sobre estos mismos videos) y `tools\preparar_hardware.py` (perfil de CPU/GPU elegido).
