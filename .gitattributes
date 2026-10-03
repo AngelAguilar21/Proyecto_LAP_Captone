@@ -1,0 +1,2 @@
+data/pilot_videos/**/*.MOV filter=lfs diff=lfs merge=lfs -text
+data/pilot_videos/**/*.mov filter=lfs diff=lfs merge=lfs -text

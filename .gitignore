@@ -10,6 +10,11 @@ __pycache__/
 # Datasets, videos and model artifacts
 *.mp4
 *.avi
+# MOV solo dentro del dataset piloto; estas rutas usan Git LFS.
+*.MOV
+*.mov
+!/data/pilot_videos/**/*.MOV
+!/data/pilot_videos/**/*.mov
 data/raw/
 data/processed/
 *.pt

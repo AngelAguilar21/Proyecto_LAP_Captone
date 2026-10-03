@@ -107,7 +107,11 @@ python src/data_quality/audit_ucf_qnrf.py \
   --dataset "/ruta/al/dataset/UCF-QNRF_ECCV18" \
   --quarantine configs/ucf_qnrf_quarantine.csv
 
-Los datasets no se almacenan dentro del repositorio Git.
+Los datasets completos se mantienen normalmente fuera del repositorio. Los datasets públicos completos, como UCF-QNRF (RAW y procesado), continúan fuera de Git.
+
+El dataset piloto propio es una excepción controlada: sus nueve derivados de privacidad fueron publicados mediante Git LFS dentro de `data/pilot_videos/` y están disponibles en la rama `pilot-video-lfs`. El [PR #2](https://github.com/AngelAguilar21/Proyecto_LAP_Captone/pull/2) está abierto hacia `main`.
+
+Los RAW canónicos del piloto permanecen externos e intactos en `data_collection/raw/`. El catálogo `data/pilot_videos/videos_metadata.csv` utiliza `distribution_published_lfs` para los nueve derivados; los hashes RAW y de distribución y la trazabilidad se documentan junto con `DATA_HANDOFF.md` y `DISTRIBUTION_REPORT.md`.
 
 Se recomienda mantener los datos en un directorio separado del código fuente.
 
