@@ -1,0 +1,794 @@
+PROYECTO: Estimación de aglomeraciones de personas mediante visión computacional
+en el Aeropuerto Internacional Jorge Chávez (Lima Airport Partners - LAP)
+Capstone I - Universidad ESAN
+
+NOTA SOBRE ESTE ARCHIVO: todo el contenido de abajo es extracción literal de
+informe/INFORME_COMPLETO_ANGEL.md (el informe consolidado del proyecto), sin
+inventar datos nuevos. Es una version ampliada respecto a la primera: ademas
+de los 5 bloques pedidos, se agrego el Marco Normativo completo y el Analisis
+de Impacto completo (que en el informe forman el verdadero "analisis de
+contexto" del proyecto: legal, etico, social, economico y ambiental), el
+Diseno del Sistema (arquitectura + algoritmo de fusion de identidad) y la
+Planificacion del proyecto, porque dan mucho mas material para armar
+diapositivas de fondo/contexto y de arquitectura tecnica.
+
+Correspondencia con lo pedido:
+  - Resumen Ejecutivo                    -> Bloque 1
+  - Introduccion (con referencias)       -> Bloque 2
+  - Planteamiento del Problema y
+    Analisis del Contexto                -> Bloque 3 (contexto del problema)
+                                             + Bloque 5 (marco normativo) +
+                                             Bloque 6 (analisis de impacto)
+  - Marco Teorico                        -> Bloque 4 (Antecedentes: CSRNet,
+                                             P2PNet, P2R)
+  - Especificacion de requerimientos
+    (incluye casos de uso)               -> Bloque 7 (requisitos + casos de
+                                             uso) + Bloque 8 (diseno del
+                                             sistema, arquitectura y
+                                             algoritmo) como material tecnico
+                                             de apoyo
+  - Extra (no pedido, incluido como
+    material de respaldo)                -> Bloque 9 (planificacion, roles,
+                                             riesgos)
+
+==============================================================================
+BLOQUE 1 - RESUMEN EJECUTIVO
+==============================================================================
+
+El proyecto "Estimación de aglomeraciones de personas mediante visión
+computacional en el Aeropuerto Internacional Jorge Chávez" desarrolla, para
+Lima Airport Partners (LAP), un sistema que estima la concentración de
+personas por zona del terminal a partir de cámaras fijas, sin recurrir a
+reconocimiento facial ni a datos biométricos que identifiquen a un pasajero
+concreto. Esta condición no es una preferencia de diseño sino un límite
+impuesto por la Ley 29733 de Protección de Datos Personales y su reglamento
+vigente (D.S. 016-2024-JUS): un dato biométrico que por sí mismo identifica al
+titular constituye dato sensible, y el proyecto se plantea evitar ese
+tratamiento desde el diseño en lugar de mitigarlo después.
+
+El Marco Teórico (Antecedentes) revisa tres trabajos que marcan una
+progresión en la línea de investigación de conteo de multitudes -CSRNet
+(mapas de densidad), P2PNet (localización pura por puntos) y P2R (aprendizaje
+semi-supervisado punto-a-región)- y concluye que la granularidad de la salida
+es una decisión de cumplimiento normativo y no solo de producto: a igualdad
+de utilidad operativa, el principio de proporcionalidad (art. 7, Ley 29733)
+favorece la opción que menos datos trata. Esa decisión -qué arquitectura y qué
+granularidad se adoptan- sigue abierta al cierre de esta versión.
+
+El Marco Normativo y el Análisis de Impacto desarrollan, respectivamente, el
+régimen legal peruano aplicable (Ley 29733, su reglamento, la Directiva de
+videovigilancia 01-2020-JUS/DGTAIPD, y el régimen de seguridad ciudadana del
+D.L. 1218 y la Ley 30120) y el impacto del sistema sobre los derechos de las
+personas observadas y sobre el entorno. Ambos incorporan una auditoría del
+prototipo de ingeniería ya construido, con hallazgos en ambos sentidos: la
+fusión de identidad entre cámaras NO usa reidentificación por apariencia
+(hallazgo favorable), pero la base de datos del prototipo persiste
+coordenadas individuales encadenadas a un identificador por persona, lo que
+NO satisface la medida de agregación por zona exigida -el único hallazgo no
+conforme de todo el análisis que el equipo puede cerrar por sí solo, sin
+depender de LAP.
+
+En paralelo a la revisión de literatura, el frente de ingeniería construyó un
+prototipo funcional (proyecto_lap_prototipo/), probado sobre dos cámaras
+propias que registran la misma explanada de la universidad desde ángulos
+distintos -no sobre material del Aeropuerto Jorge Chávez, que LAP todavía no
+ha proporcionado-. La Especificación de Requerimientos y el Diseño del
+Sistema describen ese prototipo (requisitos, arquitectura, casos de uso) y la
+Planificación describe la organización del proyecto; son evidencia de
+ingeniería complementaria al Marco Teórico, no la arquitectura definitiva que
+la Metodología debe todavía cerrar por escrito.
+
+Las secciones de Metodología, Resultados y Conclusiones siguen en esqueleto,
+a cargo de otros integrantes del equipo.
+
+==============================================================================
+BLOQUE 2 - INTRODUCCION
+==============================================================================
+
+--- Contexto del problema ---
+
+El Aeropuerto Internacional Jorge Chávez, operado por Lima Airport Partners
+(LAP), concentra en determinadas franjas horarias y en puntos específicos del
+terminal -filtros de seguridad, migraciones, mostradores de check-in, salas
+de embarque- un volumen de pasajeros considerablemente mayor que el de otras
+zonas del recinto en el mismo momento. Conocer dónde y cuándo se concentran
+las personas es información operativa de valor para un operador aeroportuario:
+permite, en principio, anticipar la apertura de mostradores adicionales,
+redirigir el flujo de pasajeros o dimensionar al personal de atención con
+mayor precisión que una revisión manual o periódica.
+
+LAP cuenta ya con infraestructura de videovigilancia de circuito cerrado en el
+terminal. Este proyecto explora si esa misma infraestructura puede
+aprovecharse, mediante técnicas de visión computacional, para producir una
+estimación automatizada de la concentración de personas por zona, sin que ello
+suponga identificar, individualizar ni caracterizar biométricamente a los
+pasajeros que aparecen en la imagen.
+
+El equipo no cuenta, al momento de escribir el informe, con evidencia
+documentada por LAP -incidentes registrados de aglomeración, tiempos de
+espera medidos o quejas de pasajeros- que cuantifique el problema en el
+propio terminal; esa evidencia se ha solicitado al cliente y su ausencia
+queda registrada. El proyecto parte, por tanto, de una necesidad operativa
+plausible y compartida por la literatura de conteo de multitudes en espacios
+de alto tránsito, y no de una cifra propia de incidentes en el Aeropuerto
+Jorge Chávez.
+
+--- Objetivos ---
+
+Objetivo general: Desarrollar y evaluar un sistema de visión computacional
+capaz de estimar la concentración de personas en distintas zonas del
+Aeropuerto Internacional Jorge Chávez a partir de imágenes de cámaras fijas,
+sin recurrir a reconocimiento facial ni a la extracción de rasgos biométricos
+identificantes, y en condiciones de cumplimiento con el marco normativo
+peruano de protección de datos personales.
+
+Objetivos específicos:
+1. Revisar el estado del arte en detección, localización y conteo de personas
+   en escenas congestionadas, e identificar qué enfoque técnico resulta más
+   adecuado para un entorno aeroportuario y para las restricciones de
+   privacidad del proyecto.
+2. Determinar el marco de cumplimiento normativo aplicable al tratamiento de
+   imágenes de un espacio de uso público bajo gestión concesionada,
+   incluyendo el análisis de impacto y los requisitos de privacidad desde el
+   diseño que ese tratamiento exige.
+3. Diseñar e implementar el componente de detección y estimación, con la
+   granularidad de salida que resulte de aplicar el principio de
+   proporcionalidad y la síntesis de antecedentes.
+4. Evaluar el desempeño del sistema mediante métricas cuantitativas y
+   cualitativas, indicando en cada caso sobre qué conjunto de datos fue
+   medido cada resultado.
+5. Identificar los requisitos de validación adicionales que quedan fuera del
+   alcance material de este Capstone -en particular el acceso a datos del
+   propio terminal y la evaluación de sesgo demográfico- y dejarlos
+   documentados como trabajo pendiente.
+
+--- Alcance y limitaciones ---
+
+Alcance funcional: el proyecto cubre la estimación de la concentración de
+personas por zona a partir de imágenes de cámaras fijas. Queda expresamente
+fuera de su alcance cualquier forma de identificación, reidentificación o
+caracterización individual: el sistema está pensado para responder "cuántas
+personas hay, y dónde", no "quién es cada una".
+
+Zonas cubiertas: dependen de qué cámaras y qué material audiovisual habilite
+LAP, dato que a la fecha del informe no ha sido confirmado por el cliente.
+
+Fase del proyecto y limitación de dominio: esta primera entrega corresponde
+a Capstone I, un desarrollo y validación conceptual sobre conjuntos de datos
+públicos de conteo de multitudes, sin acceso todavía a material propio del
+Aeropuerto Jorge Chávez. Los propios autores de la literatura revisada
+reconocen una brecha de dominio entre los conjuntos públicos de entrenamiento
+y un entorno de despliegue nuevo. Ninguna cifra de desempeño reportada debe
+leerse como una predicción de exactitud para el Aeropuerto Jorge Chávez.
+
+--- Referencias académicas citadas ---
+
+1. Li, Y., Zhang, X., Chen, D. (2018). CSRNet: Dilated Convolutional Neural
+   Networks for Understanding the Highly Congested Scenes. CVPR, 1091-1100.
+2. Song, Q., Wang, C., Jiang, Z., Wang, Y., Tai, Y., Wang, C., Li, J., Huang,
+   F., Wu, Y. (2021). Rethinking Counting and Localization in Crowds: A
+   Purely Point-Based Framework. ICCV, 3365-3374.
+3. Lin, W., Zhao, C., Chan, A. B. (2025). Point-to-Region Loss for
+   Semi-Supervised Point-Based Crowd Counting. CVPR, 29363-29373.
+4. Zhang, Y., Sun, P., Jiang, Y., Yu, D., Weng, F., Yuan, Z., Luo, P., Liu, W.,
+   Wang, X. (2022). ByteTrack: Multi-Object Tracking by Associating Every
+   Detection Box. ECCV. (Base del seguimiento mono-camara del prototipo.)
+
+Marco normativo peruano citado (normas legales, no papers academicos):
+Constitución Política del Perú (1993) art. 2; Ley 29733, Ley de Protección de
+Datos Personales; D.S. 016-2024-JUS; D.S. 003-2013-JUS (derogado); Directiva
+01-2020-JUS/DGTAIPD; D.L. 1218; Ley 30120; D.S. 007-2020-IN.
+
+==============================================================================
+BLOQUE 3 - PLANTEAMIENTO DEL PROBLEMA (resumen ejecutivo del contexto)
+==============================================================================
+
+El problema: el Aeropuerto Internacional Jorge Chávez concentra, en ciertas
+franjas horarias y puntos del terminal, un volumen de pasajeros notablemente
+mayor que otras zonas del recinto en el mismo momento, y LAP no cuenta hoy
+con una forma automatizada de estimar esa concentración sin recurrir a
+videovigilancia tradicional revisada manualmente.
+
+Contexto normativo: cualquier solución basada en video de un espacio de uso
+público bajo gestión concesionada está sujeta a la Ley 29733 de Protección de
+Datos Personales y su reglamento (D.S. 016-2024-JUS). Un dato biométrico que
+por sí mismo identifica al titular es un dato sensible; el proyecto se
+plantea, desde el diseño, evitar ese tratamiento en vez de mitigarlo después.
+
+Contexto de evidencia: el equipo no cuenta, a la fecha, con evidencia
+documentada por LAP que cuantifique el problema en el propio terminal; esa
+evidencia fue solicitada al cliente y sigue pendiente. El proyecto parte de
+una necesidad operativa plausible, respaldada por la literatura de conteo de
+multitudes en espacios de alto tránsito en general.
+
+Contexto de datos: esta primera entrega se desarrolla y valida
+conceptualmente sobre conjuntos de datos públicos, sin acceso todavía a
+material propio del aeropuerto. La literatura reconoce una brecha de dominio
+entre esos conjuntos públicos y un entorno de despliegue nuevo. Esto
+condiciona cómo deben leerse las métricas de cualquier resultado hasta que
+exista validación en sitio con datos reales de LAP.
+
+(El analisis de contexto completo -legal, etico, social, economico y
+ambiental- esta desarrollado en profundidad en los Bloques 5 y 6 de abajo.)
+
+==============================================================================
+BLOQUE 4 - MARCO TEORICO (Antecedentes)
+==============================================================================
+
+El conteo de personas en escenas congestionadas es un problema con una línea
+de investigación propia dentro de la visión computacional. Se revisan tres
+trabajos que marcan tres etapas sucesivas de esa línea.
+
+--- CSRNet: redes convolucionales dilatadas (Li et al., 2018) ---
+
+Qué propone: red completamente convolucional con un front-end que reutiliza
+las primeras diez capas de VGG-16 y un back-end de convoluciones dilatadas
+que amplía el campo receptivo sin pooling. Reemplaza las arquitecturas
+multi-columna previas (las tres columnas de MCNN aprenden características
+casi idénticas). La salida es un mapa de densidad, no un número ni una
+posición.
+
+Resultados: sobre ShanghaiTech, 7% menos de MAE que CP-CNN en la Parte A y
+47,3% menos en la Parte B; sobre TRANCOS, 15,4% menos de MAE que el mejor
+método previo.
+
+Por qué aplica al caso LAP: (1) la salida es agregada, ninguna etapa requiere
+rasgos faciales; (2) es puramente convolucional y admite resoluciones
+variables, relevante porque las cámaras de un terminal no comparten
+resolución, altura ni ángulo; (3) la distribución espacial es informativa
+por sí misma.
+
+Limitación reconocida por los autores: en UCSD (escenas dispersas) admiten
+superar a la mayoría de métodos excepto a MCNN en MAE, por la baja
+resolución de esos cuadros. El régimen de baja densidad no es donde el
+método brilla, y buena parte del día un terminal aéreo opera en baja
+densidad. Limitación estructural: el mapa de densidad no entrega posiciones
+individuales.
+
+--- P2PNet: un marco puramente basado en puntos (Song et al., 2021) ---
+
+Qué propone: localizar individuos responde mejor a las demandas prácticas
+del análisis de multitudes que simplemente contarlos. Predice directamente
+un conjunto de puntos con coordenadas y confianzas, sin representación
+intermedia, con emparejamiento uno a uno vía algoritmo húngaro. Aporta la
+métrica nAP (density Normalized Average Precision).
+
+Resultados: sobre ShanghaiTech Parte A, reduce el MAE un 4,8% y el MSE un
+12,9% respecto de ADSCNet; sobre UCF_CC_50 rebaja el MAE en 2,1 puntos; sobre
+NWPU-Crowd, 12,4% frente a DM-Count; MAE de 85,32 sobre UCF-QNRF; nAP a 0.5
+cerca del 90% en la mayoría de conjuntos.
+
+Por qué aplica al caso LAP: la localización individual convierte una cifra
+en una decisión operativa -un conjunto de puntos admite agregación por zonas
+sin reentrenar el modelo-. Pero esta capacidad eleva el perfil de riesgo: un
+punto con coordenadas no es un dato biométrico, pero sí es un dato
+espacio-temporal referido a una persona física. Si esos puntos se persisten
+y se encadenan en el tiempo, el sistema se acerca a un seguimiento de
+trayectorias, una finalidad distinta de estimar aglomeraciones.
+
+Limitación reconocida por los autores: en UCF-QNRF su precisión "no es tan
+competitiva" frente a ADSCNet. En NWPU-Crowd, desempeño inferior por usar un
+único mapa de características de una sola escala. La precisión cae bajo el
+umbral estricto nAP(0.05), efecto de desviaciones de etiquetado.
+
+--- P2R: pérdida punto-a-región (Lin, Zhao y Chan, 2025) ---
+
+Qué propone: anotar cientos o miles de puntos por imagen ha frenado la
+adopción del enfoque por puntos. Integran los métodos por puntos en un marco
+semi-supervisado maestro-estudiante; sustituyen el emparejamiento
+punto-a-punto por uno punto-a-región, eliminando la necesidad del algoritmo
+húngaro.
+
+Resultados: entrenar con el 5% de los datos usando P2R supera al aprendizaje
+totalmente supervisado con el 10%; con ese 5% alcanzan MAE de 93,7 y MSE de
+155,2 sobre ShanghaiTech Parte A; bajo supervisión completa, supera a P2PNet
+en los cuatro conjuntos evaluados; el cómputo de pérdida es unas 68 veces más
+rápido (0,4307 s frente a 0,0064 s por imagen).
+
+Por qué aplica al caso LAP: el principio de minimización de datos exige
+tratar solo los datos necesarios. Un método competitivo con el 5% de datos
+etiquetados reduce en proporción similar el volumen de imágenes del terminal
+que deben revisarse y anotarse por personas. Sus experimentos de adaptación
+de dominio no supervisada abordan un problema real del proyecto: ningún
+conjunto público contiene escenas de un terminal aéreo peruano.
+
+Limitación reconocida por los autores: fallo por desenfoque de movimiento de
+la multitud -la norma, no la excepción, en un terminal aéreo-. Registran
+explícitamente la brecha de dominio.
+
+--- Reidentificación de personas (Re-ID): por qué el proyecto no la usa hoy ---
+
+Para una eventual función futura (asociar la misma persona entre dos puntos
+distintos, por ejemplo entrada y salida de un local comercial) se revisó la
+literatura de reidentificación de personas (Person Re-ID), un problema
+distinto al de conteo: no busca cuántas personas hay, sino si dos imágenes en
+momentos distintos corresponden al mismo individuo.
+
+Fuente revisada: Asperti, A., Fiorilla, S., Nardi, S., Orsini, L. (2025). A
+Review of Recent Techniques for Person Re-Identification. Machine Vision and
+Applications. arXiv:2509.22690.
+
+Qué encontraron: dividen las técnicas en dos familias. Las supervisadas
+(aprendizaje de características con redes como PCB o ResNet50, más
+aprendizaje de métricas con pérdidas de identidad, verificación y tripletas)
+alcanzan el mejor desempeño pero exigen miles de imágenes de personas ya
+etiquetadas con su identidad, y arquitecturas pensadas para GPU (ResNet50,
+Vision Transformers, CLIP). Las no supervisadas (adaptación de dominio con
+agrupamiento automático, esquemas maestro-estudiante) reducen esa necesidad
+de etiquetado pero siguen exigiendo entrenar una red.
+
+Por qué no se adopta en esta entrega: el proyecto no cuenta con un conjunto
+propio de personas etiquetadas ni con GPU para entrenar. La única vía
+compatible con el prototipo actual sería usar un modelo ya entrenado por
+terceros en modo inferencia (sin reentrenarlo), como OSNet -señalado en el
+propio artículo como arquitectura ligera y eficiente en recursos, a
+diferencia de ResNet50, Transformers o CLIP-. Esta vía queda identificada
+como trabajo futuro, no como parte del alcance de Capstone I.
+
+NOTA PENDIENTE: se mencionó un segundo artículo sobre reidentificación
+además del anterior, pero su título o contenido nunca llegó a compartirse;
+falta incorporarlo cuando esté disponible.
+
+--- Síntesis: cómo se articulan los tres trabajos ---
+
+CSRNet resuelve "cuántos" con una superficie de densidad de la que no se
+puede extraer "dónde". P2PNet resuelve "dónde" eliminando la representación
+intermedia, pero paga ese avance con costo de anotación creciente. P2R
+resuelve el costo de anotación llevando el enfoque a régimen
+semi-supervisado.
+
+- CSRNet -> Avance: mapa de densidad sin representación individual. Riesgo:
+  perfil más bajo, salida agregada por construcción.
+- P2PNet -> Avance: localización individual por puntos. Riesgo: coordenadas
+  por persona, persistibles y encadenables en trayectorias.
+- P2R -> Avance: desempeño competitivo con 5% de etiquetas. Riesgo:
+  dependencia de pseudo-etiquetas cuya calidad no es auditable caso por caso.
+
+Tres criterios derivados: (1) la granularidad de la salida es una decisión
+de cumplimiento, no solo de producto; (2) la eficiencia de etiquetado de P2R
+es un argumento de minimización de datos; (3) ninguna cifra de la literatura
+es transferible al terminal sin validación local.
+
+==============================================================================
+BLOQUE 5 - MARCO NORMATIVO APLICABLE (contexto legal completo)
+==============================================================================
+
+Esta sección identifica el régimen jurídico que rige el tratamiento de
+imágenes de personas mediante videovigilancia y visión computacional en un
+terminal aeroportuario, y traduce cada obligación en un requisito verificable
+sobre el sistema propuesto. La calificación jurídica definitiva corresponde
+al área legal de LAP y, en su caso, a la Autoridad Nacional de Protección de
+Datos Personales.
+
+--- Marco normativo aplicable ---
+
+El artículo 2 de la Constitución de 1993 reconoce, en su inciso 6, el derecho
+a que los servicios informáticos no suministren información que afecte la
+intimidad, y en su inciso 7, el derecho al honor, la intimidad y la imagen
+propia. Captar la imagen de una persona en un espacio abierto al público no
+es intrínsecamente ilícito, pero constituye una injerencia en un derecho
+fundamental y debe superar un examen de proporcionalidad.
+
+La norma central es la Ley 29733, Ley de Protección de Datos Personales, y
+su reglamento vigente, D.S. 016-2024-JUS (vigente desde el 30 de marzo de
+2025), que derogó el D.S. 003-2013-JUS. El régimen se especifica para
+videovigilancia en la Directiva 01-2020-JUS/DGTAIPD, que sigue vigente.
+
+A ese cuerpo se superpone un segundo régimen, de finalidad distinta, en
+seguridad ciudadana: el D.L. 1218 y la Ley 30120, reglamentados por el D.S.
+007-2020-IN, cuyo artículo 3 incluye a establecimientos abiertos al público
+con aforo de 50 personas o más -un terminal aeroportuario supera ese umbral
+con holgura-.
+
+Queda identificada una zona gris: un terminal concesionado a un operador
+privado no encaja limpiamente ni en la categoría de área de dominio público
+ni en la de recinto privado cerrado. Resolverla excede el alcance del
+Capstone y es un punto a elevar al área legal del cliente.
+
+--- Naturaleza de los datos tratados ---
+
+El sistema trata cuatro tipos de dato, con regímenes distintos:
+1. El fotograma: contiene rostros identificables, es dato personal.
+2. El punto con coordenadas que producen los métodos basados en puntos:
+   desligado del fotograma, no identifica por sí solo.
+3. El dato espacio-temporal: aparece cuando ese punto se asocia a tiempo y
+   zona. Encadenado con otros del mismo individuo, reconstruye una
+   trayectoria -con poder identificante muy superior al de un punto aislado-.
+4. El dato biométrico: rasgos que por sí mismos permiten identificar (p.ej.
+   una plantilla facial). Un mapa de densidad o un conjunto de coordenadas
+   de cabezas no lo son. Que la salida del modelo no sea biométrica no
+   significa que la entrada (el video) no lo sea.
+
+Discrepancia terminológica detectada: el proyecto describe como "personas
+anonimizadas" el resultado de un procesamiento que asigna a cada persona un
+identificador persistente con el que se reconstruyen trayectorias. La
+anonimización debe ser irreversible; un identificador persistente que
+permite reagrupar apariciones de un mismo individuo es disociación
+(reversible), no anonimización, y el dato disociado sigue siendo dato
+personal sujeto al régimen general. Esta discrepancia aparece tanto en el
+material de presentación como en el esquema de base de datos del prototipo.
+
+--- Base de legitimación y finalidad declarada ---
+
+El consentimiento debe ser "previo, informado, expreso e inequívoco"
+(art. 13.5) -estándar materialmente inalcanzable en un terminal, donde el
+pasajero no elige ser observado-. La ley prevé supuestos donde no se
+requiere consentimiento (art. 14), con frecuencia el de "salvaguardar
+intereses legítimos". Qué base invoca LAP es información que solo el
+cliente puede aportar.
+
+La finalidad debe ser "determinada, explícita y lícita" y no extenderse a
+otra no establecida al momento de la recopilación (arts. 6, 28.4).
+Discrepancia detectada: medir la permanencia de personas en zonas comerciales
+(mencionado como aplicación posible) no es una variante de estimar
+aglomeraciones, es una finalidad distinta que requeriría su propia base de
+legitimación.
+
+--- Principio de proporcionalidad y granularidad de salida ---
+
+Art. 7: "todo tratamiento debe ser adecuado, relevante y no excesivo a la
+finalidad". Es el argumento más sólido a favor del enfoque del proyecto: si
+la finalidad es estimar aglomeraciones, el medio menos invasivo es un
+sistema de conteos agregados sin identificar personas.
+
+De este principio depende la decisión de mayor consecuencia normativa: el
+mapa de densidad (CSRNet) es la opción que menos datos trata; la agregación
+por zona produce el mismo resultado operativo con cualquier método; la
+localización individual (P2PNet, P2R) entrega más información de la que la
+finalidad requiere, y su licitud depende de que esas coordenadas no se
+persistan ni se encadenen -garantía de política, no de arquitectura-.
+
+--- Privacidad desde el diseño y por defecto ---
+
+El D.S. 016-2024-JUS exige privacidad por diseño y por defecto, no como
+buena práctica opcional. El proyecto incorpora diez medidas:
+M-01: procesamiento en el borde (el fotograma no sale del perímetro).
+M-02: no persistencia del fotograma.
+M-03: salida agregada por zona, sin coordenadas individuales persistidas.
+M-04: difuminado irreversible de rostros si algún fotograma debe conservarse.
+M-05: plazo de retención definido con purga automática.
+M-06: control de acceso por roles con auditoría.
+M-07: cifrado en tránsito y en reposo.
+M-08: carteles informativos.
+M-09: documentación del linaje de datos.
+M-10: supervisión humana (el sistema alerta, no ejecuta acciones automáticas).
+
+IMPORTANTE: estas diez medidas son requisitos, no una descripción del
+sistema actual. Al cierre de esta versión, M-03 NO se cumple en el
+prototipo, que persiste coordenadas individuales asociadas a un
+identificador por persona. M-02 sí se respeta.
+
+--- Plazos de retención y supresión ---
+
+El principio de calidad ordena conservar los datos "solo por el tiempo
+necesario"; para videovigilancia, la Directiva fija la conservación de
+imágenes en 30 a 60 días como máximo. Tensión normativa: el D.S. 007-2020-IN
+obliga a un mínimo de 45 días para seguridad ciudadana. Ambos regímenes son
+compatibles solo dentro de una ventana estrecha, porque recaen sobre
+finalidades distintas. Consecuencia de diseño: tratar el sistema de
+estimación de aglomeraciones como un subsistema separado del CCTV de
+seguridad, con su propia finalidad y plazo de retención.
+
+--- Derechos de los titulares e información al público ---
+
+Se reconocen los derechos de información, acceso, actualización/
+rectificación/supresión, oposición, tutela e indemnización. El art. 23
+consagra el derecho al tratamiento objetivo -a no verse sometido a una
+decisión automatizada con efectos significativos-, fundamento de M-10. El
+deber de información se cumple mediante señalética (cartel de 297x210 mm
+con contenido mínimo normado).
+
+--- Encargados de tratamiento y flujos hacia terceros ---
+
+Cualquier proveedor que trate datos por cuenta de LAP queda sujeto a
+obligaciones de encargado de tratamiento. El flujo transfronterizo solo se
+permite si el país destinatario mantiene niveles de protección adecuados. La
+decisión entre inferencia on-premise y en nube externa es, a juicio del
+frente ético-legal, la de mayor impacto legal del proyecto, y no consta por
+escrito al cierre de esta versión.
+
+--- Auditoría: ¿el sistema trata datos biométricos? ---
+
+Contraste contra lo que el prototipo implementa realmente:
+
+Sobre reidentificación por apariencia, la preocupación NO se confirma: la
+fusión entre cámaras se resuelve como asociación espacio-temporal sobre un
+plano común; solo ante ambigüedad interviene un descriptor de desempate
+(histograma de color del torso + proporción alto/ancho), no biométrico,
+nunca identificador único, no persistido.
+
+Sobre lo que se persiste, aparece un hallazgo NO conforme: el esquema de
+base de datos del prototipo almacena una tabla de personas y una tabla de
+posiciones (identificador, cámara, coordenadas, instante, zona) escrita en
+disco. La medida M-03 no se cumple en la implementación actual.
+
+Cuatro hallazgos no conformes: (1) ausencia de Evaluación de Impacto en
+Protección de Datos formal; (2) incumplimiento de M-03 -defecto de
+implementación, subsanable por el propio equipo sin depender de terceros-;
+(3) ausencia de validación de exactitud en el dominio de destino; (4)
+ausencia de evaluación de sesgo demográfico. Los dos últimos requieren
+acceso a material del terminal.
+
+==============================================================================
+BLOQUE 6 - ANALISIS DE IMPACTO Y PRIVACIDAD DESDE EL DISEÑO
+==============================================================================
+
+Esta sección reproduce deliberadamente la estructura de una Evaluación de
+Impacto en Protección de Datos: identificar el tratamiento, valorar su
+necesidad y proporcionalidad, identificar riesgos para los titulares y
+proponer mitigaciones. No es una analogía metodológica: el D.S. 016-2024-JUS
+exige esa evaluación antes de tratamientos de alto riesgo, y la
+videovigilancia masiva figura expresamente entre los supuestos que la
+activan. Criterio rector: se prefiere declarar un impacto como no
+cuantificado antes que estimarlo sin base.
+
+--- Sesgos del sistema ---
+
+Brecha de dominio: la limitación mejor documentada y la más grave para esta
+fase. Los autores de P2R reconocen que el desempeño se degrada de forma
+marcada sin adaptación de dominio, y documentan un modo de fallo por
+sobreestimación severa. Esta entrega se desarrolla sobre conjuntos públicos,
+sin acceso a material del Aeropuerto Jorge Chávez.
+
+Sesgo demográfico: ningún trabajo revisado reporta desempeño desagregado por
+características demográficas. Factores identificables aunque no
+cuantificados: estatura (subconteo de niños ocluidos), vestimenta y
+cubrimientos de cabeza, equipaje voluminoso y sillas de ruedas (siluetas
+distintas), composición demográfica de los conjuntos de origen.
+
+Sesgo de anotación: P2PNet señala que su precisión (nAP con umbral 0,05) cae
+por desviaciones de etiquetado. CSRNet construye su referencia con un
+supuesto sobre distancia-a-cámara/tamaño-de-cabeza que se sesga con
+perspectivas oblicuas y cámaras de gran angular -habituales en un terminal-.
+
+El sistema no toma decisiones sobre personas individuales, pero si el
+subconteo se concentra en un grupo, las zonas donde ese grupo se concentra
+reciben sistemáticamente menos recursos: el daño es distributivo, no
+individual, y real aunque indirecto.
+
+--- Sesgo de automatización y factor humano ---
+
+Riesgo de sustitución progresiva del criterio humano por el del sistema: un
+fallo en momento crítico produce un efecto peor que su ausencia. M-10
+(supervisión humana) responde a esta exigencia pero es insuficiente por sí
+sola -un operador que aprueba mecánicamente reintroduce de hecho la decisión
+automatizada-. La capacitación del personal se trata como medida de
+mitigación: los operadores necesitan conocer que el desempeño sobre datos
+públicos no predice el desempeño en el terminal.
+
+--- Lectura ambiental del costo de cómputo ---
+
+El equipo no ha medido el consumo energético; este apartado es cualitativo.
+Tres decisiones ya adoptadas o previstas: reutilizar modelos preentrenados
+(CSRNet parte de VGG-16 ya entrenada); la eficiencia de etiquetado de P2R
+(reduce esfuerzo humano); y la eliminación del algoritmo húngaro en P2R (68
+veces más rápido por imagen). A escala de vida útil, la inferencia continua
+supera previsiblemente al entrenamiento; muestreo de baja frecuencia y
+procesamiento en el borde (M-01) reducen esa exposición. Resultado clave:
+las decisiones que reducen exposición de datos personales (muestrear menos,
+procesar localmente, no persistir imágenes, agregar la salida) son las
+mismas que reducen cómputo, transmisión y almacenamiento.
+
+--- Riesgos residuales y decisiones pendientes ---
+
+Síntesis en cuatro dimensiones:
+- Ética: alternativa menos invasiva que biometría; riesgo de deslizamiento
+  hacia identificación, mitigable con declaración de finalidades excluidas.
+- Social: prevención de incidentes y asignación de recursos basada en
+  evidencia; riesgo de distribución desigual de beneficio/carga.
+- Económica: eficiencia operativa; riesgo del costo de reconstruir el
+  sistema si se detecta no conformidad después del despliegue.
+- Ambiental: huella menor que alternativas de mayor granularidad; riesgo del
+  consumo acumulado de inferencia continua.
+
+El riesgo de deslizamiento de finalidad merece mención propia: una vez
+desplegada la infraestructura, el costo marginal de añadir reidentificación
+o reconocimiento facial es bajo -decisión de configuración, no de rediseño-.
+Mitigación propuesta: declaración de finalidades excluidas (el sistema no
+identifica personas, no realiza seguimiento individual de trayectorias, no
+reconoce emociones, no alimenta decisiones automatizadas sobre pasajeros
+individuales, excluye uso laboral de los datos).
+
+Conclusión más importante de esta sección: la preocupación sobre
+reidentificación por embeddings de apariencia NO se confirmó al auditar el
+código. La medida M-03 SÍ incumple en la implementación actual -el único
+hallazgo que el equipo puede cerrar por sí solo, sin depender de LAP, y por
+eso debería encabezar la lista de acciones correctivas.
+
+==============================================================================
+BLOQUE 7 - ESPECIFICACION DE REQUERIMIENTOS (incluye casos de uso)
+==============================================================================
+Describe el prototipo tal como está implementado en proyecto_lap_prototipo/
+(backend live_server.py + consola web AeroTrack), no una versión aspiracional.
+
+--- Casos de uso del sistema ---
+
+CU-01 - Configurar el plano y las cámaras.
+Actor: Operador. Precondición: servidor local en ejecución.
+Flujo: el operador crea un plano en blanco o importa una imagen, PDF o DXF;
+si es imagen o PDF, recorta la región útil y el sistema la reduce a un
+dibujo esquemático de líneas por detección de bordes en vez de conservar la
+fotografía completa; coloca cada cámara sobre el plano y define su alcance
+orientativo; declara qué cámaras son vecinas entre sí.
+Postcondición: el plano queda disponible para calibración.
+
+CU-02 - Calibrar una cámara.
+Precondición: fuente de video válida.
+Flujo: el operador marca un punto de referencia del suelo en el video y su
+correspondencia en el plano, un mínimo de cuatro veces (seis a ocho
+recomendadas); el sistema calcula la homografía y rechaza la calibración si
+las correspondencias son geométricamente inconsistentes.
+Postcondición: la cámara queda habilitada para proyectar posiciones al plano
+compartido.
+
+CU-03 - Procesar una fuente y hacer seguimiento.
+Flujo: el operador elige un detector (HOG de referencia, P2PNet, o YOLO con
+pesos locales que debe aportar él mismo) e inicia la sesión; el sistema
+detecta personas por cuadro y asigna un identificador local estable dentro
+de esa cámara mediante seguimiento por distancia euclidiana y asignación
+húngara en dos etapas.
+Excepción documentada: con P2PNet, la posición no se proyecta al plano -el
+detector localiza cabezas, no pies-, de modo que ese modo solo sirve para
+validar detección y seguimiento por cámara, no el plano completo.
+
+CU-04 - Asociar identidad entre cámaras.
+Precondición: al menos dos cámaras calibradas y vecinas; el operador declaró
+explícitamente que verificó la sincronización de reloj entre fuentes.
+Flujo: ante una observación nueva, el sistema busca entre las personas
+activas de una cámara vecina alguna cuya posición proyectada, ajustada por
+velocidad si no hay solape temporal, quede dentro de un margen de distancia
+y tiempo configurables; si hay un candidato inequívoco reutiliza su
+identificador y lo marca "estimado"; si hay varios candidatos próximos,
+desempata por un descriptor no biométrico de apariencia; si ninguno es
+suficientemente inequívoco, lo marca "incierto" en vez de forzar una fusión.
+
+CU-05 - Detectar y alertar aglomeraciones.
+El operador define, por zona o globalmente, un radio, una cantidad mínima de
+personas y un tiempo de permanencia; el sistema marca una alerta cuando una
+concentración cumple los tres criterios de forma sostenida.
+
+CU-06 - Visualizar el plano en vivo y el video por cámara.
+El operador ve el plano con nodos, trayectorias recientes y aglomeraciones
+resaltadas, y puede alternar a ver el video real de una cámara con las cajas
+y el identificador de cada persona superpuestos.
+
+CU-07 - Exportar reportes.
+El sistema exporta, en PDF, Excel, CSV o JSON, ocupación por zona, evolución
+temporal y trayectorias de la sesión activa, señalando siempre si el origen
+es una fuente real o la demostración sintética.
+
+--- Requisitos funcionales y no funcionales ---
+
+RF-01: Configurar plano y cámaras, con recorte e importación como dibujo de
+líneas. Estado: Implementado.
+RF-02: Calibrar por homografía con validación de consistencia geométrica.
+Estado: Implementado.
+RF-03: Detectar y seguir personas con detector seleccionable (HOG, P2PNet,
+YOLO). Estado: Implementado; YOLO requiere pesos locales no incluidos.
+RF-04: Asociar identidad entre cámaras solo con sincronización declarada,
+con estado "incierta" cuando corresponda. Estado: Implementado.
+RF-05: Reglas de aglomeración configurables por radio, cantidad y
+permanencia. Estado: Implementado.
+RF-06: Visualizar plano en vivo y video real por cámara con overlay de ID.
+Estado: Implementado.
+RF-07: Exportar reportes en PDF/Excel/CSV/JSON. Estado: Implementado.
+RNF-01: No derivar del video ningún rasgo que permita identificación
+biométrica o reidentificación individual persistente. Estado: Parcialmente
+no conforme -la fusión no usa biometría (favorable); la persistencia de
+posiciones individuales no satisface la agregación por zona exigida (no
+conforme, pendiente).
+RNF-02: Servidor accesible solo desde 127.0.0.1, con token de sesión en
+escritura. Estado: Implementado.
+RNF-03: No persistir imágenes de forma permanente. Estado: Cumplido.
+RNF-04: Declarar explícitamente cuándo el sistema opera en modo
+demostración sintética. Estado: Implementado.
+RNF-05: Ninguna cifra de desempeño sobre datos públicos ni sobre
+grabaciones propias se presenta como desempeño esperado en el Aeropuerto
+Jorge Chávez sin validación en sitio. Estado: ver Bloques 4 y 6.
+RNF-06: Tiempo de inferencia compatible con operación práctica. Estado: No
+verificado como cumplido -P2PNet en CPU, sin GPU, procesó del orden de 3,5 s
+por cada 0,2 s de video de fuente en la prueba registrada.
+
+==============================================================================
+BLOQUE 8 - DISEÑO DEL SISTEMA (arquitectura y algoritmo)
+==============================================================================
+Describe la arquitectura del prototipo, no la arquitectura definitiva del
+proyecto final.
+
+--- Arquitectura conceptual: seis componentes ---
+
+1. Adquisición: lectura de cada fuente de cámara (archivo, USB o RTSP).
+2. Detección: un detector intercambiable (HOG, P2PNet o YOLO) produce
+   posiciones en píxeles con confianza asociada; la elección es explícita
+   del operador, no automática, porque ninguno de los tres es adecuado para
+   todos los casos.
+3. Seguimiento mono-cámara: adaptación de ByteTrack a puntos, con filtro de
+   Kalman de velocidad constante y asignación húngara en dos etapas por
+   confianza.
+4. Calibración y proyección: homografía por cámara, validada por
+   consistencia geométrica antes de aceptarse.
+5. Fusión entre cámaras: asociación de identidad por proximidad
+   espacio-temporal en el plano compartido, con descriptor de apariencia no
+   biométrico como desempate de última instancia.
+6. Persistencia, analítica y presentación: estado de sesión agregado,
+   expuesto por la consola AeroTrack (configuración, plano en vivo, video
+   por cámara, reportes).
+
+--- Algoritmo: fusión de identidad entre cámaras (núcleo de CU-04/RF-04) ---
+
+Entrada: observación nueva (cámara, punto en el plano, tiempo, color del
+torso), personas activas de cámaras vecinas, ventana de tiempo, radio de
+asociación.
+Salida: identificador global, estado de asociación ("local" | "estimada" |
+"incierta").
+
+Lógica, en palabras: para cada persona activa vista por una cámara vecina
+dentro de la ventana de tiempo, se calcula su distancia al nuevo punto -si
+las cámaras se solapan temporalmente, distancia directa; si no, se proyecta
+la posición esperada usando la velocidad estimada de esa persona-. Se
+consideran candidatos a quienes queden dentro del radio de asociación,
+ponderando también la similitud de color de torso. Si no hay candidatos, se
+crea un identificador nuevo. Si hay un candidato claramente mejor que el
+resto, se reutiliza su identificador y se marca "estimada". Si hay varios
+candidatos próximos y ambiguos, se marca "incierta" y se crea un
+identificador nuevo en vez de forzar una fusión.
+
+El diseño prioriza declarar incertidumbre sobre forzar una fusión errónea
+entre dos personas distintas -este es el criterio que la auditoría legal
+consideró alineado con el requisito de no reidentificación (RNF-01).
+
+--- Justificación del diseño ---
+
+La separación entre "cuántas personas hay" (aglomeración, disponible incluso
+sin calibración) y "quién es quién entre cámaras" (identidad, que exige
+calibración y sincronización declarada) es consistente con el Marco Teórico:
+la granularidad de la salida condiciona el examen de proporcionalidad, y el
+diseño evita comprometerse con la granularidad más invasiva por defecto.
+Excluir a P2PNet de la proyección al suelo va en la misma dirección: prefiere
+no ocultar un error geométrico no cuantificado detrás de una cifra de
+exactitud.
+
+==============================================================================
+BLOQUE 9 - PLANIFICACION Y GESTION DEL PROYECTO (material de respaldo)
+==============================================================================
+
+--- Roles y responsabilidades ---
+
+Angel Aguilar - Liderazgo e integración: coordinación general;
+consolidación de secciones; co-responsable de ampliar Antecedentes;
+responsable de la integración .md -> .docx.
+Stephano Rivadeneyra - Ciencia de datos: Metodología (esqueleto); aportó
+referencias de seguimiento multicámara aún no citadas en el cuerpo;
+co-responsable de ampliar Antecedentes.
+José Ortega - Ingeniería de datos: Resultados (esqueleto); verificación de
+licencias de datasets.
+Fabián Moreno Ugarte - Validación ética/legal y documentación: Antecedentes,
+Marco normativo, Análisis de impacto, Anexo A; mantenimiento del repositorio
+del informe.
+Conclusiones figura como "a cargo de otro integrante" sin nombre asignado
+todavía.
+
+--- Gestión de riesgos ---
+
+- Riesgo: tres evidencias distintas (datos públicos, grabaciones propias,
+  datos del terminal) usadas para un mismo argumento sin distinguirse por
+  escrito. Mitigación: decidir con el equipo si se declara expresamente.
+- Riesgo: M-03 no se cumple en el prototipo (persistencia de coordenadas
+  individuales). Mitigación: agregar por zona antes de persistir, o fijar
+  retención corta -corregible sin depender de LAP.
+- Riesgo: arquitectura definitiva sin cerrar, lo que mantiene condicional la
+  auditoría legal. Mitigación: cerrar la decisión por escrito.
+- Riesgo: rendimiento de P2PNet en CPU incompatible con operación casi en
+  tiempo real (medición registrada: ~3,5 s de cómputo por cada 0,2 s de
+  video, sin GPU). Mitigación: evaluar GPU dedicada, o ajustar la
+  frecuencia de muestreo.
+- Riesgo: acceso a material del Aeropuerto Jorge Chávez sin confirmar.
+  Mitigación: cursar la solicitud formal a LAP.
+
+(El cronograma con fechas no se incluye: el ciclo académico y la fecha de
+entrega están sin confirmar contra el sílabo del curso, y el informe evita
+deliberadamente inventar fechas de ejemplo.)
+
+==============================================================================
+FIN DEL CONTENIDO
+==============================================================================

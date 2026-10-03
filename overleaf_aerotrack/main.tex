@@ -1,0 +1,176 @@
+%=====================================================================
+%  Aerotrack: Sistema De Estimacion De Aglomeraciones y Tracking De
+%  Personas Mediante Computer Vision
+%  Universidad ESAN -- Facultad de Ingenieria
+%  Carrera de Ingenieria de Tecnologias de Informacion y Sistemas
+%
+%  Compilacion en Overleaf: pdfLaTeX (motor por defecto), dos pasadas.
+%  No requiere biber/biblatex: las referencias se listan como texto
+%  con formato APA en secciones/referencias.tex, igual que en el
+%  documento original.
+%
+%  Archivos .tex codificados en UTF-8.
+%=====================================================================
+\documentclass[12pt,a4paper]{article}
+
+%--------------------- Codificacion e idioma -------------------------
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish,es-tabla,es-noquoting,es-lcroman]{babel}
+
+%--------------------- Geometria y estilo ----------------------------
+\usepackage[a4paper,left=3cm,right=2.5cm,top=3cm,bottom=2.5cm,headheight=15pt]{geometry}
+\usepackage{fancyhdr}
+\usepackage{setspace}
+\usepackage{indentfirst}
+\setlength{\parindent}{1.25cm}
+\setlength{\parskip}{0pt}
+
+%--------------------- Tablas, listas, graficos ----------------------
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{enumitem}
+\usepackage{ragged2e}
+\usepackage{longtable}
+\usepackage{hyperref}
+
+% Tipos de columna para tablas anchas (casos de uso, requisitos).
+\newcolumntype{L}[1]{>{\RaggedRight\arraybackslash}p{#1}}
+\newcolumntype{Y}{>{\RaggedRight\arraybackslash}X}
+
+%--------------------- Figuras con reemplazo pendiente ----------------
+% El informe original trae 12 diagramas UML (uno por caso de uso) y una
+% figura compuesta de arquitectura que no se pudieron extraer del PDF
+% fuente. \figuraPendiente deja el hueco reservado (mismo tamano que
+% tendria la figura) para que no rompa la compilacion en Overleaf:
+% si el archivo ya existe en imagenes/, lo muestra; si no, dibuja un
+% recuadro con el nombre de archivo esperado para que se sepa que
+% imagen subir y donde.
+%   \figuraPendiente{archivo}{ancho}{alto-recuadro}{pie}{etiqueta}
+\newcommand{\figuraPendiente}[5]{%
+  \begin{figure}[htbp]
+    \centering
+    \IfFileExists{imagenes/#1}{%
+      \includegraphics[width=#2]{imagenes/#1}%
+    }{%
+      \fbox{\parbox[c][#3][c]{#2}{\centering\itshape
+        Figura pendiente\\ \texttt{imagenes/#1}}}%
+    }
+    \caption{#4}
+    \label{#5}
+  \end{figure}}
+
+%--------------------- Hiperenlaces -----------------------------------
+\hypersetup{
+  unicode=true,
+  hidelinks,
+  pdftitle={Aerotrack: Sistema de Estimacion de Aglomeraciones y Tracking
+            de Personas Mediante Computer Vision},
+  pdfauthor={Aguilar Contreras, Angel Jesus; Rivadeneyra Huaman, Stephano;
+             Ortega, Jose; Moreno Ugarte, Fabian},
+  pdfsubject={Universidad ESAN, Facultad de Ingenieria, Carrera de
+              Ingenieria de Tecnologias de Informacion y Sistemas}
+}
+
+%--------------------- Encabezado y pie --------------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Aerotrack}
+\fancyhead[R]{\small Universidad ESAN}
+\fancyfoot[C]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+\fancypagestyle{plain}{%
+  \fancyhf{}%
+  \fancyhead[L]{\small Aerotrack}%
+  \fancyhead[R]{\small Universidad ESAN}%
+  \fancyfoot[C]{\small\thepage}%
+  \renewcommand{\headrulewidth}{0.4pt}%
+  \renewcommand{\footrulewidth}{0pt}}
+
+\onehalfspacing
+
+%=====================================================================
+\begin{document}
+%=====================================================================
+
+%--------------------------- PORTADA ---------------------------------
+\begin{titlepage}
+\centering
+\singlespacing
+\vspace*{0.2cm}
+
+\IfFileExists{imagenes/logo-esan.png}{%
+  \includegraphics[width=5cm]{imagenes/logo-esan.png}%
+}{%
+  \framebox[5cm][c]{\rule{0pt}{1.6cm}\small\itshape Logo ESAN}%
+}
+
+\vspace{1.2cm}
+
+{\LARGE\bfseries Aerotrack: Sistema De Estimación De Aglomeraciones y\par}
+\vspace{0.2cm}
+{\LARGE\bfseries Tracking De Personas Mediante Computer Vision\par}
+
+\vspace{1.4cm}
+
+{\large Universidad ESAN.\par}
+\vspace{0.2cm}
+{\large Facultad de Ingeniería.\par}
+\vspace{0.2cm}
+{\large Carrera de Ingeniería de Tecnologías de Información y Sistemas.\par}
+
+\vspace{0.6cm}
+{\large Docente: Fabian Arteaga, Junior.\par}
+
+\vspace{0.9cm}
+
+\begin{tabular}{@{}L{5.5cm}L{2.3cm}L{6cm}@{}}
+\toprule
+\textbf{Integrante} & \textbf{Código} & \textbf{Rol} \\
+\midrule
+Aguilar Contreras, Angel Jesus & 22200133 & Liderazgo e integración \\[0.15cm]
+Rivadeneyra Huaman, Stephano & 22101822 & Ciencia de datos \\[0.15cm]
+Ortega, José & 25200719 & Ingeniería de datos \\[0.15cm]
+Moreno Ugarte, Fabián & 25200717 & Validación ética, legal y documentación \\
+\bottomrule
+\end{tabular}
+
+\vfill
+
+{\large 16 de septiembre de 2026.\par}
+\vspace{0.3cm}
+{\large Lima, Perú.\par}
+
+\end{titlepage}
+
+%--------------------------- INDICE ----------------------------------
+\pagenumbering{roman}
+\setcounter{tocdepth}{2}
+{\singlespacing\tableofcontents}
+\clearpage
+\pagenumbering{arabic}
+
+%------------------------- SECCIONES ---------------------------------
+\input{secciones/resumen_ejecutivo}
+\clearpage
+\input{secciones/introduccion}
+\clearpage
+\input{secciones/planteamiento_problema}
+\clearpage
+\input{secciones/marco_teorico}
+\clearpage
+\input{secciones/requerimientos}
+\clearpage
+\input{secciones/diseno_sistema}
+\clearpage
+\input{secciones/planificacion}
+\clearpage
+\input{secciones/referencias}
+\clearpage
+\input{secciones/anexos}
+
+\end{document}
