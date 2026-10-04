@@ -352,7 +352,7 @@ export default function MapCanvas({ config, state, connected, editable, configur
         const p = g.members[0].person, label = labelOffset.get(g.key) || (peopleFirst ? {dx:scale*7,dy:-scale*6} : undefined);
         return <g key={g.key} transform={`translate(${g.point[0]},${g.point[1]})`} className="map-person" onPointerUp={e => {e.stopPropagation(); onPerson?.(p);}}>
           <circle r={scale*(selectedPerson===p.id ? 8.5 : peopleFirst ? 5.2 : 5.4)} fill={p.association==='uncertain' ? '#ffb340' : '#21a8ff'} stroke="#03111f" strokeWidth={scale*(peopleFirst ? 1.4 : 1.5)}/>
-          {label && <text x={label.dx} y={label.dy} fontSize={scale*(peopleFirst ? 9.5 : 10)} fontWeight="700" fill="#ffffff" stroke="#061c31" strokeWidth={scale*(peopleFirst?2.2:2.4)} paintOrder="stroke" transform={`rotate(${-bearing})`}>{p.id}{p.association==='uncertain' ? ' ?' : p.association==='estimated' ? ' ~' : ''}</text>}
+          {label && <text x={label.dx} y={label.dy} fontSize={scale*(peopleFirst ? 9.5 : 10)} fontWeight="700" fill="#ffffff" stroke="#061c31" strokeWidth={scale*(peopleFirst?2.2:2.4)} paintOrder="stroke" transform={`rotate(${-bearing})`}>{p.id}{p.association==='uncertain' ? ' ?' : p.association==='estimated' || p.association==='reidentified' ? ' ~' : ''}</text>}
           {show('prediction', lod.prediction) && p.velocity && <path d={`M0,0 L${p.velocity[0]*2},${p.velocity[1]*2}`} stroke="#ffc777" strokeDasharray={`${scale*4} ${scale*3}`} strokeWidth={scale*1.4}/>}
         </g>;
       })}

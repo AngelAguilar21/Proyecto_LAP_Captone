@@ -11,7 +11,7 @@ type Cluster = { center: Point; radius: number; count: number; duration: number;
 type State = { status: string; mode?: string; session?: string; configRevision?: number; t: number; processingMs?: number; updatedAt?: number; error?: string; people: Person[]; cameras: CameraState[]; events: { id: string; from: string; to: string; t: number }[]; analytics: { clusters: Cluster[]; zones: { name: string; count: number }[]; heat: { x: number; y: number; size: number; seconds: number; peak: number }[]; mappedCount: number } };
 const STATUS: Record<string, string> = { idle: 'Sin sesión', starting: 'Iniciando detector', running: 'Procesando', stopping: 'Deteniendo', stopped: 'Detenida', ended: 'Finalizada', error: 'Error', live: 'Imagen disponible', ready: 'Preparada' };
 const COLORS = ['#72e8ba', '#74b9ff', '#ffca83', '#b5a1ff', '#ff99b3'];
-const assoc = (p: Person) => p.association === 'estimated' ? 'Asociación estimada' : p.association === 'uncertain' ? 'Asociación incierta' : p.association === 'synthetic' ? 'Dato sintético' : 'ID de seguimiento local';
+const assoc = (p: Person) => p.association === 'estimated' ? 'Asociación estimada' : p.association === 'reidentified' ? 'ID recuperado' : p.association === 'uncertain' ? 'Asociación incierta' : p.association === 'synthetic' ? 'Dato sintético' : 'ID de seguimiento local';
 
 export default function LiveDashboard() {
   const [config, setConfig] = useState<Config | null>(null);

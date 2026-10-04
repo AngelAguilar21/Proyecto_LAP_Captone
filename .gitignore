@@ -19,7 +19,6 @@ checkpoints/
 # Prototipo LAP: salidas generadas y pesos de modelos externos
 proyecto_lap_prototipo/data/*.sqlite
 proyecto_lap_prototipo/data/*.csv
-proyecto_lap_prototipo/data/camera_*.mp4
 proyecto_lap_prototipo/external/P2PNet/weights/
 
 # Entorno / credenciales
@@ -94,3 +93,11 @@ proyecto_lap_prototipo/data/identidad/
 proyecto_lap_prototipo/config/automation.local.json*
 proyecto_lap_prototipo/config/automation.sqlite*
 proyecto_lap_prototipo/data/reports/
+
+# Salidas locales de evaluacion y registros del servidor; OSNet ya está versionado en models/osnet.onnx
+proyecto_lap_prototipo/data/*.log
+proyecto_lap_prototipo/data/salida_reid/
+
+# Videos de ejemplo para la prueba reproducible (7 MB y 5 MB)
+!proyecto_lap_prototipo/data/camera_A.mp4
+!proyecto_lap_prototipo/data/camera_B.mp4

@@ -1,31 +1,28 @@
 # Ejecutar la versión candidata de AeroTrack
 
-Esta es la guía de ejecución para el equipo; se reutiliza en lugar de crear un
-segundo manual `docs/GUIA_EJECUCION.md`. Corte documental: **1 de octubre de 2026,
-America/Lima**, publicación intermedia autorizada después de la validación fallida
-del host experimental de las 22:13. El checkpoint NMS de las 15:57 se conserva
-como antecedente separado.
+Corte: **4 de octubre de 2026, America/Lima**. Rama candidata:
+**`jose/automations-main-integration-v3`**. Combina las revisiones publicadas
+`90ba03d7d150d3db3b60b593dca18021ef6e03a0` y
+`de44a7ec7dfbe68512b25cef707dc9f23c42d5bf`. El SHA de integración se verifica
+con `git rev-parse HEAD`; las dos revisiones de origen no son su SHA final.
 
-Rama de desarrollo: `jose/automations-main-integration-v2`. Base anterior a esta
-entrega: **`4f43cb9bd15896cd930477c5e0ea829971fef175`**. La base `0b611e0`
-pertenece a la revisión histórica de Fase 8. No se afirma integración en `main`
-ni aprobación de producción. Véase [AVANCE_EQUIPO](docs/AVANCE_EQUIPO.md) para
-separar el código de esta entrega, requisitos externos, evidencias y pendientes.
+La candidata incluye las correcciones REV-01/02/05 y las novedades de `main`.
+Se conserva la versión anterior en `jose/automations-main-integration-v2`.
+Revisa esta candidata en una **carpeta nueva** para conservar esa copia y sus
+parches locales de P2PNet. Los comandos de actualización siguientes se aplican
+solamente a una copia que ya esté en la rama candidata indicada.
 
-**Esta entrega incluye los seis archivos de REV-01/02/05 y los tres documentos
-relacionados.** El usuario autorizó commit/push intermedios para revisión sin
-esperar al cierre total. Un compañero que descargue sólo `4f43cb9` recibe los
-arreglos AUD anteriores, pero no este avance. Verificar el SHA comunicado en el
-cierre con `git rev-parse HEAD`; no confundir el SHA de la base con el publicado.
-El dictamen sigue siendo **REQUIERE CORRECCIONES**, con REV-03/04/06 pendientes,
-NMS abierto y LIVE no iniciado por el bloqueo actual del host. Esta publicación
-no autoriza otra ejecución LIVE ni el uso de datos operativos.
-El usuario adoptó una excepción limitada para un piloto experimental de cinco
-minutos: la causa histórica de NMS puede seguir abierta, pero el host debe
-demostrar aislamiento, cierre y comprobaciones previas en el mismo proceso.
-La primera validación del host falló antes de abrir la cámara; **LIVE no se
-inició**. El bloqueo actual es esa preparación fallida. NMS permanece abierto;
-la excepción se limita a este único experimento.
+**REQUIERE CORRECCIONES:** REV-03/04/06 y la causa histórica de NMS siguen
+pendientes. El piloto CPU verificado el 4 de octubre utilizó `90ba03d`, no esta
+integración. Se acreditaron captura real e inferencias y entrega HTTP de imágenes;
+la confirmación visual y el motivo por el que cesaron las solicitudes de frames
+al final de ese piloto siguen pendientes. No se acredita aquí LIVE/CUDA de la
+candidata ni una instalación completa desde un clon limpio.
+
+Los controles de esta integración y sus límites están en
+[INTEGRACION_MAIN_20261004](docs/INTEGRACION_MAIN_20261004.md). El registro del
+1 de octubre se conserva como antecedente en
+[AVANCE_EQUIPO](docs/AVANCE_EQUIPO.md).
 
 ## Acceso y versión que se comparte
 
@@ -38,8 +35,7 @@ capturas o documentación ni copiar credenciales de otro equipo.
 
 ## Plataforma y preparación
 
-La plataforma documentada es Windows de 64 bits con Git, Python 3.12 AMD64 y su
-lanzador `py`, Node.js con `npm`, acceso a Internet para preparar dependencias y
+La plataforma documentada es Windows de 64 bits con Git, Python 3.12 AMD64 con el lanzador `py` o como `python`/`python3.12` en el PATH, Node.js con `npm`, acceso a Internet para preparar dependencias y
 espacio para entorno, modelos, interfaz y datos. Python y Node deben instalarse
 previamente: `preparar_sistema.ps1` comprueba que existan; no instala sus runtimes.
 
@@ -51,7 +47,7 @@ mínimo ni capacidad de cámaras.
 Para una **instalación nueva** de esta candidata:
 
 ```powershell
-git clone --branch jose/automations-main-integration-v2 --recurse-submodules https://github.com/AngelAguilar21/Proyecto_LAP_Captone.git
+git clone --branch jose/automations-main-integration-v3 --recurse-submodules https://github.com/AngelAguilar21/Proyecto_LAP_Captone.git
 cd Proyecto_LAP_Captone
 git rev-parse HEAD
 git branch --show-current
@@ -72,16 +68,16 @@ la raíz de **tu copia**, sin reemplazarla ni descartar cambios:
 git branch --show-current
 git status --short
 git fetch origin --prune
-git log --oneline --left-right HEAD...origin/jose/automations-main-integration-v2
-git diff --submodule=short HEAD..origin/jose/automations-main-integration-v2 -- proyecto_lap_prototipo/external/P2PNet
+git log --oneline --left-right HEAD...origin/jose/automations-main-integration-v3
+git diff --submodule=short HEAD..origin/jose/automations-main-integration-v3 -- proyecto_lap_prototipo/external/P2PNet
 ```
 
-Sólo si ya estás en `jose/automations-main-integration-v2`, la actualización es
+Sólo si ya estás en `jose/automations-main-integration-v3`, la actualización es
 fast-forward, no cambió el gitlink de P2PNet y no tienes trabajo propio pendiente
 en el repositorio padre:
 
 ```powershell
-git -c submodule.recurse=false pull --ff-only origin jose/automations-main-integration-v2
+git -c submodule.recurse=false pull --ff-only origin jose/automations-main-integration-v3
 git rev-parse HEAD
 git status --short
 ```
@@ -98,7 +94,7 @@ hazlo en una copia nueva, con un nombre de carpeta que no exista. Sustituye
 `SHA_PUBLICADO` por el hash comunicado en el cierre de esta entrega:
 
 ```powershell
-git clone --branch jose/automations-main-integration-v2 https://github.com/AngelAguilar21/Proyecto_LAP_Captone.git AeroTrack-revision-intermedia
+git clone --branch jose/automations-main-integration-v3 https://github.com/AngelAguilar21/Proyecto_LAP_Captone.git AeroTrack-revision-intermedia
 git -C AeroTrack-revision-intermedia switch --detach SHA_PUBLICADO
 git -C AeroTrack-revision-intermedia submodule update --init --recursive
 git -C AeroTrack-revision-intermedia rev-parse HEAD
@@ -270,6 +266,10 @@ no basta con cambiar el nombre del proyecto.
 
 ## Estado y procedimiento del piloto LIVE
 
+El procedimiento siguiente conserva el contexto del intento del 1 de octubre.
+Para el estado posterior y los límites de esta integración, consultar
+[INTEGRACION_MAIN_20261004](docs/INTEGRACION_MAIN_20261004.md).
+
 El [protocolo LIVE existente](proyecto_lap_prototipo/docs/PRUEBA_LIVE.md) conserva
 su carácter histórico de propuesta; no es por sí solo un script validado ni una
 autorización para abrir fuentes. El usuario adoptó después el encargo externo
@@ -377,14 +377,14 @@ configuración explícitamente, sin atribuir una desconexión al detector.
 
 | Control | Alcance de la evidencia disponible |
 |---|---|
-| Rama y SHA compartidos | Entrega intermedia posterior a `4f43cb9`; comparar el SHA del cierre con HEAD y la rama remota. No prueba acceso de cada compañero |
-| Comandos, rutas y configuración de ejemplo | Revisión estática de scripts/código; no se ejecutaron aquí |
+| Rama y SHA compartidos | Integración de `90ba03d` y `de44a7e`; comparar HEAD con el cierre y la rama candidata remota. No prueba acceso de cada compañero |
+| Comandos, rutas y configuración de ejemplo | Revisión estática de scripts/código; instalación completa y prueba de videos no ejecutadas en esta integración |
 | Entorno instalado y modelos CPU | Validaciones históricas identificadas en [AVANCE_EQUIPO](docs/AVANCE_EQUIPO.md), con sus fallos y límites |
 | Clon limpio + preparación + primer arranque | Pendiente de verificación de extremo a extremo; no se hizo una instalación para redactar esta guía |
 | Parche P2PNet | Receta versionada existente; cambios locales preservados y excluidos de la entrega |
 | Causa inicial NMS | Pendiente; no inferir incompatibilidad, DLL o CUDA por el nombre del operador |
-| Preparación del host experimental | E5: primer control fallido en 16.109756 s, salida 2; cierre comprobado, sin segundo arranque |
-| LIVE Windows e imagen procesada en UI | No iniciado ni acreditado: 0 capturas/0 s; sigue pendiente tras el fallo del host |
+| Preparación del host experimental | E5 fue el intento fallido del 1 de octubre; pilotos posteriores CPU de `90ba03d` completaron. No se ejecutó aquí el host Windows integrado |
+| LIVE Windows e imagen procesada en UI | Piloto de `90ba03d`: 300.188 s, captura/inferencia real y frames HTTP; confirmación visual pendiente. LIVE de esta integración aún no probado |
 | macOS/MPS y NVIDIA/CUDA integrados | No acreditados por las pruebas Windows/CPU ni por el antecedente MacBook reportado |
 
 Los originales externos de pruebas se identifican por ejecución en
@@ -400,3 +400,20 @@ servidor tras actualizar código. La señal opcional de objetos añade inferenci
 YOLO aparte del seguimiento y sigue siendo experimental. Consulta
 [PLAN_COMERCIAL.md](proyecto_lap_prototipo/docs/PLAN_COMERCIAL.md); sus sesiones
 de ejemplo son antecedentes locales, no datos que deban existir en un clon nuevo.
+
+## Prueba rápida en un equipo nuevo (reidentificación OSNet)
+
+La herramienta de `main` se conserva para su evaluación; su prueba completa aún no se ejecutó en esta integración. No sustituye el piloto con guardas ni acredita estabilidad LIVE. El repositorio incluye los videos `data/camera_A.mp4` y `data/camera_B.mp4` (la misma explanada vista desde dos ángulos), su calibración (`config/calibracion.json`, `config/alcance.json`), el modelo `models/osnet.onnx` y una configuración demo (`config/ejemplos/demo_camaras_A_B.json`).
+
+Tras `preparar_sistema`, con el entorno `.venv` del proyecto:
+
+```powershell
+cd proyecto_lap_prototipo
+..\.venv\Scripts\python.exe tools\prueba_completa.py --seconds 120
+```
+
+Levanta su propio servidor en el puerto 8799 con una configuración aislada (no toca tus proyectos), inicia una sesión unificada A+B y comprueba que el servidor responde, que se detectan personas, que OSNet está activo (`reid: osnet`) y que alguna persona se asocia entre cámaras. Termina con `PRUEBA COMPLETA OK` o con el motivo del fallo.
+
+Para verlo en la interfaz: inicia el sistema, crea un proyecto nuevo, importa `config/ejemplos/demo_camaras_A_B.json` desde Configuración y pulsa Iniciar con **Asociar recorridos** encendido.
+
+Otras comprobaciones: pruebas unitarias (`..\.venv\Scripts\python.exe -m pytest tests -q`), `tools\probar_reid.py` (compara OSNet contra color sobre estos mismos videos) y `tools\preparar_hardware.py` (perfil de CPU/GPU elegido).

@@ -1,3 +1,28 @@
+# AeroTrack — avance del equipo
+
+## Actualización del 4 de octubre de 2026 (America/Lima)
+
+La rama **`jose/automations-main-integration-v3`** reúne nuestras correcciones
+publicadas en `90ba03d` y las novedades de `main` hasta `de44a7e`, manteniendo
+las ramas originales. Consulta [el informe de integración](INTEGRACION_MAIN_20261004.md)
+para los resultados nuevos, las exclusiones, los conflictos resueltos y la copia
+que debe descargar el equipo. La candidata mantiene el dictamen **REQUIERE
+CORRECCIONES**: REV-03/04/06 y la causa histórica de NMS permanecen abiertos.
+
+En la revisión anterior `90ba03d`, el piloto del 4 de octubre acreditó
+**300.188 s LIVE Windows/CPU**, **1392 inferencias YOLO**, **40 inferencias P2PNet**
+y **503 solicitudes HTTP de frames**, con salida 0 y cierre cooperativo. La
+confirmación visual del usuario y el motivo del cese de solicitudes al final
+siguen pendientes. No es una validación LIVE/CUDA de esta nueva integración.
+El ZIP externo y su hash están identificados en el informe enlazado; no se
+publican medios, credenciales ni los resultados privados completos.
+
+## Registro histórico del 1 de octubre de 2026
+
+El contenido siguiente conserva su corte y resultados originales. Sus referencias
+a «piloto no iniciado», «host no validado» y a la rama v2 describen ese intento;
+el estado posterior está arriba y en el informe de integración.
+
 # AeroTrack — avance y evidencias para el equipo
 
 Corte: **1 de octubre de 2026, America/Lima**, publicación intermedia para revisión

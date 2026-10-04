@@ -31,7 +31,9 @@ export default function MonitoringWorkspace({ session, onSetup, onReplay, active
   const [error, setError] = useState('');
   const [historyLoading, setHistoryLoading] = useState(true);
   const quality = 256;
-  const [unified, setUnified] = useState(false);
+  // Sin asociar recorridos cada cámara conserva su propio ID: se activa por defecto
+  // cuando hay varias cámaras y la sincronización ya está verificada.
+  const [unified, setUnified] = useState(config.clocksVerified && config.cameras.filter(c => c.active !== false).length > 1);
   const [testRun,setTestRun]=useState(config.cameras.some(c=>c.illustrative));
   const [allLevels, setAllLevels] = useState(true);
   const [trend, setTrend] = useState<{ t: number; zones: any[] }[]>([]);

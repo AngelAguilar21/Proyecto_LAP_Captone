@@ -1,0 +1,42 @@
+\section{Diseño del Sistema}
+\label{sec:diseno-sistema}
+
+\textbf{Arquitectura Conceptual.} El prototipo se organiza en seis componentes
+secuenciales:
+
+\figuraPendiente{arquitectura.png}{\textwidth}{9cm}{Arquitectura conceptual del sistema
+Aerotrack: adquisición, detección, seguimiento, calibración y proyección, fusión de
+identidad entre cámaras, y persistencia/analítica/presentación.}{fig:arquitectura}
+
+\begin{enumerate}
+  \item \textbf{Adquisición.} Lectura de cada fuente de cámara (archivo, USB o RTSP),
+  abierta una sola vez por cámara.
+
+  \item \textbf{Detección.} Un detector intercambiable (HOG, P2PNet o YOLO11n) produce
+  posiciones con confianza asociada; la elección es explícita del operador porque
+  ninguno de los tres es adecuado para todos los casos.
+
+  \item \textbf{Seguimiento.} La variante mono-cámara por puntos adapta ByteTrack con
+  Kalman de velocidad constante y asignación húngara en dos etapas, usando distancia
+  euclidiana como costo. La variante de cajas usa ByteTrack sin modificar sobre
+  YOLO11n. Un componente complementario de conteo denso (P2PNet por ROI) opera sin
+  identidad.
+
+  \item \textbf{Calibración y proyección.} Homografía por cámara, calculada con al menos
+  cuatro correspondencias suelo-plano y validada por consistencia geométrica. La
+  primera calibración del equipo, con puntos agrupados en un área pequeña, produjo
+  extrapolaciones absurdas lejos de esa zona; se corrigió con 6 a 8 puntos repartidos
+  por toda el área de interés.
+
+  \item \textbf{Fusión de identidad entre cámaras.} Como las cámaras tienen campos de
+  visión superpuestos, la fusión se basa en cercanía espacial simultánea en el plano
+  compartido, con desempate por un descriptor no biométrico (histograma de color HSV
+  del torso, más proporción alto/ancho) solo ante ambigüedad.
+
+  \figuraPendiente{algoritmo_fusion.png}{0.9\textwidth}{6.5cm}{Algoritmo de fusión de
+  identidad entre cámaras por cercanía espacio-temporal, con desempate por
+  descriptor no biométrico.}{fig:fusion}
+
+  \item \textbf{Persistencia, analítica y presentación.} Estado de sesión agregado en
+  SQLite, expuesto por la consola web AeroTrack.
+\end{enumerate}
