@@ -1,4 +1,4 @@
-"""Meaningful regression cases for live identity assignment and occupancy."""
+"""Calibración, ocupación, validación y cámaras relacionadas por personas marcadas."""
 import copy
 import sys
 import unittest
@@ -6,72 +6,21 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from live_server import default_config
-from live_core import IdentityStore, Occupancy, calibration, project, validate_config
+from live_core import MIN_PAREJAS_RELACION, Occupancy, calibration, project, related_cameras, validate_config
 
 
-def obs(camera, local, x, y):
-    return {"camera": camera, "local": local, "point": (x, y), "color": None}
+def row(pid, x, y):
+    return {"id": pid, "camera": "A", "point": [x, y], "predicted": False}
+
+
+def pareja(i, a="A", b="B"):
+    return {"id": f"p{i}", "t": float(i), "a": {"camera": a, "point": [.5, .8]}, "b": {"camera": b, "point": [.4, .7]}}
 
 
 class LiveCoreTests(unittest.TestCase):
     def setUp(self):
         self.cfg = default_config()
         self.cfg["clocksVerified"] = True
-
-    def test_no_cross_camera_merging_without_clock_verification(self):
-        self.cfg["clocksVerified"] = False
-        rows = IdentityStore(self.cfg).update([obs("A", 1, 1, 1), obs("B", 1, 1, 1)], 0)
-        self.assertNotEqual(rows[0]["id"], rows[1]["id"])
-
-    def test_overlap_and_double_count_suppression(self):
-        rows = IdentityStore(self.cfg).update([obs("A", 1, 1, 1), obs("B", 1, 1.05, 1)], 0)
-        self.assertEqual(rows[0]["id"], rows[1]["id"])
-        self.assertEqual(rows[1]["association"], "estimated")
-        self.assertEqual(Occupancy(self.cfg).update(rows, 0)["mappedCount"], 1)
-
-    def test_overlap_tolerates_moderate_homography_error(self):
-        store = IdentityStore(self.cfg)
-        first = {"camera": "A", "local": 1, "point": (2, 2), "color": None}
-        second = {"camera": "B", "local": 4, "point": (3.2, 2), "color": None}
-        rows = store.update([first, second], 0)
-        self.assertEqual(rows[0]["id"], rows[1]["id"])
-        self.assertEqual(rows[1]["association"], "estimated")
-
-    def test_two_simultaneous_people_in_one_camera_do_not_share_id(self):
-        store = IdentityStore(self.cfg)
-        first = store.update([obs("A", 1, 1, 1)], 0)[0]["id"]
-        rows = store.update([obs("B", 1, 1, 1), obs("B", 2, 1.1, 1)], .2)
-        self.assertEqual(rows[0]["id"], first)
-        self.assertNotEqual(rows[0]["id"], rows[1]["id"])
-
-    def test_ambiguous_candidates_are_not_forcibly_merged(self):
-        store = IdentityStore(self.cfg)
-        old = store.update([obs("A", 1, 1, 1), obs("A", 2, 1.4, 1)], 0)
-        row = store.update([obs("B", 1, 1.2, 1)], .2)[0]
-        self.assertNotIn(row["id"], {p["id"] for p in old})
-        self.assertEqual(row["association"], "uncertain")
-
-    def test_non_overlap_handoff_uses_motion_and_time(self):
-        store = IdentityStore(self.cfg)
-        pid = store.update([obs("A", 1, 1, 1)], 0)[0]["id"]
-        store.update([obs("A", 1, 2, 1)], 1)
-        row = store.update([obs("B", 7, 3, 1)], 3)[0]
-        self.assertEqual(row["id"], pid)
-        self.assertEqual(row["association"], "estimated")
-
-    def test_no_handoff_without_a_declared_camera_link(self):
-        self.cfg["cameras"][0]["links"] = []
-        store = IdentityStore(self.cfg)
-        pid = store.update([obs("A", 1, 1, 1)], 0)[0]["id"]
-        row = store.update([obs("B", 1, 1, 1)], 1)[0]
-        self.assertNotEqual(row["id"], pid)
-
-    def test_id_expires_after_handoff_window(self):
-        store = IdentityStore(self.cfg)
-        pid = store.update([obs("A", 1, 1, 1)], 0)[0]["id"]
-        store.update([], 20)
-        self.assertFalse(store.people)
-        self.assertNotEqual(store.update([obs("B", 1, 1, 1)], 21)[0]["id"], pid)
 
     def test_ground_projection_and_degenerate_calibration(self):
         h = calibration([[0, 0, 0, 0], [1, 0, 12, 0], [1, 1, 12, 8], [0, 1, 0, 8]])
@@ -83,16 +32,15 @@ class LiveCoreTests(unittest.TestCase):
 
     def test_alert_requires_persistence_and_clears_when_empty(self):
         self.cfg.update(minPeople=2, dwell=2)
-        store, occupancy = IdentityStore(self.cfg), Occupancy(self.cfg)
-        rows = store.update([obs("A", 1, 1, 1), obs("A", 2, 1.1, 1)], 0)
+        occupancy = Occupancy(self.cfg)
+        rows = [row("P1", 1, 1), row("P2", 1.1, 1)]
         self.assertFalse(occupancy.update(rows, 0)["clusters"][0]["alert"])
         self.assertTrue(occupancy.update(rows, 2)["clusters"][0]["alert"])
         self.assertEqual(occupancy.update([], 3)["clusters"], [])
 
     def test_predictions_do_not_inflate_occupancy(self):
         occupancy = Occupancy(self.cfg)
-        row = {"id": "P1", "point": [1, 1], "predicted": True}
-        self.assertEqual(occupancy.update([row], 1)["mappedCount"], 0)
+        self.assertEqual(occupancy.update([{**row("P1", 1, 1), "predicted": True}], 1)["mappedCount"], 0)
 
     def test_configuration_rejects_invalid_geometry_and_nonfinite_values(self):
         for patch in ({"radius": float("nan")}, {"width": 0}, {"minPeople": 2.5}, {"background": "javascript:bad"}):
@@ -110,6 +58,60 @@ class LiveCoreTests(unittest.TestCase):
         floor = {key: copy.deepcopy(config[key]) for key in ("width","height","unit","background","floor","zones","commercialContext")}
         config.update(planId="floor-a1b2c3d4", plans={"floor-a1b2c3d4":floor}, cameras=[])
         validate_config(config)
+
+    def test_retired_fields_are_removed_and_people_calibration_restores_ground_points(self):
+        config = copy.deepcopy(self.cfg)
+        medidos = [[.1, .9, 1, 1], [.9, .9, 5, 1], [.9, .5, 5, 4], [.1, .5, 1, 4]]
+        camara = config["cameras"][0]
+        camara.update(pairs=[[.2, .8, 2, 2], [.8, .8, 4, 2], [.8, .6, 4, 3], [.2, .6, 2, 3]], heading=90, fov=60, coverageShape="free",
+                      peopleCalibration={"base": "B", "replaced": medidos})
+        config.update(alignment={"B": {}}, connections={"A|B": {}}, cameraRelations={}, identityEngine="legacy", identityAlign=True)
+        validate_config(config)
+        for campo in ("alignment", "connections", "cameraRelations", "identityEngine", "identityAlign"):
+            self.assertNotIn(campo, config)
+        self.assertNotIn("peopleCalibration", camara)
+        self.assertNotIn("coverageShape", camara)
+        self.assertEqual(camara["pairs"], medidos)
+
+    def test_sin_puntos_medidos_guardados_se_conservan_los_actuales(self):
+        config = copy.deepcopy(self.cfg)
+        actuales = [[.2, .8, 2, 2], [.8, .8, 4, 2], [.8, .6, 4, 3]]
+        config["cameras"][0].update(pairs=copy.deepcopy(actuales), peopleCalibration={"base": "B", "replaced": []})
+        validate_config(config)
+        self.assertEqual(config["cameras"][0]["pairs"], actuales)
+        self.assertNotIn("peopleCalibration", config["cameras"][0])
+
+
+class CamarasRelacionadas(unittest.TestCase):
+    def config(self, parejas=(), links=None):
+        c = default_config()
+        for cam in c["cameras"]:
+            cam["links"] = []
+        c["cameras"].append({**copy.deepcopy(c["cameras"][0]), "id": "C"})
+        if links:
+            c["cameras"][0]["links"] = links
+        c["personPairs"] = list(parejas)
+        return c
+
+    def test_sin_personas_marcadas_no_hay_relacion(self):
+        self.assertEqual(related_cameras(self.config()), {"A": [], "B": [], "C": []})
+
+    def test_la_misma_persona_marcada_suficientes_veces_relaciona_las_dos_camaras(self):
+        pocas = related_cameras(self.config([pareja(i) for i in range(MIN_PAREJAS_RELACION - 1)]))
+        self.assertEqual(pocas["A"], [])
+        bastantes = related_cameras(self.config([pareja(i) for i in range(MIN_PAREJAS_RELACION)]))
+        self.assertEqual(bastantes["A"], ["B"])
+        self.assertEqual(bastantes["B"], ["A"])
+        self.assertEqual(bastantes["C"], [])
+
+    def test_los_enlaces_manuales_se_conservan(self):
+        self.assertEqual(related_cameras(self.config(links=["C"]))["C"], ["A"])
+
+    def test_una_camara_inactiva_no_se_relaciona(self):
+        c = self.config([pareja(i) for i in range(MIN_PAREJAS_RELACION)])
+        c["cameras"][1]["active"] = False
+        self.assertNotIn("B", related_cameras(c))
+        self.assertEqual(related_cameras(c)["A"], [])
 
 
 if __name__ == "__main__":

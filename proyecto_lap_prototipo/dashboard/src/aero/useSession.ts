@@ -67,7 +67,7 @@ export function useSession() {
   useEffect(()=>{const warn=(e:BeforeUnloadEvent)=>{if(dirty){e.preventDefault();e.returnValue='';}};window.addEventListener('beforeunload',warn);return()=>window.removeEventListener('beforeunload',warn);},[dirty]);
 
   const post = useCallback(async (path: string, body: unknown, binary = false) => {
-    const response = await fetch(`/api/${path}`, { method: 'POST', headers: { 'Content-Type': binary ? 'application/octet-stream' : 'application/json', 'X-LAP-Token': token.current, 'X-LAP-Session': sessionToken.current }, body: binary ? body as Blob : JSON.stringify(body), signal: AbortSignal.timeout(binary ? 180000 : 15000) });
+    const response = await fetch(`/api/${path}`, { method: 'POST', headers: { 'Content-Type': binary ? 'application/octet-stream' : 'application/json', 'X-LAP-Token': token.current, 'X-LAP-Session': sessionToken.current }, body: binary ? body as Blob : JSON.stringify(body), signal: AbortSignal.timeout(binary ? 6 * 3600 * 1000 : 15000) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'No se pudo completar la operación');
     return data;

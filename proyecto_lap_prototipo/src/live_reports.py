@@ -65,7 +65,19 @@ def report_data(config, state, kind):
         title="Trayectorias recientes de la sesión"
     else:
         raise ValueError("Tipo de reporte desconocido.")
-    return {"title":title,"headers":headers,"rows":rows,"airport":(config.get("airport") or "Espacio sin nombre"),"session":state["session"],"mode":"SIMULACIÓN SINTÉTICA" if state.get("mode")=="demo" else "VIDEOS DE PRUEBA - PLANO ILUSTRATIVO" if state.get("testRun") else "FUENTE REAL - SIN VALIDACIÓN DE PRECISIÓN", "unit":"metros" if config["unit"]=="meters" else "unidades relativas","seconds":round(state["t"],2),"generated":datetime.now(timezone.utc).isoformat(),"note":"Datos observados; asociaciones estimadas. Ocupación no equivale a rentabilidad. Flujo horario calculado sobre las muestras retenidas (hasta 3600)."}
+    return {"title":title,"headers":headers,"rows":rows,"airport":(config.get("airport") or "Espacio sin nombre"),"session":state["session"],"mode":"SIMULACIÓN SINTÉTICA" if state.get("mode")=="demo" else "VIDEOS DE PRUEBA - PLANO ILUSTRATIVO" if state.get("testRun") else "FUENTE REAL - SIN VALIDACIÓN DE PRECISIÓN", "unit":"metros" if config["unit"]=="meters" else "unidades relativas","seconds":round(state["t"],2),"generated":datetime.now(timezone.utc).isoformat(),"note":"Datos observados; asociaciones estimadas. Ocupación no equivale a rentabilidad. Flujo horario calculado sobre las muestras retenidas (hasta 3600)."+identity_note(state)}
+
+
+def identity_note(state):
+    """Frase para los reportes sobre cómo se asignaron las identidades entre cámaras (vacía si la sesión no la informa)."""
+    info = state.get("identity") or {}
+    if not info.get("engine"):
+        return ""
+    modo = "geometría calibrada de las cámaras" if info.get("mode") == "calibrado" and info.get("geometria_validada") else "modo visual y temporal"
+    sin = info.get("camaras_sin_calibracion") or []
+    texto = f" Identidad: tracklets + OSNet, {modo}" + (f", sin calibrar: {', '.join(sin)}" if sin else "")
+    texto += "; umbrales calibrados con una escena pequeña, no validados en campo."
+    return texto
 
 
 def _median(values):

@@ -10,7 +10,7 @@ const leer = (p) => readFileSync(new URL(`../src/aero/${p}`, import.meta.url), '
 const panel = leer('MonitoringWorkspace.tsx');
 
 // Las tarjetas KPI tienen que apagarse a "-" cuando no hay datos, no a 0.
-ok(/hayDatos\?state\.people\.length:'—'/.test(panel),
+ok(/label="Personas en el plano" value=\{hayDatos\?[^}]*:'—'\}/.test(panel),
    'Personas en el plano ya no distingue "sin datos" de "cero medido"');
 ok(/hayDatos\?entries:'—'/.test(panel) && /hayDatos\?exits:'—'/.test(panel),
    'Entradas/Salidas ya no distinguen "sin datos" de "cero medido"');

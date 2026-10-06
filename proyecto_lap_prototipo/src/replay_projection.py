@@ -8,7 +8,7 @@ from spatial_scope import accepts
 def current_projection(meta, samples, config):
     result = copy.deepcopy(samples)
     cameras = {c['id']: c for c in config['cameras']}
-    original = {c['id']: c for c in meta.get('config', {}).get('cameras', [])}
+    original = {c['id']: c for c in meta.get('cameras', [])}      # lo que tenía cada cámara cuando se hizo el análisis
     matrices = {cid: calibration(c.get('pairs', [])) for cid, c in cameras.items()}
     counters, fields, camera_counters = {}, {}, {}
     for sample in result:
@@ -16,7 +16,7 @@ def current_projection(meta, samples, config):
         for observation in sample['cameras']:
             cid = observation['id']
             camera = cameras.get(cid)
-            if not camera or (cid in original and camera.get('source') != original[cid].get('source')):
+            if not camera or (original.get(cid, {}).get('source') and camera.get('source') != original[cid]['source']):
                 observation['people'] = []
                 continue
             pid = camera.get('planId', 'custom')
@@ -24,7 +24,9 @@ def current_projection(meta, samples, config):
             counters.setdefault(pid, Occupancy(plan))
             fields.setdefault(pid, FlowField(plan))
             camera_counters.setdefault(cid, Occupancy(plan))
-            changed = any(camera.get(k) != original.get(cid, {}).get(k) for k in ('pairs', 'planId', 'detectionZone', 'source'))
+            # Solo cuenta como cambio lo que la grabación registró: una grabación antigua que no guardó la calibración no se
+            # puede comparar, y tratarla como «cambiada» rompía siempre la asociación entre cámaras (P00001 se volvía A:P00001 y B:P00001).
+            changed = any(k in original.get(cid, {}) and camera.get(k) != original[cid][k] for k in ('pairs', 'planId', 'detectionZone', 'source'))
             for person in observation.get('people', []):
                 pixel = person.get('pixel')
                 person['point'] = project(matrices[cid], *pixel) if matrices[cid] is not None and pixel else None

@@ -75,8 +75,7 @@ class AeroTrackTests(unittest.TestCase):
             self.engine.start({"detector":"demo"})
 
     def test_supported_detectors_and_unknown_mode(self):
-        # YOLO/hybrid are now the live primary route; only unknown legacy modes
-        # should be rejected before a source is opened.
+        # YOLO is the only live detector; unknown modes are rejected before a source is opened.
         with self.assertRaises(ValueError):
             self.engine.start({"detector":"hog"})
 
@@ -172,7 +171,7 @@ class AeroTrackTests(unittest.TestCase):
         self.engine.configure(cfg)
         fake_detector=SimpleNamespace(detectar=lambda frame: [])
         with patch.object(self.engine,'load_detector',return_value=fake_detector):
-            self.engine.start({'detector':'p2pnet'})
+            self.engine.start({'detector':'yolo'})
             self.wait_status('ended',timeout=20)
             self.assertEqual(len(self.engine.source_checks),3)
             self.assertEqual(len(self.engine.frames),3)

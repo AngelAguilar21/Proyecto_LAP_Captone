@@ -1,137 +1,38 @@
 # Proyecto LAP Capstone
 
-## Ejecutar el sistema AeroTrack
+Proyecto interdisciplinario de análisis de afluencia de personas con Computer Vision para Lima Airport Partners (LAP).
 
-Consulta [INSTALACION.md](INSTALACION.md) para clonar esta rama con P2PNet, instalar YOLO y ByteTrack, preparar los mapas e iniciar el sistema desde cero. En Windows, el instalador es `preparar_sistema.ps1`.
+## AeroTrack
 
+AeroTrack (`proyecto_lap_prototipo/`) analiza video de cámaras fijas: detecta personas con YOLO, las sigue en cada cámara con
+ByteTrack, las ubica en el plano con una homografía de puntos del suelo, reconoce a la misma persona entre cámaras con OSNet y mide
+ocupación, aglomeraciones, flujos y accesos de locales. Asigna IDs anónimos; no usa rostros ni guarda imágenes de personas.
 
-Proyecto interdisciplinario orientado al análisis de afluencia de personas mediante Computer Vision para Lima Airport Partners (LAP).
+- **Instalar y ejecutar:** [INSTALACION.md](INSTALACION.md)
+- **Usarlo paso a paso:** [proyecto_lap_prototipo/docs/GUIA_DE_USO.md](proyecto_lap_prototipo/docs/GUIA_DE_USO.md)
+- **Cómo funciona y en qué literatura se apoya:** [proyecto_lap_prototipo/docs/ARQUITECTURA.md](proyecto_lap_prototipo/docs/ARQUITECTURA.md)
 
-Este repositorio contiene el trabajo de Data Engineering asociado a la preparación, validación, limpieza y trazabilidad de datasets utilizados en experimentos de crowd counting.
-
-## Estado actual
-
-El primer dataset integrado al pipeline es **UCF-QNRF**.
-
-Actualmente se ha completado:
-
-- validación estructural del dataset RAW;
-- verificación de correspondencia imagen/anotación;
-- auditoría espacial de anotaciones;
-- identificación de muestras inconsistentes;
-- definición de cuarentena;
-- limpieza reproducible de anotaciones;
-- generación de dataset procesado;
-- generación de manifest de trazabilidad;
-- auditoría posterior al preprocessing;
-- documentación de Data Quality.
-
-Resultado de la auditoría final del dataset procesado:
-
-- **1,532 muestras utilizables**
-- **1,244,115 anotaciones válidas**
-- **0 puntos Out-of-Bounds (OOB)**
-
-## Estructura del repositorio
+## Contenido del repositorio
 
 ```text
 Proyecto_LAP_Captone/
-├── configs/
-│   └── ucf_qnrf_quarantine.csv
-│
-├── reports/
-│   └── data_quality/
-│       ├── UCF_QNRF_DATA_QUALITY.md
-│       ├── ucf_qnrf_issues.csv
-│       └── ucf_qnrf_summary.json
-│
-├── scripts/
-│   └── exploration/
-│       ├── inspect_outlier.py
-│       ├── inspect_top_outliers.py
-│       ├── inspect_ucf_qnrf.py
-│       ├── rank_invalid_points.py
-│       ├── rank_severe_outliers.py
-│       ├── validate_after_quarantine.py
-│       └── validate_ucf_qnrf.py
-│
-├── src/
-│   ├── data_quality/
-│   │   ├── audit_ucf_qnrf.py
-│   │   └── audit_processed_ucf_qnrf.py
-│   │
-│   └── preprocessing/
-│       └── clean_ucf_qnrf.py
-│
-├── .gitignore
-├── requirements.txt
-└── README.md
+├── proyecto_lap_prototipo/   aplicación AeroTrack (servidor Python, interfaz web, modelos, pruebas y herramientas)
+├── datos_ucf_qnrf/           calidad de datos del dataset UCF-QNRF (ver su README)
+├── informe/                  informe final, presentación, anexos, Gantt, proyecto de Overleaf y antecedentes
+├── Tareas equipo.md          tareas y responsables del equipo
+├── requirements.txt          dependencias de Python
+├── preparar_sistema.cmd/.ps1 primera instalación (entorno, modelos, mapas e interfaz)
+└── iniciar_sistema.cmd/.ps1  inicia AeroTrack en http://127.0.0.1:8765
+```
 
-## Requisitos
-
-El pipeline fue desarrollado y validado utilizando:
-
-- Python 3.9.6
-- matplotlib 3.9.4
-- NumPy 2.0.2
-- Pillow 11.3.0
-- SciPy 1.13.1
-
-Las dependencias Python se encuentran definidas en `requirements.txt`.
-
-## Instalación
-
-### 1. Clonar el repositorio
-
-```bash
-git clone https://github.com/AngelAguilar21/Proyecto_LAP_Captone.git
-cd Proyecto_LAP_Captone
-
-python3 -m venv lap_env
-
-source lap_env/bin/activate
-
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-
-## Datos
-
-## Ejecución del pipeline UCF-QNRF
-
-El pipeline se ejecuta sobre el dataset RAW sin modificarlo directamente.
-
-### 1. Auditoría del dataset RAW
-
-```bash
-python src/data_quality/audit_ucf_qnrf.py \
-  --dataset "/ruta/al/dataset/UCF-QNRF_ECCV18" \
-  --quarantine configs/ucf_qnrf_quarantine.csv
-
-Los datasets no se almacenan dentro del repositorio Git.
-
-Se recomienda mantener los datos en un directorio separado del código fuente.
-
-Una estructura local posible es:
+Dentro de `proyecto_lap_prototipo/`:
 
 ```text
-Proyecto_Interdisciplinario_I/
-├── Proyecto_LAP_Captone/
-│   ├── configs/
-│   ├── reports/
-│   ├── scripts/
-│   ├── src/
-│   ├── requirements.txt
-│   └── README.md
-│
-└── Datasets/
-    ├── UCF-QNRF_ECCV18/
-    └── UCF-QNRF_ECCV18_PROCESSED/
+live_server.py   servidor y API local          src/        núcleo: seguimiento, identidad, análisis y reportes
+dashboard/       interfaz web (React + Vite)   tests/      pruebas automáticas
+config/          proyectos y ajustes locales   tools/      evaluación, rendimiento y mantenimiento
+models/          YOLO y OSNet                  docs/       guías y arquitectura
+data/            demo, videos y resultados
+```
 
-python src/preprocessing/clean_ucf_qnrf.py \
-  --dataset "/ruta/al/dataset/UCF-QNRF_ECCV18" \
-  --output "/ruta/al/dataset/UCF-QNRF_ECCV18_PROCESSED" \
-  --quarantine configs/ucf_qnrf_quarantine.csv
-
-python src/data_quality/audit_processed_ucf_qnrf.py \
-  --raw "/ruta/al/dataset/UCF-QNRF_ECCV18" \
-  --processed "/ruta/al/dataset/UCF-QNRF_ECCV18_PROCESSED"
+Los videos, los proyectos de cada usuario y las credenciales locales no se versionan.

@@ -36,6 +36,8 @@ export default function MonitoringWorkspace({ session, onSetup, onReplay, active
   const [unified, setUnified] = useState(config.clocksVerified && config.cameras.filter(c => c.active !== false).length > 1);
   const [testRun,setTestRun]=useState(config.cameras.some(c=>c.illustrative));
   const [allLevels, setAllLevels] = useState(true);
+  const [groupCrops, setGroupCrops] = useState(config.identityGroupCrops !== false);
+  const [performance, setPerformance] = useState<'auto' | 'precise' | 'balanced' | 'fast'>('auto');
   const [trend, setTrend] = useState<{ t: number; zones: any[] }[]>([]);
   const [pendientes, setPendientes] = useState<number | null>(null);
   const [detailSettings,setDetailSettings]=useState(false);
@@ -203,12 +205,14 @@ export default function MonitoringWorkspace({ session, onSetup, onReplay, active
       }
       await session.save();
       await session.post('start', {
-        detector: 'hybrid',
+        detector: 'yolo',
         combined: true,
         testRun,
         inferenceSize: quality,
         cameraIds: (camera === 'all' ? availableCameras : cameras).filter(c => c.active !== false).map(c => c.id),
         requireUnified: unified,
+        identityGroupCrops: groupCrops,
+        performance,
       });
     });
   }
@@ -241,6 +245,10 @@ export default function MonitoringWorkspace({ session, onSetup, onReplay, active
     </header>
 
     {error && <div className="notice error" role="alert">{error}</div>}
+    {busy && session.state.identity?.engine === 'reid_v2' && <div className="notice" role="status">
+      <b>Identidad entre cámaras</b>: {session.state.identity.mode === 'calibrado' && session.state.identity.geometria_validada ? 'geometría calibrada de todas las cámaras' : `modo visual y temporal${session.state.identity.camaras_sin_calibracion?.length ? ` (sin calibrar: ${session.state.identity.camaras_sin_calibracion.join(', ')})` : ''}`}
+ · {session.state.identity.identidades_globales ?? 0} personas contadas, {session.state.identity.identidades_multicamara ?? 0} vistas en más de una cámara
+    </div>}
     {testRun&&<p className="commerce-test">Los videos se procesan con sus detecciones y accesos configurados. El plano es ilustrativo; los resultados comerciales se guardan en Datos de prueba.</p>}
 
     {sinCamaras ? <section className="monitor-onboarding">
@@ -249,7 +257,7 @@ export default function MonitoringWorkspace({ session, onSetup, onReplay, active
       <button className="primary" onClick={() => onSetup()}><Icon name="plus" size={16} />Configurar espacio</button>
     </section> : <>
       <section className="monitor-kpi-grid" aria-label="Indicadores de monitoreo">
-        <Metric label="Personas en el plano" value={hayDatos?state.people.length:'—'} icon="people" tone={busy ? 'blue' : 'muted'} note={busy ? 'Detectadas ahora' : archived ? 'Último resultado guardado' : 'Esperando monitoreo'} />
+        <Metric label="Personas en el plano" value={hayDatos?new Set(state.people.filter(p=>!p.duplicate).map(p=>p.id)).size:'—'} icon="people" tone={busy ? 'blue' : 'muted'} note={busy ? 'Detectadas ahora' : archived ? 'Último resultado guardado' : 'Esperando monitoreo'} />
         <Metric label="Entradas" value={hayDatos?entries:'—'} icon="arrow" tone="blue" note={hayDatos ? 'Durante la sesión' : 'Esperando monitoreo'} />
         <Metric label="Salidas" value={hayDatos?exits:'—'} icon="arrow" tone="blue" note={hayDatos ? 'Durante la sesión' : 'Esperando monitoreo'} />
         <Metric label="Alertas activas" value={pendientes??'—'} icon="alert" tone={pendientes ? 'red' : pendientes === 0 ? 'green' : 'muted'} note={pendientes === null ? 'Sin lectura disponible' : pendientes ? 'Pendientes de revisión' : 'Operación normal'} />
@@ -265,6 +273,14 @@ export default function MonitoringWorkspace({ session, onSetup, onReplay, active
         <div className="toolbar-toggles">
           <label className="switch-control"><input disabled={busy} type="checkbox" checked={allLevels} onChange={e => setAllLevels(e.target.checked)} /><span />Procesar niveles</label>
           <label className="switch-control"><input disabled={busy} type="checkbox" checked={unified} onChange={e => setUnified(e.target.checked)} /><span />Asociar recorridos</label>
+          <label className="switch-control" title="Cuando dos personas van juntas, en vez de descartar el recorte se tapa la parte que cubre la persona de adelante y se usa el resto. Más vistas en grupos; puede separar a una persona que va tapada."><input disabled={busy} type="checkbox" checked={groupCrops} onChange={e => setGroupCrops(e.target.checked)} /><span />Recorte en grupos</label>
+          <label className="switch-control" title="Cuánto analizar por segundo de video. Automático elige según el número de cámaras: con varias cámaras en un equipo sin GPU analizar cada 0,2 s va decenas de veces más lento que el video."><span />Rendimiento
+            <select disabled={busy} value={performance} onChange={e => setPerformance(e.target.value as typeof performance)}>
+              <option value="auto">Automático</option><option value="precise">Preciso (0,2 s)</option><option value="balanced">Equilibrado (0,4 s)</option><option value="fast">Rápido (0,6 s)</option>
+            </select></label>
+          {busy && session.state.performance && <span className="subtle" role="status">
+            Paso de {session.state.performance.stepSeconds} s, detector a {session.state.performance.detectorSize} px: {session.state.performance.tiempoReal > 1
+              ? `${session.state.performance.tiempoReal.toFixed(1)} veces más lento que el video` : 'alcanza el tiempo real'}.</span>}
         </div>
       </section>
 
@@ -317,10 +333,9 @@ export default function MonitoringWorkspace({ session, onSetup, onReplay, active
             <p>{c.active === false ? 'Cámara desactivada · ' : ''}{analytics ? `Última muestra: ${formatTime(analytics.t)}` : 'Todavía no hay resultados de esta cámara'}</p>
             <div className="feed-metrics">{busy && status?.duration && <span>Video: {formatTime(status.sourceTime || 0)} / {formatTime(status.duration)}</span>}<span>{analytics?.occupancy?.count ?? '--'} personas</span><span>Máximo: {analytics?.occupancy?.peak ?? '--'}</span></div>
             {zones.map((z: any) => <p key={z.id}>{z.name}: {z.count} personas · máximo {z.peak}{z.alert ? ' · Concentración sostenida' : ''}</p>)}
-            {analytics?.dense?.status === 'ready' && <p>P2PNet (estimación de densidad): {analytics.dense.count} · muestra {formatTime(analytics.dense.t)}</p>}
             {analytics?.crossings?.map((line: any) => <p key={line.id}>{line.name}: {line.entries} entradas · {line.exits} salidas</p>)}
-            {analytics?.avie && <p>AVIE: {analytics.avie.state} · {analytics.avie.inferenceMs ?? '--'} ms</p>}
-            {analytics?.dense?.status === 'ready' && <p>P2PNet (estimación de densidad): {analytics.dense.count} · muestra {formatTime(analytics.dense.t)}</p>}
+            {status?.tracker && <p>Seguimiento: {status.tracker === 'botsort' ? 'BoT-SORT activo' : status.tracker}</p>}
+            {status?.reid && <p>Reidentificación: {status.reid === 'osnet' ? 'OSNet activo' : `${status.reid} activo`}{status.hardware ? ` · ${status.hardware.device === 'cpu' ? 'CPU' : 'GPU'} · ${status.hardware.model}` : ''}</p>}
           </article>;
         })}</div>
       </section>

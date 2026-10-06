@@ -61,7 +61,7 @@ npm run build
 
 En **Vista general**, activa **Prueba con videos** y pulsa **Analizar videos de prueba**. El selector Cámara permite analizar una sola; Todas las cámaras procesa las activas. Esta opción permite el plano ilustrativo sin presentarlo como medición real del LAP. Para asociar IDs entre vistas se necesitan geometría coherente, desfases correctos y sincronización declarada. El detector operativo de esta versión de main es P2PNet con tracking de puntos de cabeza; no es el antiguo seguimiento corporal YOLO. La señal opcional de objetos sí carga YOLO11n y ByteTrack.
 
-Sesión guardada **6aa427dd**, dos videos originales CAM-1/CAM-2, P2PNet real, análisis de cruces y ocupación, sin error. Disponible en **Videos y resultados**. Resumen local en `data/commercial-tests/videos_actuales.json`. La reproducción de prueba dura aproximadamente 32 segundos de fuente analizada; no se validó manualmente la precisión de sus conteos ni la reidentificación.
+Sesión guardada **6aa427dd**, dos videos originales CAM-1/CAM-2, análisis de cruces y ocupación, sin error (hecha cuando el sistema aún incluía P2PNet, retirado el 2026-10-05). Disponible en **Videos y resultados**. Resumen local en `data/commercial-tests/videos_actuales.json`. La reproducción de prueba dura aproximadamente 32 segundos de fuente analizada; no se validó manualmente la precisión de sus conteos ni la reidentificación.
 
 Proyecciones sintéticas adicionales guardadas para El Bodegón, origen **Datos de prueba**, fecha **2026-09-27**:
 

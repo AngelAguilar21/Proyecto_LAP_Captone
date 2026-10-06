@@ -19,12 +19,12 @@ ok(/function startCameraTest/.test(asistente),
    'no existe la funcion que inicia la prueba de seguimiento');
 ok(/session\.post\(['"]start['"]/.test(asistente),
    'startCameraTest no llama al endpoint que inicia el analisis');
-ok(/detector:['"]p2pnet['"]/.test(asistente),
-   'la prueba del asistente ya no fija P2PNet');
+ok(/detector:['"]yolo['"]/.test(asistente),
+   'la prueba del asistente no usa el detector YOLO');
 ok(/PROJECT_STEPS[^\n]*\['project','plan','source','test','calibrate','zones','review'\]/.test(asistente),
    'el asistente no respeta el flujo simplificado proyecto-plano-camara-zona-homografia-zonas-revision');
-ok(/inferenceSize:256/.test(asistente),
-   'la prueba de camara ya no usa el perfil P2PNet de baja latencia');
+ok(/inferenceSize:640/.test(asistente),
+   'la prueba de camara no usa la resolucion YOLO de 640 px');
 ok(!/equipaje|luggage/i.test(asistente),
    'el asistente todavia expone el modulo de equipaje retirado');
 
@@ -33,8 +33,8 @@ ok(/const starting *= *session\.connected *&& *session\.state\.status *=== *['"]
    'CameraPanel ya no distingue el estado "iniciando" para avisar al operador');
 ok(/video-starting/.test(panel),
    'no hay ningun aviso visible mientras la sesion esta iniciando');
-ok(!/YOLO|HOG|onDetector|denseCounting|denseInterval/.test(panel),
-   'la camara todavia ofrece detectores o una segunda inferencia fuera del flujo P2PNet');
+ok(!/HOG|onDetector|denseCounting|denseInterval|p2pnet|P2PNet/.test(panel),
+   'la camara todavia ofrece otros detectores o una segunda inferencia de densidad');
 ok(!/Orientación|Cobertura orientativa|Accesos de un local/.test(panel),
    'la configuracion basica de camara volvio a exponer opciones avanzadas');
 

@@ -30,23 +30,31 @@ def resolve_model_path(configured=None):
 
 
 class OSNetEmbedder:
-    def __init__(self, model_path=None, providers=None):
+    def __init__(self, model_path=None, providers=None, threads=None):
         self.session = None
         self.error = None
         self.batch = None
+        self.dimension, self.name = 512, "osnet"
         self.size = (128, 256)  # (ancho, alto) de entrada habitual de OSNet
         path = resolve_model_path(model_path)
         if path is None:
-            self.error = "Sin modelo OSNet (.onnx): se usa la firma de color."
+            self.error = "Sin modelo OSNet (models/osnet.onnx)."
             return
         try:
             import onnxruntime as ort
-            self.session = ort.InferenceSession(str(path), providers=providers or ["CPUExecutionProvider"])
+            opciones = ort.SessionOptions()
+            if threads:
+                opciones.intra_op_num_threads = int(threads)   # tope de hilos: OSNet no debe frenar al detector
+            self.session = ort.InferenceSession(str(path), opciones, providers=providers or ["CPUExecutionProvider"])
             shape = self.session.get_inputs()[0].shape
             if len(shape) == 4 and all(isinstance(v, int) and v > 0 for v in shape[2:]):
                 self.size = (int(shape[3]), int(shape[2]))
             self.input_name = self.session.get_inputs()[0].name
             self.batch = shape[0] if isinstance(shape[0], int) and shape[0] > 0 else None
+            salida = self.session.get_outputs()[0].shape
+            if salida and isinstance(salida[-1], int) and salida[-1] > 0:
+                self.dimension = int(salida[-1])
+            self.name = path.stem
         except Exception as exc:  # onnxruntime lanza tipos propios según el fallo
             self.session = None
             self.error = f"No se pudo cargar OSNet: {exc}"
@@ -55,27 +63,45 @@ class OSNetEmbedder:
     def available(self):
         return self.session is not None
 
-    def _crop(self, frame, box):
+    def _crop(self, frame, box, tapados=None):
         height, width = frame.shape[:2]
         x1, y1, x2, y2 = box
         x1, x2 = max(0, int(x1)), min(width, int(x2))
         y1, y2 = max(0, int(y1)), min(height, int(y2))
         if x2 - x1 < MIN_CROP_PX or y2 - y1 < MIN_CROP_PX:
             return None
-        rgb = cv2.cvtColor(frame[y1:y2, x1:x2], cv2.COLOR_BGR2RGB)
+        recorte = frame[y1:y2, x1:x2]
+        if tapados:
+            from identity.quality import rellenar   # zonas tapadas por otra persona: gris neutro, no ropa del vecino
+            recorte = rellenar(recorte, tapados, (x1, y1))
+        rgb = cv2.cvtColor(recorte, cv2.COLOR_BGR2RGB)
         resized = cv2.resize(rgb, self.size, interpolation=cv2.INTER_LINEAR)
         return ((resized.astype(np.float32) / 255. - MEAN) / STD).transpose(2, 0, 1)
 
-    def embed(self, frame, boxes):
-        """Devuelve un vector L2-normalizado por caja (None si el recorte es inválido)."""
-        if not self.available or not boxes:
-            return [None] * len(boxes)
-        crops = [self._crop(frame, box) if box is not None else None for box in boxes]
-        valid = [i for i, crop in enumerate(crops) if crop is not None]
-        result = [None] * len(boxes)
-        if not valid:
-            return result
-        batch = np.stack([crops[i] for i in valid])
+    def embed(self, frame, boxes, tapados=None):
+        """Devuelve un vector L2-normalizado por caja (None si el recorte es inválido).
+
+        `tapados`: por caja, rectángulos del frame que cubre otra persona y se rellenan antes de calcular el vector."""
+        return self.embed_varios([(frame, boxes, tapados)])[0]
+
+    def embed_varios(self, trabajos):
+        """Como `embed` para varios cuadros a la vez: `trabajos` = [(frame, cajas, tapados)], devuelve una lista por trabajo.
+
+        Con el export de lote fijo (16) cada llamada al modelo cuesta un bloque completo aunque lleve un solo recorte, así
+        que los recortes de todas las cámaras van juntos en los mismos bloques."""
+        resultados = [[None] * len(boxes or []) for _, boxes, _ in trabajos]
+        if not self.available:
+            return resultados
+        crops, destinos = [], []
+        for j, (frame, boxes, tapados) in enumerate(trabajos):
+            for i, box in enumerate(boxes or []):
+                crop = self._crop(frame, box, tapados[i] if tapados else None) if box is not None else None
+                if crop is not None:
+                    crops.append(crop)
+                    destinos.append((j, i))
+        if not crops:
+            return resultados
+        batch = np.stack(crops)
         # Algunos exports ONNX fijan el tamaño de lote: se procesa por bloques con relleno.
         step = self.batch or len(batch)
         try:
@@ -88,13 +114,13 @@ class OSNetEmbedder:
             output = np.concatenate(chunks)
         except Exception as exc:  # un fallo de inferencia no debe parar el monitoreo
             self.session, self.error = None, f"OSNet desactivado: {exc}"
-            return result
-        output = np.asarray(output, dtype=np.float32).reshape(len(valid), -1)
+            return resultados
+        output = np.asarray(output, dtype=np.float32).reshape(len(crops), -1)
         norms = np.linalg.norm(output, axis=1, keepdims=True)
         output = output / np.maximum(norms, 1e-9)
-        for row, i in zip(output, valid):
-            result[i] = row
-        return result
+        for row, (j, i) in zip(output, destinos):
+            resultados[j][i] = row
+        return resultados
 
 
 def _iou(a, b):

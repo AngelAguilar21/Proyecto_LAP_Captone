@@ -1,0 +1,26 @@
+.insights-panel { display: grid; gap: 16px; }
+.insights-actions { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.insights-actions label { display: grid; gap: 4px; font-size: 13px; }
+.insights-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.insights-kpis article { padding: 12px 14px; border: 1px solid var(--line, #d7dde5); border-radius: 10px; background: var(--panel, #fff); }
+.insights-kpis span { display: block; font-size: 12px; opacity: .75; }
+.insights-kpis strong { font-size: 24px; }
+.insights-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.insights-tabs button.active, .insights-panel .segmented button.active { background: var(--accent, #1f6feb); color: #fff; }
+.insights-panel .segmented { display: inline-flex; gap: 4px; }
+.insights-heat { width: 100%; max-height: 520px; border: 1px solid var(--line, #d7dde5); border-radius: 8px; background: #f4f6f9; }
+.insights-heat .heat-floor { fill: #f4f6f9; }
+.insights-heat .heat-zone { fill: none; stroke: #1f6feb; vector-effect: non-scaling-stroke; stroke-width: 1.5; }
+.insights-heat .zone-frontage { stroke: #19a05b; stroke-dasharray: 4 3; }
+.insights-heat .zone-cola { stroke: #c4561a; }
+.insights-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+.insights-routes { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.insights-routes li { display: flex; justify-content: space-between; gap: 12px; }
+.insights-od { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.insights-od li { display: grid; grid-template-columns: minmax(120px, 1.4fr) 2fr auto; gap: 10px; align-items: center; font-size: 13px; }
+.insights-od i { display: block; height: 8px; border-radius: 4px; background: var(--accent, #1f6feb); }
+.insights-sales { padding: 10px 0; border-top: 1px solid var(--line, #d7dde5); }
+.insights-sales h3 { margin: 0 0 4px; font-size: 15px; }
+.insights-sales small { opacity: .75; }
+.insights-limits ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 13px; }
+@media (prefers-color-scheme: dark) { .insights-heat, .insights-heat .heat-floor { background: #1b2230; fill: #1b2230; } }

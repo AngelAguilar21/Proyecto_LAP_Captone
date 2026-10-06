@@ -98,6 +98,17 @@ class HardwareTests(unittest.TestCase):
         self.assertTrue(p["weights"].endswith("yolo11m.pt"))
         self.assertEqual(p["osnetProviders"][0], "CUDAExecutionProvider")
 
+    def test_osnet_threads_are_capped_on_cpu_only(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "yolo11n.pt").write_bytes(b"x")
+            cpu = hardware.choose({}, False, self.info(cpuThreads=8), d)
+            self.assertEqual(cpu["osnetThreads"], 4)          # medido: con 4 hilos un lote de OSNet tarda menos que con 2 u 8
+            self.assertEqual(hardware.choose({}, False, self.info(cpuThreads=2), d)["osnetThreads"], 1)
+            self.assertEqual(hardware.choose({}, False, self.info(cpuThreads=32), d)["osnetThreads"], 4)
+            self.assertEqual(hardware.choose({"reidThreads": 4}, False, self.info(cpuThreads=8), d)["osnetThreads"], 4)
+            gpu = self.info(gpu="RTX", vramGb=24, cudaTorch=True, ortProviders=["CUDAExecutionProvider", "CPUExecutionProvider"])
+            self.assertIsNone(hardware.choose({}, False, gpu, d)["osnetThreads"])
+
     def test_missing_weights_fall_back_to_what_exists(self):
         with tempfile.TemporaryDirectory() as d:
             (Path(d) / "yolo11n.pt").write_bytes(b"x")

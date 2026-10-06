@@ -40,7 +40,7 @@ export default function CameraRegionEditor({camera,config,session,onChange}:{cam
   const cutout=visible.length>=3?`M0 0H100V100H0Z M${visible.map(p=>`${p[0]*100} ${p[1]*100}`).join('L')}Z`:'';
   return <section className="region-editor simple-region-editor">
     <div className="region-title"><div><h3>Zona útil</h3><p>Solo el área clara será analizada. Deja espejos, vidrios y pantallas en la parte oscura.</p></div><span className={camera.detectionZone?'pill good':'pill warn'}>{camera.detectionZone?'Definida':'Pendiente'}</span></div>
-    <div className="notice compact mirror-note"><Icon name="shield" size={17}/><span>P2PNet también ve personas reflejadas. Esta máscara evita que entren al conteo.</span></div>
+    <div className="notice compact mirror-note"><Icon name="shield" size={17}/><span>El detector también ve personas reflejadas. Esta máscara evita que entren al conteo.</span></div>
     <div className="region-actions">
       <button disabled={disabled||camera.source===''} onClick={useFrame}><Icon name="camera" size={15}/> Usar imagen actual</button>
       {!drawing?<button className="primary" disabled={disabled||!loaded} onClick={()=>{setDraft([]);setDrawing(true);setSelected(null);}}>Dibujar zona útil</button>:<>

@@ -15,7 +15,36 @@
   "matchDistance": 1.0,
   "personHeight": 1.7,
   "clocksVerified": true,
-  "zones": [],
+  "zones": [
+    {
+      "id": "demo-local",
+      "name": "Local demo",
+      "kind": "commercial",
+      "shape": "rectangle",
+      "source": "operator",
+      "points": [
+        [
+          4.0,
+          4.7
+        ],
+        [
+          6.2,
+          4.7
+        ],
+        [
+          6.2,
+          6.2
+        ],
+        [
+          4.0,
+          6.2
+        ]
+      ],
+      "business": {
+        "category": "retail"
+      }
+    }
+  ],
   "cameras": [
     {
       "id": "A",

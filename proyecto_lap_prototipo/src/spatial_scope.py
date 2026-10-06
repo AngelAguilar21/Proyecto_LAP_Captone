@@ -8,22 +8,6 @@ def inside(point, polygon):
     return bool(point is not None and polygon and cv2.pointPolygonTest(np.asarray(polygon, dtype=np.float32), tuple(map(float, point)), False) >= 0)
 
 
-def coverage_contains(camera, point):
-    if point is None:
-        return False
-    shape = camera.get('coverageShape', 'cone')
-    if shape == 'free':
-        return inside(point, camera.get('coveragePolygon'))
-    dx, dy = point[0]-camera['x'], point[1]-camera['y']
-    angle = math.radians(camera.get('heading', 90))
-    forward = dx*math.cos(angle)+dy*math.sin(angle)
-    sideways = -dx*math.sin(angle)+dy*math.cos(angle)
-    radius = camera.get('range', 3)
-    if shape == 'rectangle':
-        return -1e-7 <= forward <= radius+1e-7 and abs(sideways) <= camera.get('coverageWidth', 2)/2+1e-7
-    return math.hypot(dx,dy) <= radius+1e-7 and abs(math.atan2(sideways,forward)) <= math.radians(camera.get('fov',60)/2)+1e-7
-
-
 def accepts(camera, config, u, v, ground, image_only=False):
     if camera.get('detectionZone') and not inside((u,v), camera['detectionZone']):
         return False
@@ -31,8 +15,6 @@ def accepts(camera, config, u, v, ground, image_only=False):
     if image_only:
         return True
     if not config.get('mapAsset') and config.get('workArea') and not inside(ground, config['workArea']):
-        return False
-    if camera.get('restrictCoverage', False) and not coverage_contains(camera, ground):
         return False
     return True
 

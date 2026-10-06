@@ -9,17 +9,188 @@ import json
 import os
 from pathlib import Path
 import secrets
+import shutil
 import socket
 import sys
 import subprocess
 import threading
 import time
 from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
+import numpy as np
+
 ROOT = Path(__file__).resolve().parent
+
+
+RESERVA_DISCO = 1024 ** 3   # espacio libre que debe quedar después de guardar un video
+
+
+def validar_tamano_de_video(size, libre):
+    """Un video no tiene tope de peso; solo debe caber en el disco con una reserva. `libre` son los bytes libres."""
+    if size <= 0:
+        raise ValueError("El video está vacío o el navegador no informó su tamaño.")
+    if size + RESERVA_DISCO > libre:
+        raise ValueError(f"No hay espacio en el disco: el video ocupa {size / 1024 ** 3:.1f} GB y quedan {libre / 1024 ** 3:.1f} GB libres "
+                         f"(se deja {RESERVA_DISCO // 1024 ** 3} GB de reserva).")
+
+
+def desfase_temporal(deltas):
+    """(desfase, dispersión, fiable) de las diferencias de posición pb - pa entre parejas de personas.
+
+    Se usa la mediana y el MAD para que una pareja mal marcada no cambie el resultado. Es fiable con 4 o más parejas y una
+    dispersión de hasta 0,25 s."""
+    deltas = np.asarray(deltas, dtype=float)
+    if not len(deltas):
+        return 0.0, float("inf"), False
+    desfase = float(np.median(deltas))
+    dispersion = max(float(np.median(np.abs(deltas - desfase))) * 1.4826, 0.0)
+    return desfase, dispersion, bool(len(deltas) >= 4 and dispersion <= 0.25)
+
+
+def source_time_offset(camera):
+    """Offset total de lectura: inicio omitido más corrección temporal estimada.
+
+    ``offset`` sigue siendo el ajuste manual no negativo del inicio del archivo;
+    ``syncOffset`` es firmado y solo se escribe cuando la evidencia de personas
+    entre cámaras supera la validación automática.
+    """
+    try:
+        return float(camera.get("offset", 0)) + float(camera.get("syncOffset", 0))
+    except (TypeError, ValueError):
+        return float(camera.get("offset", 0) or 0)
+
+
+def posiciones_de_pareja(item, base, destino):
+    """(pa, pb): instante de la persona en el archivo de video de cada cámara.
+
+    Las parejas nuevas guardan `pa` y `pb`, que no dependen del desfase que se aplique después. Las antiguas solo tienen el
+    tiempo común (`ta`, `tb`), que se pasa a archivo con el desfase actual de cada cámara."""
+    ta = float(item.get("ta", item.get("t", 0)))
+    tb = float(item.get("tb", item.get("t", 0)))
+    pa = float(item["pa"]) if "pa" in item else ta + source_time_offset(base)
+    pb = float(item["pb"]) if "pb" in item else tb + source_time_offset(destino)
+    return pa, pb
+
+
+def ajuste_de_relojes(base, destino, diferencias):
+    """Desfase de tiempo para que la misma persona caiga en el mismo instante común en las dos cámaras.
+
+    `diferencias`: pb - pa de cada pareja, es decir cuánto más adelante está el suceso en el video de `destino`. Ese valor es
+    exactamente el desfase de lectura que debe tener `destino` respecto de `base` (si es positivo, `destino` empezó antes y se
+    lee más adelante). Como la lectura no puede empezar antes del archivo, si saliera negativa se retrasa `base` en su lugar.
+    Devuelve el desfase (`offset`), su dispersión, si es fiable, si hay que cambiar algo y los `syncOffset` de cada cámara."""
+    desfase, dispersion, fiable = desfase_temporal(diferencias)
+    base_actual, destino_actual = source_time_offset(base), source_time_offset(destino)
+    necesita = bool(fiable and abs(desfase - (destino_actual - base_actual)) >= 0.15)
+    total_base, total_destino = base_actual, base_actual + desfase
+    if total_destino < 0:
+        total_base, total_destino = base_actual - total_destino, 0.0
+    sync_base = total_base - float(base.get("offset", 0) or 0)
+    sync_destino = total_destino - float(destino.get("offset", 0) or 0)
+    if not necesita:
+        sync_base, sync_destino = float(base.get("syncOffset", 0) or 0), float(destino.get("syncOffset", 0) or 0)
+    return {"offset": desfase, "dispersion": dispersion, "fiable": fiable, "necesita": necesita,
+            "sync_base": round(sync_base, 4), "sync_destino": round(sync_destino, 4)}
+
+
+def problemas_de_parejas(filas, ajuste, espacial, unidad, con_geometria):
+    """Frases para el operador sobre las parejas de personas: qué falta y qué conviene revisar. {"nivel", "texto"}."""
+    n = len(filas)
+    if n < 4:
+        return [{"nivel": "error", "texto": f"Hay {n} {'pareja' if n == 1 else 'parejas'}; hacen falta 4 como mínimo para relacionar y sincronizar las cámaras. Marca {4 - n} más."}]
+    salida = []
+    if not ajuste["fiable"]:
+        salida.append({"nivel": "error", "texto": f"Las parejas no coinciden en el tiempo (sus desfases varían {ajuste['dispersion']:.2f} s; se admite hasta 0,25 s). "
+                                                  "Revisa que cada pareja sea la misma persona en la misma pose."})
+    elif any(f["fueraDeTiempo"] for f in filas):
+        salida.append({"nivel": "aviso", "texto": "Algunas parejas dan otro desfase que el resto (marcadas en la lista): revisa que sean la misma persona."})
+    if len({(f["ta"], f["tb"]) for f in filas}) == 1:
+        salida.append({"nivel": "aviso", "texto": "Todas las parejas están en el mismo instante: marca a la persona también en otros momentos para comprobar el desfase."})
+    if not con_geometria:
+        salida.append({"nivel": "info", "texto": "Sin puntos del suelo en las dos cámaras solo se calcula el desfase de tiempo; la posición en el plano no se puede comparar."})
+    elif espacial and not espacial["concuerdan"]:
+        salida.append({"nivel": "aviso", "texto": f"La misma persona queda a {espacial['mediana']:.2f} {unidad} (mediana) entre las dos cámaras: sus puntos del suelo no concuerdan. "
+                                                  "Recalibra usando los mismos puntos del plano en las dos cámaras."})
+    return salida
+
+
+def abrir_archivo(ruta):
+    """VideoCapture de un archivo, con decodificación por hardware si el equipo la ofrece.
+
+    Medido con 7 cámaras de 1920x1080 a 60 fps en un i5 sin GPU: avanzar 0,2 s de video costaba 495 ms por software y 137 ms con
+    aceleración (D3D11 en Windows). Si no abre, o no entrega el primer cuadro, se usa el modo normal."""
+    import cv2
+    try:
+        cap = cv2.VideoCapture(ruta, cv2.CAP_FFMPEG, [cv2.CAP_PROP_HW_ACCELERATION, cv2.VIDEO_ACCELERATION_ANY])
+        if cap.isOpened() and cap.read()[0]:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            return cap
+        cap.release()
+    except (cv2.error, AttributeError):
+        pass
+    return cv2.VideoCapture(ruta)
+
+
+# Cuánto analizar por segundo de video. En un i5 sin GPU, YOLO11n a 960 px cuesta unos 0,33 s por cámara y paso y OSNet unos
+# 0,2 s por bloque de 16 recortes: con varias cámaras, analizar cada 0,2 s va entre 5 y 25 veces más lento que el video.
+RENDIMIENTO = {
+    "precise": {"step": 0.2, "size": None, "reid": 16, "nombre": "Preciso"},      # resolución del equipo, una muestra cada 0,2 s
+    "balanced": {"step": 0.4, "size": 800, "reid": 16, "nombre": "Equilibrado"},
+    "fast": {"step": 0.6, "size": 640, "reid": 16, "nombre": "Rápido"},
+}
+
+
+def rendimiento_elegido(pedido, n_camaras, tier="cpu"):
+    """(clave, preset). `auto` elige por el número de cámaras en CPU; con GPU se conserva el modo preciso."""
+    if pedido not in ("auto", *RENDIMIENTO):
+        raise ValueError("performance inválido: auto, precise, balanced o fast.")
+    if pedido == "auto":
+        pedido = "precise" if tier != "cpu" or n_camaras <= 2 else "balanced" if n_camaras <= 4 else "fast"
+    return pedido, RENDIMIENTO[pedido]
+
+
+EXPANSION_REGION_FIABLE = 1.5     # la región de la imagen donde se confía en la homografía: casco de sus referencias x 1,5
+
+
+def region_fiable(camera, factor=EXPANSION_REGION_FIABLE):
+    """Región de la imagen (u, v en 0..1) donde la homografía de la cámara es fiable, o None si no se puede acotar.
+
+    Una homografía solo vale donde hay referencias: ajustada con personas que caminaron lejos, fuera de esa franja coloca a la
+    gente en cualquier parte del plano (y el límite de trabajo la descarta). Es el casco de las referencias ampliado un 50 %."""
+    import cv2
+    pares = camera.get("pairs") or []
+    if len(pares) < 4:
+        return None
+    uv = np.asarray([[q[0], q[1]] for q in pares], np.float32)
+    casco = cv2.convexHull(uv).reshape(-1, 2)
+    if len(casco) < 3 or cv2.contourArea(casco) < 1e-4:
+        return None
+    centro = casco.mean(axis=0)
+    return np.clip(centro + (casco - centro) * factor, 0.0, 1.0).astype(np.float32)
+
+
+def ubicar_en_plano(camera, u, v, estatura):
+    """(posición en el plano o None, fiable). Fuera de la región fiable no se extrapola: la persona sigue en el video, sin punto en el plano."""
+    import cv2
+    if not camera.get("projects"):
+        return None, False
+    region = camera.get("fiable")
+    if region is not None and cv2.pointPolygonTest(region, (float(u), float(v)), False) < 0:
+        return None, False
+    return ground_point(camera, u, v, estatura), True
+
+
+def embed_lote(embedder, trabajos):
+    """Vectores de varios cuadros en una sola pasada si el encoder lo permite. `trabajos` = [(frame, cajas, tapados)]."""
+    if hasattr(embedder, "embed_varios"):
+        return embedder.embed_varios(trabajos)
+    return [embedder.embed(frame, cajas, tapados) for frame, cajas, tapados in trabajos]
+
+
 # Al abrir el servidor directamente, conservar el entorno validado del proyecto.
 project_env = ROOT.parent / ".venv"
 project_python = project_env / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
@@ -27,9 +198,8 @@ if __name__ == "__main__" and project_python.is_file() and Path(sys.prefix).reso
     os.execv(str(project_python), [str(project_python), str(Path(__file__).resolve()), *sys.argv[1:]])
 sys.path.insert(0, str(ROOT / "src"))
 import hardware
-from live_core import (ESTATURA_MEDIA, IdentityStore, Occupancy, body_box, calibration,
-                       estimate_height, ground_point, validate_config)
-from identity_memory import IdentityMemory, clamp_retention
+from live_core import (ESTATURA_MEDIA, Occupancy, calibration, estimate_height, ground_point, validate_config,
+                       collapsed_pairs, blocking_calibration_issue, pairs_hash, related_cameras)
 from live_metrics import SessionMetrics
 from spatial_scope import accepts
 import projects
@@ -38,7 +208,7 @@ import business_catalog
 import commercial
 import sqlite3
 import auth
-from counting.source import is_youtube_url, low_latency_ffmpeg, resolve_stream_source
+from following.stream_source import is_youtube_url, low_latency_ffmpeg, resolve_stream_source
 
 CONFIG_PATH = ROOT / "config" / "live.local.json"
 
@@ -46,7 +216,7 @@ CONFIG_PATH = ROOT / "config" / "live.local.json"
 def default_config():
     legacy = ROOT / "config" / "camaras.json"
     definitions = json.loads(legacy.read_text(encoding="utf-8")).get("camaras",[]) if legacy.exists() else []
-    cameras = [{"id": c["id"], "name": f"Cámara {c['id']}", "location": "", "type":"tilted", "source": str((ROOT / c["video_path"]).resolve()), "x": 1+10*(i/max(1,len(definitions)-1)), "y": 1, "offset":0, "links":c.get("vecinos",[]), "pairs":[], "heading":90, "fov":60, "range":4, "height":2, "tilt":45} for i,c in enumerate(definitions)]
+    cameras = [{"id": c["id"], "name": f"Cámara {c['id']}", "location": "", "type":"tilted", "source": str((ROOT / c["video_path"]).resolve()), "x": 1+10*(i/max(1,len(definitions)-1)), "y": 1, "offset":0, "links":c.get("vecinos",[]), "pairs":[], "height":2} for i,c in enumerate(definitions)]
     # Sin identidad de ningún cliente: el nombre del espacio lo pone cada proyecto.
     # Antes decía «Aeropuerto LAP / Terminal A · Nivel 1», y un proyecto nuevo heredaba
     # ese rótulo y lo mostraba como si fuera suyo.
@@ -79,13 +249,8 @@ class Engine:
         self.stop_event = threading.Event()
         self.pause_event = threading.Event()
         self.worker = None
-        # Cargar los pesos de un detector cuesta varios segundos (medido: ~8 s
-        # para P2PNet en este equipo) y no depende de nada de la sesión que
-        # termina, así que reconstruirlo en cada «Iniciar» es tiempo perdido.
-        # Se conserva mientras el proceso siga vivo y solo se descarta si se
-        # pide otro modelo o pesos distintos.
-        self.detector_cache = None
-        self.detector_cache_key = None
+        # Cargar los pesos de YOLO cuesta segundos y no depende de la sesión que termina: se conservan mientras el
+        # proceso siga vivo y solo se cargan otros si se piden otro modelo o resolución.
         self.detector_caches = {}
         self.detector_lock = threading.Lock()
         self.detector_warmup = None
@@ -130,7 +295,7 @@ class Engine:
                     analytics=copy.deepcopy(last.get('levelAnalytics',{}).get(pid,self.state['analytics']))
                     analytics.update(clusters=[],mappedCount=0)
                     for zone in analytics.get('zones',[]):zone.update(count=0,alert=False)
-                    self.state.update(status=last['status'],session=last['session'],mode='demo' if last['module']=='demo' else 'p2pnet',t=last['end'],planId=pid,analytics=analytics,levelAnalytics=last.get('levelAnalytics',{}),cameraAnalytics=last['cameraAnalytics'],identityDeleted=True)
+                    self.state.update(status=last['status'],session=last['session'],mode='demo' if last['module']=='demo' else 'yolo',t=last['end'],planId=pid,analytics=analytics,levelAnalytics=last.get('levelAnalytics',{}),cameraAnalytics=last['cameraAnalytics'],identityDeleted=True)
 
         # Unifica la restauración para el arranque inicial y para el cambio de
         # proyecto, incluyendo sesiones con estado parcial o error recuperable.
@@ -569,7 +734,7 @@ class Engine:
         self.state.update(
             status=last.get('status', 'ended'),
             session=last.get('session'),
-            mode='demo' if last.get('module') == 'demo' else 'hybrid',
+            mode='demo' if last.get('module') == 'demo' else 'yolo',
             t=last.get('end', 0), planId=pid,
             analytics=analytics,
             levelAnalytics=copy.deepcopy(last.get('levelAnalytics', {})),
@@ -665,7 +830,7 @@ class Engine:
                     if histories:
                         last = max(histories, key=lambda m:m["created"])
                         sid, elapsed = last["session"], last["end"]
-                        mode = "demo" if last["module"] == "demo" else "p2pnet"
+                        mode = "demo" if last["module"] == "demo" else "yolo"
                         analytics = last["cameraAnalytics"]
                 if sid:
                     from replay import manifest
@@ -738,21 +903,19 @@ class Engine:
     def start(self, request):
         self.preview_stop()
         with self.lock:
-            if getattr(self, "counting", None) and self.counting.active():
-                raise ValueError("Detén el análisis de conteo antes de iniciar tracking.")
             if self.worker and self.worker.is_alive():
                 raise ValueError("Ya hay una sesión activa; detenla primero.")
-            mode = request.get("detector", "hybrid")
+            mode = request.get("detector", "yolo")
             test_run = request.get('testRun') is True
-            if mode not in ("hybrid", "yolo", "p2pnet", "demo"):
-                raise ValueError("AeroTrack opera únicamente con P2PNet.")
-            requested_size = int(request.get("inferenceSize") or (256 if mode == "p2pnet" else 640))
-            if mode in ("hybrid", "yolo") and requested_size == 256:
-                requested_size = 640
-            if mode in ("hybrid", "yolo") and requested_size not in (320, 480, 640, 960):
-                raise ValueError("El tamaÃ±o YOLO debe ser 320, 480, 640 o 960 pÃ­xeles.")
-            if mode == "p2pnet" and requested_size not in (128, 256, 384, 512):
-                raise ValueError("El tamaño de inferencia debe ser 128, 256, 384 o 512 píxeles.")
+            if mode not in ("yolo", "demo"):
+                raise ValueError("Detector no admitido: usa yolo.")
+            requested_size = int(request.get("inferenceSize") or 640)
+            if request.get("performance", "auto") not in ("auto", *RENDIMIENTO):
+                raise ValueError("performance inválido: auto, precise, balanced o fast.")
+            if requested_size == 256:
+                requested_size = 640      # valor antiguo de la interfaz
+            if requested_size not in (320, 480, 640, 960):
+                raise ValueError("El tamaño YOLO debe ser 320, 480, 640 o 960 píxeles.")
             if not self.config["cameras"]:
                 raise ValueError("Añade al menos una cámara antes de iniciar.")
             camera_id = request.get("camera")
@@ -766,13 +929,9 @@ class Engine:
                 selected=[c for c in self.config["cameras"] if c["id"] in camera_ids and c.get("active",True)]
             if not selected:
                 raise ValueError("Activa al menos una cámara.")
-            if mode in ("hybrid", "yolo", "p2pnet"):
+            if mode == "yolo":
                 if any(c.get("illustrative") for c in selected) and not test_run:
                     raise ValueError("Las ubicaciones ilustrativas no sirven para medir ocupación comercial.")
-                if not test_run and any(len(c.get("pairs", [])) < 4 for c in selected):
-                    raise ValueError("Calibra todas las cámaras con al menos cuatro referencias antes de iniciar.")
-                if mode == "p2pnet" and any(float(c.get("height") or 0) <= float(self.config.get("personHeight") or ESTATURA_MEDIA) for c in selected):
-                    raise ValueError("La altura de cada cámara debe superar la estatura media para proyectar cabezas al suelo.")
                 if not test_run and any(not c.get("detectionZone") for c in selected):
                     raise ValueError("Delimita la zona útil de cada cámara para excluir espejos, vidrios y áreas externas.")
                 for camera in selected:
@@ -781,12 +940,15 @@ class Engine:
                 if any(c.get('illustrative') for c in selected) and not test_run:
                     raise ValueError('Las ubicaciones ilustrativas permiten probar el mapa, pero no validar identidades entre cámaras. Usa referencias reales del mismo suelo y tiempos sincronizados.')
                 if len(selected)>1 and not self.config["clocksVerified"]:
-                    raise ValueError("Verifica el tiempo común y los desfases antes del conteo multicámara.")
-                if any(len(c.get("pairs",[]))<4 for c in selected):
-                    raise ValueError("Calibra todas las cámaras antes del conteo en el plano.")
+                    raise ValueError("Marca personas de apoyo en Homografía para calcular el desfase de tiempo entre cámaras antes del conteo multicámara.")
+                # Las referencias del suelo son opcionales: solo se revisan en las cámaras que las tienen.
                 import cv2
                 import numpy as np
-                if any(cv2.contourArea(cv2.convexHull(np.asarray(c["pairs"],dtype=np.float32)[:,:2].copy()))<.005 for c in selected):
+                for c in [c for c in selected if len(c.get("pairs",[]))>=4]:
+                    problem = blocking_calibration_issue(c["pairs"], (self.config["width"], self.config["height"]))
+                    if problem:
+                        raise ValueError(f"Calibración de la cámara {c['id']}: {problem}")
+                if any(cv2.contourArea(cv2.convexHull(np.asarray(c["pairs"],dtype=np.float32)[:,:2].copy()))<.005 for c in selected if len(c.get("pairs",[]))>=4):
                     raise ValueError("Calibración insuficiente: distribuye las referencias por el suelo, no sobre una sola línea.")
                 if any(not c.get("detectionZone") for c in selected):
                     raise ValueError("Delimita la zona útil de cada cámara para excluir espejos, vidrios y áreas externas.")
@@ -800,33 +962,55 @@ class Engine:
             self.runtime_config = copy.deepcopy(self.config)
             self.runtime_config['testRun'] = test_run
             self.runtime_config["cameras"] = copy.deepcopy(selected)
+            # Cámaras vecinas: las que el usuario relacionó marcando a la misma persona en ambas (o enlaces manuales).
             selected_ids = {camera['id'] for camera in selected}
+            vecinas = related_cameras(self.runtime_config)
+            bloqueadas_geometria = []
+            if mode == "yolo":
+                # Una similitud OSNet no basta si las homografías de dos cámaras
+                # proyectan a lugares incompatibles. En ese caso es más seguro
+                # conservar IDs locales que publicar una fusión falsa.
+                for base in sorted(vecinas):
+                    for destino in sorted(list(vecinas[base])):
+                        if base >= destino or destino not in vecinas:
+                            continue
+                        pares = [p for p in self.runtime_config.get("personPairs", [])
+                                 if {p.get("a", {}).get("camera"), p.get("b", {}).get("camera")} == {base, destino}]
+                        if len(pares) < 4:
+                            continue
+                        try:
+                            espacial = self.person_pairs_check(base, destino, pares).get("espacial")
+                        except (ValueError, KeyError, TypeError):
+                            espacial = None
+                        if espacial and not espacial.get("concuerdan", False):
+                            vecinas[base].discard(destino)
+                            vecinas[destino].discard(base)
+                            bloqueadas_geometria.append({"base": base, "destino": destino,
+                                                         "distancia": round(float(espacial.get("mediana", 0)), 2),
+                                                         "limite": round(float(espacial.get("max", 0)), 2)})
             for camera in self.runtime_config['cameras']:
-                explicit = [cid for cid in camera.get('links', []) if cid in selected_ids]
-                # En la configuración básica no se obliga al operador a dibujar una
-                # red técnica. Sin enlaces explícitos se asocian automáticamente las
-                # cámaras del mismo plano; la homografía, el tiempo y la apariencia
-                # siguen siendo los filtros que deciden cada traspaso.
-                camera['links'] = explicit or [
-                    other['id'] for other in selected
-                    if other['id'] != camera['id']
-                    and other.get('planId', 'custom') == camera.get('planId', 'custom')
-                ]
+                camera['links'] = [cid for cid in vecinas.get(camera['id'], []) if cid in selected_ids]
+            self.runtime_config["identityBlockedPairs"] = bloqueadas_geometria
+            for item in bloqueadas_geometria:
+                self.record("Identidad", f"No se fusionan {item['base']} y {item['destino']}: homografías incompatibles ({item['distancia']} > {item['limite']} unidades). Se mantienen IDs locales hasta recalibrar.")
+            if "identityGroupCrops" in request:
+                if not isinstance(request["identityGroupCrops"], bool):
+                    raise ValueError("identityGroupCrops inválido.")
+                self.runtime_config["identityGroupCrops"] = request["identityGroupCrops"]
+            self.runtime_config.setdefault("identityGroupCrops", True)
             self.state["planId"] = selected[0].get("planId","custom")
+            sin_referencias = [c["id"] for c in selected if len(c.get("pairs", [])) < 4]
+            if sin_referencias and not test_run:
+                self.record("Calibración", f"Sin puntos del suelo en {', '.join(sin_referencias)}: esas cámaras cuentan por zonas de imagen pero no se ubican en el plano.")
+            if len(selected) > 1 and not any(camera['links'] for camera in self.runtime_config['cameras']):
+                self.record("Identidad", "Ninguna cámara está relacionada con otra: cada una conserva sus propios IDs. Marca a la misma persona en dos cámaras para relacionarlas.")
             if not request.get("requireUnified"):
                 self.runtime_config["clocksVerified"]=False
             if camera_id:
                 pid=selected[0].get("planId","custom")
                 if pid!=self.config.get("planId","custom"):
                     self.runtime_config.update(copy.deepcopy(self.config.get("plans",{}).get(pid,{})))
-            runtime_request = {
-                **request,
-                "detector": mode,
-                "weights": None,
-                # El modo operativo prioriza continuidad. P2PNet reescala las
-                # coordenadas al frame original después de inferir.
-                "inferenceSize": min(requested_size, 256) if mode == "p2pnet" else requested_size,
-            }
+            runtime_request = {**request, "detector": mode, "weights": None, "inferenceSize": requested_size}
             self.worker = threading.Thread(target=self.run, args=(self.runtime_config, runtime_request), daemon=True)
             self.worker.start()
             self.record("Sesión iniciada",f"{mode} · {camera_id or 'todas las cámaras'}")
@@ -842,6 +1026,192 @@ class Engine:
             self.state["status"] = "paused" if paused else "running"
             self.record("Sesión pausada" if paused else "Sesión reanudada","Control del operador")
 
+    def compute_insights(self, sid):
+        """Insights espaciales de una grabación: eventos, KDE, rutas, captación. Un fallo se avisa y no detiene nada.
+
+        Usa las zonas y los negocios actuales del proyecto (no los de la sesión): si cambian, se pueden recalcular."""
+        try:
+            import insights
+            from insights import ventas as insights_ventas
+            with self.lock:
+                plan = copy.deepcopy(self.config)
+            con = business_data.connect(self.config_path)
+            try:
+                negocios = business_catalog.sync(con, plan, ROOT / "dashboard/public")
+                resultado, eventos, meta = insights.analizar_replay(self.data_root, sid, plan, negocios)
+                dataset = "demo" if meta.get("module") == "demo" or meta.get("config", {}).get("testRun") else "real"
+                commercial.setup(con)
+                insights_ventas.guardar(con, sid, dataset, resultado, eventos)
+            finally:
+                con.close()
+            return resultado
+        except Exception as exc:  # los insights son derivados: nunca pueden romper el cierre de una sesión
+            self.record("Insights", f"No se pudieron calcular los insights de la sesión: {type(exc).__name__}: {exc}")
+            return None
+
+    def insights_data(self, sid):
+        """Insights guardados de una sesión del proyecto abierto, con su relación con las ventas por negocio."""
+        from replay import directory, manifest
+        meta = manifest(self.data_root, sid)
+        if self.project_id and meta.get("projectId") not in (self.project_id, None):
+            raise ValueError("La sesión no pertenece al proyecto abierto.")
+        ruta = directory(self.data_root, sid) / "insights.json"
+        if not ruta.is_file():
+            raise FileNotFoundError("Esta sesión todavía no tiene insights. Calcúlalos desde el panel.")
+        resultado = json.loads(ruta.read_text(encoding="utf-8"))
+        dataset = "demo" if meta.get("module") == "demo" or meta.get("config", {}).get("testRun") else "real"
+        con = business_data.connect(self.config_path)
+        try:
+            commercial.setup(con)
+            from insights import ventas as insights_ventas
+            resultado["ventas"] = {l["negocio_id"]: insights_ventas.relacion_con_ventas(con, l["negocio_id"], dataset)
+                                   for l in resultado["locales"] if l.get("negocio_id")}
+        finally:
+            con.close()
+        resultado["dataset"] = dataset
+        return resultado
+
+    def _camera_file(self, cid):
+        """Cámara del proyecto y la ruta de su video grabado (las fuentes en vivo no se pueden recorrer en el tiempo)."""
+        camera = next((c for c in self.config["cameras"] if c["id"] == cid), None)
+        if camera is None:
+            raise ValueError("Cámara desconocida.")
+        source = camera.get("source")
+        if not isinstance(source, str) or not source or "://" in source:
+            raise ValueError("Marcar personas necesita videos grabados: una fuente en vivo no se puede recorrer en el tiempo.")
+        return camera, str((ROOT / source).resolve())
+
+    def camera_frame_info(self, cid):
+        """Duración, tamaño y desfase del video de una cámara, para sincronizar dos videos al marcar personas."""
+        import cv2
+        camera, path = self._camera_file(cid)
+        cap = cv2.VideoCapture(path)
+        try:
+            if not cap.isOpened():
+                raise ValueError("No se pudo abrir el video de la cámara.")
+            fps = cap.get(cv2.CAP_PROP_FPS) or 25.
+            frames = cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0
+            return {"duration": round(max(0., frames / fps - source_time_offset(camera)), 2), "fps": fps, "offset": source_time_offset(camera),
+                    "width": int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), "height": int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                    "pairsHash": pairs_hash(camera.get("pairs", []))}
+        finally:
+            cap.release()
+
+    def camera_frame_at(self, cid, seconds):
+        """JPEG de la cámara en el instante común `seconds` (igual que el monitoreo: segundos + desfase de la cámara)."""
+        import cv2
+        camera, path = self._camera_file(cid)
+        cap = cv2.VideoCapture(path)
+        try:
+            if not cap.isOpened():
+                raise ValueError("No se pudo abrir el video de la cámara.")
+            try:
+                cap.set(cv2.CAP_PROP_ORIENTATION_AUTO, 1)
+            except cv2.error:
+                pass
+            fps = cap.get(cv2.CAP_PROP_FPS) or 25.
+            total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+            instante = float(seconds)
+            duracion = total / fps - source_time_offset(camera) if total > 0 else None
+            if instante < 0 or (duracion is not None and instante > max(0., duracion) + .25):
+                raise ValueError("Ese instante estÃ¡ fuera del video.")
+            objetivo = max(0, int(round((instante + source_time_offset(camera)) * fps)))
+            # Algunos contenedores informan un frame de más o fallan al buscar
+            # exactamente el último índice. Acotamos y probamos unos frames
+            # vecinos para no dejar la vista de parejas en negro.
+            if total > 0:
+                objetivo = min(objetivo, total - 1)
+            ok, frame = False, None
+            for candidato in (objetivo, max(0, objetivo - 1), max(0, objetivo - 2)):
+                cap.set(cv2.CAP_PROP_POS_FRAMES, candidato)
+                ok, frame = cap.read()
+                if ok and frame is not None and getattr(frame, "size", 0):
+                    break
+            if not ok:
+                raise ValueError("Ese instante está fuera del video.")
+            if frame.shape[1] > 1280:
+                frame = cv2.resize(frame, (1280, round(frame.shape[0] * 1280 / frame.shape[1])))
+            return self._preview_jpeg(frame, width=1280, quality=82)
+        finally:
+            cap.release()
+
+    def person_pairs_check(self, base, target, pairs):
+        """La misma persona marcada en dos cámaras: desfase de tiempo entre sus videos y concordancia de sus homografías.
+
+        Cada pareja son los pies de una persona en `base` y en `target`. Con 4 o más parejas se estima cuánto hay que desplazar
+        la lectura de `target` para que la misma persona caiga en el mismo instante (mediana, robusta a una pareja mal marcada).
+        Si las dos cámaras tienen puntos del suelo, también se mide a qué distancia quedan en el plano las parejas simultáneas:
+        es un diagnóstico de la calibración, no una corrección. Nada se guarda aquí."""
+        with self.lock:
+            config = copy.deepcopy(self.config)
+        cams = {c["id"]: c for c in config["cameras"]}
+        if base == target or base not in cams or target not in cams:
+            raise ValueError("Elige dos cámaras distintas del proyecto.")
+        person_height = float(config.get("personHeight") or ESTATURA_MEDIA)
+        geometria = {cid: {**cams[cid], "h": calibration(cams[cid].get("pairs", []))} for cid in (base, target)}
+        con_geometria = all(geometria[cid]["h"] is not None for cid in (base, target))
+        usable = []
+        for item in pairs or []:
+            try:
+                lados = {item["a"]["camera"]: item["a"]["point"], item["b"]["camera"]: item["b"]["point"]}
+            except (KeyError, TypeError):
+                continue
+            if set(lados) != {base, target}:
+                continue
+            pa, pb = posiciones_de_pareja(item, cams[base], cams[target])
+            plano = {cid: ground_point(geometria[cid], lados[cid][0], lados[cid][1], person_height) for cid in (base, target)} if con_geometria else None
+            usable.append((item, pa, pb, plano))
+        deltas = np.asarray([u[2] - u[1] for u in usable], dtype=float)
+        ajuste = ajuste_de_relojes(cams[base], cams[target], deltas)
+        tolerancia = max(0.12, ajuste["dispersion"] * 2)
+        unidad = "m" if config.get("unit") == "meters" else "u"
+        filas, distancias = [], []
+        for item, pa, pb, plano in usable:
+            fuera_de_tiempo = len(usable) >= 4 and abs((pb - pa) - ajuste["offset"]) > tolerancia
+            distancia = None
+            if plano and None not in plano.values() and not fuera_de_tiempo:
+                distancia = float(np.linalg.norm(np.asarray(plano[base]) - np.asarray(plano[target])))
+                distancias.append(distancia)
+            filas.append({"id": item["id"], "ta": round(pa - source_time_offset(cams[base]), 3), "tb": round(pb - source_time_offset(cams[target]), 3),
+                          "dt": round((pb - pa) - ajuste["offset"], 3), "fueraDeTiempo": bool(fuera_de_tiempo),
+                          "distancia": None if distancia is None else round(distancia, 3)})
+        espacial = None
+        if distancias:
+            mediana = float(np.median(distancias))
+            espacial = {"mediana": round(mediana, 3), "max": round(max(distancias), 3), "n": len(distancias),
+                        "concuerdan": mediana <= float(config.get("matchDistance", 1.0))}
+        avisos = problemas_de_parejas(filas, ajuste, espacial, unidad, con_geometria)
+        return {"n": len(usable), "suficiente": len(usable) >= 4, "pares": filas, "avisos": avisos, "espacial": espacial,
+                "temporal": {"offset": round(ajuste["offset"], 3), "muestras": len(usable), "dispersion": round(ajuste["dispersion"], 3) if len(usable) else None,
+                             "necesita": ajuste["necesita"], "verificada": ajuste["fiable"], "syncBase": ajuste["sync_base"], "syncDestino": ajuste["sync_destino"]}}
+
+    def purge_identities(self):
+        """Borrado inmediato de lo que el sistema recuerda de las personas de este proyecto.
+
+        Vacía las observaciones por ID temporal y los vectores de apariencia, en RAM y en disco, y reinicia la
+        numeración. No toca grabaciones ni reportes: esos llevan IDs de sesión y se borran desde Videos y resultados."""
+        borradas = 0
+        vivo = getattr(self, "appearance_memory_live", None)
+        if vivo is not None:
+            borradas += vivo.purgar_todo()
+        carpeta = self.data_root / "data" / "identidad"
+        nombre = self.project_id or "local"
+        for ruta in (carpeta / f"{nombre}.sqlite", carpeta / f"{nombre}_apariencia.sqlite"):
+            if not ruta.is_file():
+                continue
+            con = sqlite3.connect(str(ruta), timeout=5)
+            try:
+                tablas = {fila[0] for fila in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                for tabla in ("identity_observations", "appearance_views", "appearance_people"):
+                    if tabla in tablas:
+                        borradas += max(con.execute(f"DELETE FROM {tabla}").rowcount, 0)
+                con.commit()
+                con.execute("VACUUM")
+            finally:
+                con.close()
+        self.record("Identidad", f"Memoria de identidad borrada ({borradas} registros).")
+        return borradas
+
     def stop(self):
         self.stop_event.set()
         self.pause_event.clear()
@@ -850,72 +1220,37 @@ class Engine:
                 self.state["status"] = "stopping"
 
     def load_detector(self, mode, request):
-        """Construye el detector o reutiliza el de la sesión anterior.
+        """YOLO para personas, reutilizado entre sesiones (cargar los pesos es lo que tarda)."""
+        if mode != "yolo":
+            raise ValueError("Detector no admitido: usa yolo.")
+        profile = request.get("profile") or {}
+        weights = profile.get("weights") or str(ROOT / "models" / "yolo11n.pt")
+        key = ("yolo", int(request.get("inferenceSize") or 640), weights, profile.get("device"), bool(profile.get("half")))
+        with self.detector_lock:
+            if key not in self.detector_caches:
+                from following.detector import YoloPersonDetector
+                self.detector_caches[key] = YoloPersonDetector(weights, imgsz=key[1], device=profile.get("device"), half=key[4])
+            return self.detector_caches[key]
 
-        Cargar los pesos es lo que de verdad tarda, no el análisis en sí:
-        medido en este equipo, construir P2PNet toma unos 8 s. Ese costo no depende de la
-        sesión que termina, así que pagarlo en cada «Iniciar» — incluida cada
-        prueba rápida de una cámara durante la configuración — es tiempo
-        perdido. Se conserva mientras el proceso siga vivo y solo se
-        reconstruye mientras el proceso siga vivo; lo que sí varía entre
-        sesiones (resolución de análisis) se ajusta sobre la
-        instancia ya cargada, que es barato.
-        """
-        if mode in ("hybrid", "yolo"):
-            profile = request.get("profile") or {}
-            weights = profile.get("weights") or str(ROOT / "models" / "yolo11n.pt")
-            key = ("yolo", int(request.get("inferenceSize") or 640), weights, profile.get("device"), bool(profile.get("half")))
-            with self.detector_lock:
-                if key not in self.detector_caches:
-                    from following.detector import YoloPersonDetector
-                    self.detector_caches[key] = YoloPersonDetector(weights, imgsz=key[1], device=profile.get("device"), half=key[4])
-                return self.detector_caches[key]
-        if mode == "p2pnet":
-            key = ("p2pnet",)
-            lado_max = int(request.get("inferenceSize") or 256)
-            if not hasattr(self, "detector_lock"):
-                self.detector_lock = threading.Lock()
-            with self.detector_lock:
-                if self.detector_cache_key != key:
-                    from detection import DetectorP2PNet
-                    self.detector_cache = DetectorP2PNet(str(ROOT / "external" / "P2PNet" / "weights" / "SHTechA.pth"),
-                                                          umbral=.1, lado_max=lado_max)
-                    self.detector_cache_key = key
-                else:
-                    self.detector_cache.lado_max = lado_max
-                return self.detector_cache
-        raise ValueError("AeroTrack opera únicamente con P2PNet.")
-
-        if mode in ("hybrid", "yolo"):
-            profile = request.get("profile") or {}
-            weights = profile.get("weights") or str(ROOT / "models" / "yolo11n.pt")
-            key = ("yolo", int(request.get("inferenceSize") or 640), weights, profile.get("device"), bool(profile.get("half")))
-            with self.detector_lock:
-                if key not in self.detector_caches:
-                    from following.detector import YoloPersonDetector
-                    self.detector_caches[key] = YoloPersonDetector(weights, imgsz=key[1], device=profile.get("device"), half=key[4])
-                return self.detector_caches[key]
-        raise ValueError("Detector no soportado.")
-
-    def warm_detector_async(self, mode="yolo"):
-        """Prepara P2PNet después de comprobar una fuente, antes de pulsar Probar."""
-        if (mode == "p2pnet" and self.detector_cache_key == ("p2pnet",)) or (mode != "p2pnet" and ("yolo", 640) in self.detector_caches) or (self.detector_warmup and self.detector_warmup.is_alive()):
+    def warm_detector_async(self):
+        """Carga YOLO en segundo plano para que el primer «Iniciar» no espere los pesos."""
+        if any(k[:2] == ("yolo", 640) for k in self.detector_caches) or (self.detector_warmup and self.detector_warmup.is_alive()):
             return
+
         def warm():
             try:
-                self.load_detector(mode, {"inferenceSize": 256 if mode == "p2pnet" else 640})
+                self.load_detector("yolo", {"inferenceSize": 640})
             except Exception as exc:
-                self.record("Preparación de P2PNet", f"No se pudo anticipar la carga: {exc}")
-        self.detector_warmup = threading.Thread(target=warm, daemon=True, name="p2pnet-warmup")
+                self.record("Preparación del detector", f"No se pudo anticipar la carga de YOLO: {exc}")
+        self.detector_warmup = threading.Thread(target=warm, daemon=True, name="yolo-warmup")
         self.detector_warmup.start()
 
     def run(self, config, request):
         captures = {}
         replay = None
         combined = None
-        density_sampler = None
-        identity_memory = None
-        mode = request.get("detector", "hybrid")
+        appearance_memory = None
+        mode = request.get("detector", "yolo")
         try:
             if mode == "demo":
                 self.demo(config)
@@ -923,26 +1258,32 @@ class Engine:
             import cv2
             import numpy as np
             from types import SimpleNamespace
-            from tracking import ByteTrackPuntos
+            from tracking import BoTSortPuntos
             from following.appearance import torso_histogram
             from following.reid import OSNetEmbedder, EmbeddingScheduler, occluded_ids
             from following.clutter import SizeFilter, StaticClutter
             from following.flow import ZoneFlow, FlowField
             person_height = float(config.get("personHeight") or ESTATURA_MEDIA)
-            primary_mode = "yolo" if mode == "hybrid" else mode
+            primary_mode = "yolo"
+            preset_clave, preset = "precise", RENDIMIENTO["precise"]      # lo fija el bloque de YOLO más abajo
             # Con cámaras elevadas (>= 3 m) las personas miden pocos píxeles y a 640 px
             # YOLO casi no las detecta: se sube la resolución y se baja el umbral.
             elevated = any(float(c.get("height") or 0) >= 3 for c in config["cameras"] if c.get("active", True))
             profile = hardware.choose(config, elevated)
-            if primary_mode == "yolo":
-                # La interfaz envía 256 px (pensado para P2PNet); con YOLO eso pierde a las
-                # personas en grupos. El perfil del equipo fija modelo y resolución mínima.
-                request = {**request, "inferenceSize": max(int(request.get("inferenceSize") or 640), profile["imgsz"]), "profile": profile}
+            if True:
+                # El perfil del equipo fija modelo y resolución mínima.
+                activas = sum(1 for c in config["cameras"] if c.get("active", True) and (not request.get("camera") or c["id"] == request["camera"]))
+                preset_clave, preset = rendimiento_elegido(request.get("performance", "auto"), activas, profile["tier"])
+                tamano = preset["size"] or profile["imgsz"]
+                if elevated and preset["size"]:
+                    tamano = max(tamano, 960)       # cámaras elevadas: las personas miden pocos píxeles
+                request = {**request, "inferenceSize": tamano, "profile": profile}
+                self.record("Rendimiento", f"{preset['nombre']}: una muestra cada {preset['step']:g} s, detector a {tamano} px, hasta "
+                                           f"{int(config.get('reidMaxPerTick') or preset['reid'])} recortes de apariencia por muestra, {activas} cámara(s).")
                 if profile["missingWeights"] or profile["hint"]:
                     self.record("Hardware", profile["hint"] or f"Falta {profile['missingWeights']}: se usa {Path(profile['weights']).name}. Descárgalo con tools/preparar_hardware.py.")
             detector = self.load_detector(primary_mode, request)
-            if primary_mode == "yolo":
-                detector.confidence = .15 if elevated else .25
+            detector.confidence = .15 if elevated else .25
             cams =[c for c in config["cameras"] if c.get("active",True) and (not request.get("camera") or c["id"] == request["camera"])]
             statuses = {}
             for c in cams:
@@ -989,19 +1330,10 @@ class Engine:
                 c.update(cap=cap, fps=fps, stream=stream, duration=cap.get(cv2.CAP_PROP_FRAME_COUNT)/fps if not stream else None, frameIndex=-1,
                          # Mantiene el track durante 1.8 s a 25 FPS para
                          # recuperar la identidad tras una oclusión corta.
-                         tracker=ByteTrackPuntos(umbral_alto=.4,max_frames_perdido=45),
-                         h=calibration(c.get("pairs", [])), headPoints=primary_mode=="p2pnet")
-                # P2PNet marca cabezas: se proyectan al suelo corrigiendo por la altura de la
-                # cámara, que por eso tiene que superar la estatura supuesta.
-                if c["headPoints"] and c["h"] is not None and not float(c.get("height") or 0) > person_height:
-                    raise ValueError(f"{c['id']}: con P2PNet la altura de la cámara debe ser mayor que la estatura media ({person_height:g} m) para poder ubicar a la gente en el plano. Corrige la altura en el paso de ubicación.")
-                c["projects"] = c["h"] is not None and (not c["headPoints"] or ground_point(c, .5, .5, person_height) is not None)
-                try:
-                    c["hInv"] = np.linalg.inv(c["h"]) if c["projects"] and c["headPoints"] else None
-                except np.linalg.LinAlgError:
-                    c["hInv"] = None
-                if c.get("restrictCoverage") and not c["projects"]:
-                    raise ValueError(f"{c['id']}: calibra el suelo para limitar por cobertura del plano, o usa solo la zona útil de la imagen.")
+                         tracker=BoTSortPuntos(umbral_alto=.4,max_frames_perdido=45),
+                         h=calibration(c.get("pairs", [])))
+                c["projects"] = c["h"] is not None
+                c["fiable"] = region_fiable(c) if c["projects"] else None
                 statuses[c["id"]] = {"id": c["id"], "status": "ready"}
             active = [c for c in cams if "cap" in c]
             if len(active)!=len(cams) and request.get("requireUnified"):
@@ -1019,21 +1351,29 @@ class Engine:
                 raise ValueError("Ninguna fuente pudo abrirse; revisa las rutas o la conexión de cámara.")
             if len({c["stream"] for c in active}) > 1:
                 raise ValueError("No mezcles archivos y cámaras en vivo en una sesión; sus relojes no son equivalentes.")
-            identities, occupancy, metrics = IdentityStore(config), Occupancy(config), SessionMetrics()
-            # OSNet solo refuerza la asociación; sin modelo .onnx se conserva la firma de color.
-            embedder = OSNetEmbedder(config.get("reidModel"), providers=profile["osnetProviders"])
+            occupancy, metrics = Occupancy(config), SessionMetrics()
+            # Re-ID: OSNet (models/osnet.onnx). Sin él no hay identidad entre cámaras fiable y no se inicia.
+            embedder = OSNetEmbedder(None, providers=profile["osnetProviders"], threads=profile.get("osnetThreads"))
+            if not embedder.available:
+                raise ValueError("Falta el modelo de reidentificación models/osnet.onnx: ejecuta preparar_sistema para instalarlo.")
+            # Motor de identidad: tracklets por cámara + OSNet + compuerta de tiempo y plano; al cerrar se reagrupa la grabación.
+            from identity import crear_motor_identidad
+            from identity.engine import crear_memoria
+            if config.get("appearanceMemory", True):
+                # Solo vectores de apariencia, con retención corta; si el disco falla la memoria queda en RAM.
+                appearance_memory = crear_memoria(config, self.data_root / "data" / "identidad" / f"{self.project_id or 'local'}_apariencia.sqlite",
+                                                  embedder.name, embedder.dimension)
+            self.appearance_memory_live = appearance_memory
+            identities = crear_motor_identidad(config, memoria=appearance_memory, encoder_nombre=embedder.name)
             reid_interval = int(config.get("reidInterval") or profile["osnetInterval"])
             size_filters = {c["id"]: SizeFilter() for c in active}
             clutter = {c["id"]: StaticClutter() for c in active}
-            reid_schedulers = {c["id"]: EmbeddingScheduler(reid_interval) for c in active}
-            # Posición, ropa y aspecto físico por ID temporal, con retención corta.
-            # Un fallo al abrir la base no debe impedir el monitoreo.
-            try:
-                identity_memory = IdentityMemory(
-                    self.data_root / "data" / "identidad" / f"{self.project_id or 'local'}.sqlite",
-                    retention_hours=clamp_retention(config.get("identityRetentionHours", 24)))
-            except (OSError, sqlite3.Error):
-                identity_memory = None
+            # El intervalo del equipo está pensado en cuadros de un análisis cuadro a cuadro; con pasos de 0,2 s o más todo track
+            # estaría siempre pendiente. Se pide como mínimo `reidIntervalSeconds` entre dos vectores de un mismo track (el motor
+            # reid_v2 pide además los que le faltan, con `necesita_vista`).
+            intervalo_s = float(config.get("reidIntervalSeconds") or 1.0)
+            reid_schedulers = {c["id"]: EmbeddingScheduler(reid_interval if config.get("reidInterval") else max(reid_interval, round(c["fps"] * intervalo_s))) for c in active}
+            collapse_steps = {}
             # Guardamos observaciones y métricas también para fuentes en vivo.
             # El video remoto no se archiva y la URL no se escribe en el
             # manifiesto para evitar conservar credenciales o enlaces efímeros.
@@ -1045,16 +1385,13 @@ class Engine:
                 [{"id":c["id"],"name":c.get("name",c["id"]),
                   "source":c["source"] if not (c.get("stream") or (isinstance(c.get("source"), str) and "://" in c["source"])) else "",
                   "sourceKind":"live" if (c.get("stream") or (isinstance(c.get("source"), str) and "://" in c["source"])) else "recording",
-                  "offset":c.get("offset",0),"planId":c.get("planId","custom"),
-                  "countLines":c.get("countLines",[])} for c in cams],
+                  "offset":c.get("offset",0),"syncOffset":c.get("syncOffset",0),"planId":c.get("planId","custom"),
+                  "countLines":c.get("countLines",[]),"pairs":c.get("pairs",[]),"detectionZone":c.get("detectionZone")} for c in cams],
                 {k:v for k,v in config.items() if k != "cameras"},
                 self.project_id,
             )
             from following.combined import CombinedAnalysis
             combined = CombinedAnalysis(cams, ROOT) if request.get('combined') else None
-            from following.adaptive import AdaptiveVisionController, AsyncDensitySampler
-            avie = {c['id']: AdaptiveVisionController(c.get('crowdThreshold', 30)) for c in cams}
-            density_sampler = AsyncDensitySampler(lambda: self.load_detector('p2pnet', {'inferenceSize': 256})) if mode == 'hybrid' else None
             camera_analytics = {}
             level_configs={pid:config if pid==config.get('planId','custom') else {**config,**config.get('plans',{}).get(pid,{})} for pid in {c.get('planId','custom') for c in cams}}
             level_occupancy={pid:Occupancy(value) for pid,value in level_configs.items()}
@@ -1071,6 +1408,10 @@ class Engine:
             trails = {}
             wall_start = time.monotonic()
             timeline = 0.
+            paso_muestreo = preset["step"]
+            max_embed = max(1, int(config.get("reidMaxPerTick") or preset["reid"]))
+            lectores = ThreadPoolExecutor(max_workers=max(1, len(cams)))      # decodificar cada cámara en su propio hilo
+            tiempos, avisados_zona = {}, set()
             while not self.stop_event.is_set():
                 # Permite relanzar una cámara que perdió señal sin detener las
                 # demás ni reconstruir el detector.
@@ -1094,7 +1435,7 @@ class Engine:
                             from following.source import NetworkCapture
                             cap = NetworkCapture(source, ROOT)
                         else:
-                            cap = cv2.VideoCapture(source)
+                            cap = abrir_archivo(source) if isinstance(source, str) else cv2.VideoCapture(source)
                         if not cap.isOpened():
                             cap.release()
                             raise ValueError("No se pudo abrir la fuente.")
@@ -1109,15 +1450,11 @@ class Engine:
                             cap=cap, fps=fps, stream=stream,
                             duration=cap.get(cv2.CAP_PROP_FRAME_COUNT) / fps if not stream else None,
                             frameIndex=-1,
-                            tracker=ByteTrackPuntos(umbral_alto=.4, max_frames_perdido=45),
+                            tracker=BoTSortPuntos(umbral_alto=.4, max_frames_perdido=45),
                             h=calibration(camera.get("pairs", [])),
-                            headPoints=primary_mode == "p2pnet",
                         )
-                        camera["projects"] = camera["h"] is not None and (not camera["headPoints"] or ground_point(camera, .5, .5, person_height) is not None)
-                        try:
-                            camera["hInv"] = np.linalg.inv(camera["h"]) if camera["projects"] and camera["headPoints"] else None
-                        except np.linalg.LinAlgError:
-                            camera["hInv"] = None
+                        camera["projects"] = camera["h"] is not None
+                        camera["fiable"] = region_fiable(camera) if camera["projects"] else None
                         captures[restart_id] = cap
                         active.append(camera)
                         statuses[restart_id] = {"id": restart_id, "status": "ready"}
@@ -1139,13 +1476,11 @@ class Engine:
                 # En vivo prima la latencia. En archivos prima conservar las
                 # muestras: el coste de inferencia no debe saltarse cruces.
                 t = start - wall_start if active[0]["stream"] else timeline
-                observations, raw_frames, pending = [], {}, []
-                for c in list(active):
-                    if self.stop_event.is_set():
-                        break
+                observations, raw_frames, pending, fuera_de_alcance = [], {}, [], {}
+                def leer(c):
                     cap = c["cap"]
                     if not c["stream"]:
-                        target = max(0, int((t + c.get("offset", 0)) * c["fps"]))
+                        target = max(0, int((t + source_time_offset(c)) * c["fps"]))
                         if target < c["frameIndex"]:
                             cap.set(cv2.CAP_PROP_POS_FRAMES, target)
                             c["frameIndex"] = target - 1
@@ -1155,6 +1490,14 @@ class Engine:
                             c["frameIndex"] += 1
                     ok, frame = cap.read()
                     c["frameIndex"] += 1
+                    return ok, frame
+                lectura_inicio = time.monotonic()
+                lecturas = list(lectores.map(leer, list(active)))
+                tiempos["decode"] = (time.monotonic() - lectura_inicio) * 1000
+                for c, (ok, frame) in zip(list(active), lecturas):
+                    if self.stop_event.is_set():
+                        break
+                    cap = c["cap"]
                     if not ok:
                         statuses[c["id"]] = {**statuses[c["id"]], "status": "error" if c["stream"] else "ended", "error": "Fuente sin imagen" if c["stream"] else None}
                         active.remove(c)
@@ -1182,15 +1525,21 @@ class Engine:
                                      if hasattr(detector, "detectar_lote")
                                      else [detector.detectar(item[1]) for item in pending])
                 detector_ms = (time.monotonic() - detector_started) * 1000
+                tiempos["detector"] = detector_ms
+                seguimiento_inicio = time.monotonic()
+                etapas = []
                 for (c, frame, height, width), detections in zip(pending, detection_batches):
                     keep = []
                     for i,d in enumerate(detections):
-                        ground = ground_point(c,d.x/width,d.y/height,person_height) if c["projects"] else None
-                        if accepts(c,c["scope"],d.x/width,d.y/height,ground,image_only=not c["projects"]):
+                        ground, fiable = ubicar_en_plano(c, d.x/width, d.y/height, person_height)
+                        if accepts(c,c["scope"],d.x/width,d.y/height,ground,image_only=not fiable):
                             keep.append(i)
                     excluded = len(detections)-len(keep)
+                    # Lo que descartan la zona útil o el límite de trabajo se dibuja en gris para que se vea que YOLO sí las detectó.
+                    quedan = set(keep)
+                    fuera_de_alcance[c["id"]] = [d.box for i, d in enumerate(detections) if i not in quedan and getattr(d, "box", None) is not None]
                     detections = [detections[i] for i in keep]
-                    use_filters = config.get("clutterFilter", True) and primary_mode == "yolo"
+                    use_filters = config.get("clutterFilter", True)
                     if use_filters:
                         # Gorros, pósters y otros objetos pequeños que YOLO confunde con personas.
                         detections, small = size_filters[c["id"]].apply(detections, (width, height))
@@ -1203,47 +1552,98 @@ class Engine:
                         tracks = [tr for tr in tracks if tr.id not in still]
                         excluded += len(still)
                     scheduler = reid_schedulers[c["id"]]
+                    due, cubiertos = [], {}
                     if embedder.available:
-                        # OSNet cada N frames, al crear el track o si su confianza es baja.
-                        blocked = occluded_ids(tracks)
-                        due = [tr for tr in tracks if tr.ultima_caja is not None and tr.id not in blocked and scheduler.due(tr.id, c["frameIndex"], tr.score)]
-                        for tr, vec in zip(due, embedder.embed(frame, [tr.ultima_caja for tr in due])):
+                        # OSNet cada N frames, al crear el track o si su confianza es baja, y en cada muestra mientras
+                        # el track no tiene ID público o le faltan vistas. Con min_visible, en grupos el recorte se
+                        # rellena donde tapa otra persona (no se descarta).
+                        min_visible = identities.min_visible
+                        cubiertos = {}
+                        if min_visible is not None:
+                            from identity.quality import tapadores
+                            con_caja = [tr for tr in tracks if tr.ultima_caja is not None]
+                            cubiertos = dict(zip((tr.id for tr in con_caja), tapadores([tr.ultima_caja for tr in con_caja])))
+                            blocked = {i for i, (visible, _) in cubiertos.items() if visible < min_visible}
+                        else:
+                            blocked = occluded_ids(tracks)
+                        due = [tr for tr in tracks if tr.ultima_caja is not None and tr.id not in blocked
+                               and (scheduler.due(tr.id, c["frameIndex"], tr.score) or identities.necesita_vista(c["id"], tr.id, t))]
+                    etapas.append((c, frame, height, width, detections, tracks, excluded, scheduler, due, cubiertos))
+                # OSNet: un solo paso para todas las cámaras (con lote fijo cada llamada cobra un bloque entero) y como mucho
+                # `max_embed` recortes por muestra. Primero los tracks sin vector y luego los de vector más viejo; los que no
+                # entran siguen pendientes para la muestra siguiente.
+                tiempos["seguimiento"] = (time.monotonic() - seguimiento_inicio) * 1000
+                embed_inicio = time.monotonic()
+                candidatos = []
+                for k, (c, frame, height, width, detections, tracks, excluded, scheduler, due, cubiertos) in enumerate(etapas):
+                    for tr in due:
+                        previo = scheduler.state.get(tr.id)
+                        sin_vector = previo is None or previo["vec"] is None
+                        candidatos.append((not sin_vector, -(c["frameIndex"] - previo["frame"]) if previo else 0, k, tr))
+                candidatos.sort(key=lambda x: x[:3])
+                elegidos = [set() for _ in etapas]
+                for _, _, k, tr in candidatos[:max_embed]:
+                    elegidos[k].add(tr.id)
+                trabajos = []
+                for k, (c, frame, height, width, detections, tracks, excluded, scheduler, due, cubiertos) in enumerate(etapas):
+                    due[:] = [tr for tr in due if tr.id in elegidos[k]]
+                    trabajos.append((frame, [tr.ultima_caja for tr in due], [cubiertos[tr.id][1] for tr in due] if cubiertos else None))
+                vectores_por_camara = embed_lote(embedder, trabajos) if embedder.available and any(t[1] for t in trabajos) else [[] for _ in trabajos]
+                tiempos["osnet"] = (time.monotonic() - embed_inicio) * 1000
+                observaciones_inicio = time.monotonic()
+                for (c, frame, height, width, detections, tracks, excluded, scheduler, due, cubiertos), vectors in zip(etapas, vectores_por_camara):
+                    fresh, parciales = set(), set()
+                    if embedder.available:
+                        parciales = {tr.id for tr in due if cubiertos and cubiertos[tr.id][1]}      # vector calculado con zonas rellenas
+                        for tr, vec in zip(due, vectors):
                             scheduler.store(tr.id, c["frameIndex"], vec)
+                            if vec is not None:
+                                fresh.add(tr.id)
                         scheduler.prune({tr.id for tr in c["tracker"].tracks_activos + c["tracker"].tracks_perdidos})
+                    fuera_de_zona = 0
                     for tr in tracks:
                         px, py = tr.posicion
                         box = tr.ultima_caja
-                        point = ground_point(c, px / width, py / height, person_height) if c["projects"] else None
-                        if not accepts(c,c["scope"],px/width,py/height,point,image_only=not c["projects"]):
+                        point, fiable = ubicar_en_plano(c, px / width, py / height, person_height)
+                        fuera_de_zona += bool(c["projects"] and not fiable)
+                        if not accepts(c,c["scope"],px/width,py/height,point,image_only=not fiable):
                             continue
                         if point and not (0 <= point[0] <= c["scope"]["width"] and 0 <= point[1] <= c["scope"]["height"]):
                             point = None
-                        # Sin recuadro no hay color de ropa, y sin color la fusión entre cámaras
-                        # nunca pasa su umbral: la misma persona se contaría dos veces. Con
-                        # P2PNet se deriva un recorte solo para muestrear el color; no se
-                        # publica como detección porque es una estimación, no una medición.
-                        sample = box if box is not None else (body_box(c.get("hInv"), px, py, point, width, height) if c["headPoints"] else None)
                         color = getattr(tr, "apariencia", None)
                         if color is None:
-                            color = torso_histogram(frame, sample)
-                        observations.append({"camera": c["id"], "local": tr.id, "point": point, "pixel": [float(px), float(py)], "box": box, "color": color, "embedding": scheduler.get(tr.id) if embedder.available else None, "score": tr.score,
+                            color = torso_histogram(frame, box)
+                        observations.append({"camera": c["id"], "local": tr.id, "point": point, "pixel": [float(px), float(py)], "box": box, "color": color, "embedding": scheduler.get(tr.id) if embedder.available else None, "embeddingFresh": tr.id in fresh, "partial": tr.id in fresh and tr.id in parciales, "score": tr.score,
                                              "height": estimate_height(c, box, width, height)})
                     camera_count = sum(o["camera"] == c["id"] for o in observations)
-                    avie_state = avie[c["id"]].update(detections, tracks, detector_ms / max(1, len(pending)))
-                    if density_sampler and avie_state["p2pRequested"]:
-                        density_sampler.submit(c["id"], frame, t)
-                    statuses[c["id"]] = {"id": c["id"], "status": "live", "width": width, "height": height, "fps":c["fps"], "duration":c.get("duration"), "calibrated": c["projects"], "count": camera_count, "excluded":excluded, "timestamp": t, "sourceTime":c["frameIndex"]/c["fps"] if not c["stream"] else None, "detector": primary_mode, "hardware": {"tier": profile["tier"], "device": profile["device"], "model": Path(profile["weights"]).name, "imgsz": request.get("inferenceSize")}, "reid": "osnet" if embedder.available else "color", "inferenceMs": round(detector_ms / max(1, len(pending)), 2), "avie": avie_state}
+                    statuses[c["id"]] = {"id": c["id"], "status": "live", "width": width, "height": height, "fps":c["fps"], "duration":c.get("duration"), "calibrated": c["projects"], "outsideCalibration": fuera_de_zona, "count": camera_count, "excluded":excluded, "timestamp": t, "sourceTime":c["frameIndex"]/c["fps"] if not c["stream"] else None, "detector": primary_mode, "tracker": "botsort", "hardware": {"tier": profile["tier"], "device": profile["device"], "model": Path(profile["weights"]).name, "imgsz": request.get("inferenceSize")}, "reid": embedder.name if embedder.available else "color", "inferenceMs": round(detector_ms / max(1, len(pending)), 2)}
+                    if fuera_de_zona and c["id"] not in avisados_zona:
+                        avisados_zona.add(c["id"])
+                        self.record("Calibración", f"Cámara {c['id']}: hay personas fuera de la región donde su homografía es fiable (donde hay referencias). "
+                                                   "Se muestran en el video pero no en el plano. Marca personas de apoyo también en esa zona de la imagen.")
                     with self.lock:
                         self.source_checks[c["id"]] = {"source":c["source"],"valid":True,"width":width,"height":height,"fps":c["fps"],"checkedAt":time.time()}
-                people = identities.update(observations, t)
-                if identity_memory:
-                    identity_memory.record(self.state["session"], people, identities, t)
+                tiempos["observaciones"] = (time.monotonic() - observaciones_inicio) * 1000
+                sizes = {cid: (item["width"], item["height"]) for cid, item in statuses.items() if "width" in item}
+                motor_inicio = time.monotonic()
+                people = identities.update(observations, t, tamanos=sizes)
+                tiempos["identidad"] = (time.monotonic() - motor_inicio) * 1000
+                # Con reid_v2 una persona recién vista lleva ID provisional: se dibuja y se muestra, pero no entra
+                # en conteos, ocupación ni memoria hasta confirmarse (evita contarla dos veces al cambiar de ID).
+                counted = [p for p in people if p.get("confirmed", True)]
+                # Personas distintas proyectadas al mismo punto: la calibración no sirve para asociar.
+                for c in active:
+                    group = [p for p in people if p["camera"] == c["id"]]
+                    if len(group) >= 3 and collapsed_pairs(group) >= 1:
+                        collapse_steps[c["id"]] = collapse_steps.get(c["id"], 0) + 1
+                        if collapse_steps[c["id"]] == 8:
+                            self.record("Calibración", f"Cámara {c['id']}: personas distintas se proyectan al mismo punto del plano. Recalibra con referencias más separadas que cubran el suelo donde caminan.")
+                    else:
+                        collapse_steps[c["id"]] = 0
                 if combined:
                     for c in active:
-                        group=[p for p in people if p['camera']==c['id']]
-                        camera_analytics[c['id']] = combined.observe(c, raw_frames[c['id']], group, t,
-                            density=density_sampler.latest(c['id']) if density_sampler else None,
-                            avie=avie[c['id']].last)
+                        group=[p for p in counted if p['camera']==c['id']]
+                        camera_analytics[c['id']] = combined.observe(c, raw_frames[c['id']], group, t)
                         camera_analytics[c['id']]['map']=camera_maps[c['id']].update(group,t)
                 for cid, frame in raw_frames.items():
                     try:
@@ -1262,6 +1662,7 @@ class Engine:
                             camera_analytics.setdefault(cid,{})['bagSignal'] = {'status':'experimental','samples':len(bag_events)}
                     except (ValueError, ImportError, OSError, RuntimeError) as exc:
                         camera_analytics.setdefault(cid,{})['bagSignal'] = {'status':'unavailable','error':str(exc)}
+                dibujo_inicio = time.monotonic()
                 encoded = {}
                 for cid, frame in raw_frames.items():
                     # Operator-only view on a loopback-only server: the operator already
@@ -1269,6 +1670,10 @@ class Engine:
                     # tracking overlays drawn on top, not degraded for anonymity.
                     overlay_scale = max(1., frame.shape[1]/1440)
                     line_width = max(2, round(2*overlay_scale))
+                    for x1, y1, x2, y2 in fuera_de_alcance.get(cid, []):
+                        cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (150, 150, 150), 1)
+                    if fuera_de_alcance.get(cid):
+                        cv2.putText(frame, f"{len(fuera_de_alcance[cid])} fuera de la zona (gris)", (12, frame.shape[0]-14), cv2.FONT_HERSHEY_SIMPLEX, .6*overlay_scale, (190, 190, 190), max(1, line_width-1))
                     for p in [p for p in people if p["camera"] == cid]:
                         px, py = map(int, p["pixel"])
                         trail = trails.setdefault((cid, p["id"]), deque(maxlen=25))
@@ -1301,18 +1706,19 @@ class Engine:
                         encoded[cid] = jpg.tobytes()
                         with self.lock:
                             self.preview_frames[cid] = encoded[cid]
-                sample_times = [c["frameIndex"]/c["fps"]-c.get("offset",0) for c in active if not c["stream"]]
+                tiempos["dibujo"] = (time.monotonic() - dibujo_inicio) * 1000
+                sample_times = [c["frameIndex"]/c["fps"]-source_time_offset(c) for c in active if not c["stream"]]
                 skew = max(sample_times)-min(sample_times) if len(sample_times)>1 else 0.
                 elapsed = time.monotonic() - start
                 seen = {(p["camera"], p["id"]) for p in people}
                 trails = {key: value for key, value in trails.items() if key in seen}
                 with self.lock:
                     self.frames.update(encoded)
-                    analytics = occupancy.update(people,t)
-                    analytics["flow"] = flow.update(people,t)
+                    analytics = occupancy.update(counted,t)
+                    analytics["flow"] = flow.update(counted,t)
                     levels={}
                     for pid, counter in level_occupancy.items():
-                        group=[p for p in people if camera_levels[p['camera']]==pid]
+                        group=[p for p in counted if camera_levels[p['camera']]==pid]
                         levels[pid]=counter.update(group,t)
                         levels[pid]['flow']=level_flow[pid].update(group,t)
                         levels[pid]['flowVectors']=flow_fields[pid].update(group,t)
@@ -1321,22 +1727,26 @@ class Engine:
                         views=[]
                         for c in active:
                             h,w=raw_frames[c["id"]].shape[:2]
-                            views.append({"id":c["id"],"t":statuses[c["id"]]["sourceTime"],"analysis":camera_analytics.get(c["id"]),"people":[{"id":p["id"],"box":[p["box"][0]/w,p["box"][1]/h,p["box"][2]/w,p["box"][3]/h] if p["box"] else None,"pixel":[p["pixel"][0]/w,p["pixel"][1]/h],"point":p["point"],"association":p["association"],"history":p.get("history",[])[-30:]} for p in people if p["camera"]==c["id"]]})
+                            views.append({"id":c["id"],"t":statuses[c["id"]]["sourceTime"],"analysis":camera_analytics.get(c["id"]),"people":[{"id":p["id"],"box":[p["box"][0]/w,p["box"][1]/h,p["box"][2]/w,p["box"][3]/h] if p["box"] else None,"pixel":[p["pixel"][0]/w,p["pixel"][1]/h],"local":p["local"],"point":p["point"],"association":p["association"],"confirmed":p.get("confirmed",True),"duplicate":p.get("duplicate",False),"history":p.get("history",[])[-30:]} for p in people if p["camera"]==c["id"]]})
                         replay.append({"t":t,"cameras":views,"analytics":analytics,"levels":levels})
                     self.dispatch_alerts(camera_analytics, analytics)
                     self.record_traffic(analytics, bool(active and active[0].get("stream")))
                     self.state.update(status="paused" if self.pause_event.is_set() else "running", people=people, cameras=list(statuses.values()), events=list(identities.events), t=t,
-                                      analytics=analytics, levelAnalytics=levels, cameraAnalytics=camera_analytics, synchronization={"mode":"live" if active[0]["stream"] else "recordings", "contentVerified":config["clocksVerified"], "sampleSkewSeconds":round(skew,5), "commonTime":t}, totals=metrics.update(people,analytics,t), series=list(metrics.series), processingMs=round(elapsed * 1000), updatedAt=time.time())
-                timeline = round(timeline+.2,6)
-                self.stop_event.wait(max(0., .2 - elapsed))
+                                      analytics=analytics, levelAnalytics=levels, cameraAnalytics=camera_analytics, synchronization={"mode":"live" if active[0]["stream"] else "recordings", "contentVerified":config["clocksVerified"], "sampleSkewSeconds":round(skew,5), "commonTime":t}, totals=metrics.update(counted,analytics,t), series=list(metrics.series), processingMs=round(elapsed * 1000), updatedAt=time.time(),
+                                      performance={"preset": preset_clave, "stepSeconds": paso_muestreo, "detectorSize": request.get("inferenceSize"), "maxEmbedPerStep": max_embed,
+                                                   "msPorEtapa": {**{k: round(v) for k, v in tiempos.items()}, "otros": round(max(0., elapsed * 1000 - sum(tiempos.values())))}, "tiempoReal": round(elapsed / paso_muestreo, 2)},
+                                      identity=identities.resumen())
+                timeline = round(timeline+paso_muestreo,6)
+                self.stop_event.wait(max(0., paso_muestreo - elapsed))
         except Exception as exc:
             with self.lock:
                 self.state.update(status="error", error=f"{type(exc).__name__}: {exc}", people=[])
         finally:
-            if density_sampler:
-                density_sampler.close()
-            if identity_memory:
-                identity_memory.close()
+            if "lectores" in locals():
+                lectores.shutdown(wait=False)
+            self.appearance_memory_live = None
+            if appearance_memory:
+                appearance_memory.cerrar()
             self.flush_traffic()
             if combined:
                 final_analytics=combined.close()
@@ -1350,6 +1760,21 @@ class Engine:
                     replay.meta['reportAnalytics'] = copy.deepcopy(self.state['analytics'])
                     replay.meta['totals'] = copy.deepcopy(self.state.get('totals', {}))
                     replay.finish("error" if self.state["status"]=="error" else "stopped" if self.stop_event.is_set() else "ended")
+                    # Con el análisis terminado la CPU queda libre: se prepara la copia que el navegador puede reproducir (AVI/MKV).
+                    import video_web
+                    for camera in cams:
+                        fuente = camera.get("source")
+                        if isinstance(fuente, str) and fuente and "://" not in fuente and Path(fuente).is_file():
+                            video_web.preparar(Path(fuente))
+                    if config.get("identityFinalize", True) and "identities" in locals():
+                        # Reagrupación con el plano al cerrar: IDs finales 1..N en la grabación. Un fallo aquí
+                        # deja la grabación con los IDs en vivo y lo avisa, sin perder la sesión.
+                        try:
+                            from identity.closing import reescribir_replay
+                            reescribir_replay(replay.directory, identities.cierre())
+                        except (OSError, ValueError, KeyError) as exc:
+                            self.record("Identidad", f"No se pudo reagrupar la sesión al cerrar: {exc}")
+                    self.compute_insights(replay.directory.name)
                 except OSError as exc:
                     self.state.update(status="error", error=f"No se pudo guardar la reproducción: {exc}")
             for cap in captures.values():
@@ -1461,6 +1886,26 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_data(200,sample)
             except (OSError, ValueError) as exc:
                 return self.send_data(404,{"error":str(exc)})
+        if url.path in ("/api/camera-frame", "/api/camera-frame-info"):
+            if auth.hay_usuarios(engine.settings_root) and not engine.sessions.leer(self.headers.get("X-LAP-Session", "")):
+                return self.send_data(401, {"error": "Inicia sesión para ver los videos."})
+            query = parse_qs(url.query)
+            try:
+                cid = query.get("camera", [""])[0]
+                if url.path == "/api/camera-frame-info":
+                    return self.send_data(200, engine.camera_frame_info(cid))
+                return self.send_data(200, engine.camera_frame_at(cid, float(query.get("t", ["0"])[0])), "image/jpeg")
+            except (ValueError, OSError) as exc:
+                return self.send_data(400, {"error": str(exc)})
+        if url.path == "/api/insights":
+            if auth.hay_usuarios(engine.settings_root) and not engine.sessions.leer(self.headers.get("X-LAP-Session", "")):
+                return self.send_data(401, {"error": "Inicia sesión para consultar los insights."})
+            try:
+                return self.send_data(200, engine.insights_data(parse_qs(url.query).get("session", [""])[0]))
+            except FileNotFoundError as exc:
+                return self.send_data(404, {"error": str(exc)})
+            except (ValueError, OSError) as exc:
+                return self.send_data(400, {"error": str(exc)})
         if url.path in ("/api/commercial", "/api/commercial/template", "/api/commercial/export"):
             if auth.hay_usuarios(engine.settings_root) and not engine.sessions.leer(self.headers.get("X-LAP-Session", "")):
                 return self.send_data(401, {"error": "Inicia sesión para consultar ventas."})
@@ -1507,9 +1952,6 @@ class Handler(BaseHTTPRequestHandler):
         if url.path.startswith("/api/replay/"):
             from replay import get
             return get(self,url,self.server.engine.data_root)
-        if url.path.startswith("/api/counting/"):
-            from counting.api import get
-            return get(self, url, ROOT)
         if url.path == "/api/mail":
             import notifier
             return self.send_data(200, {**notifier.public(engine.settings_root), "lastError": engine.mailer.error, "sent": engine.mailer.sent})
@@ -1579,7 +2021,7 @@ class Handler(BaseHTTPRequestHandler):
     # sistema, ve todo y ajusta umbrales de alerta, pero no toca la geometria
     # ni la calibracion, para no romper por error algo que costo calibrar.
     SOLO_OPERADOR = ("/api/commercial/import", "/api/commercial/simulate", "/api/businesses", "/api/config", "/api/import-plan", "/api/plan-lines", "/api/upload", "/api/camera-restart",
-                     "/api/camera-preview", "/api/calibration-check")
+                     "/api/camera-preview", "/api/calibration-check", "/api/person-pairs/check")
 
     def reject(self, size, code, message):
         """Rechaza leyendo primero el cuerpo enviado.
@@ -1636,15 +2078,17 @@ class Handler(BaseHTTPRequestHandler):
                 result=plan_lines_from_bytes(self.rfile.read(size),width,modo)
                 return self.send_data(200,result)
             if parsed.path == "/api/upload":
-                if not 0 < size <= 1024*1024*1024:
-                    raise ValueError("El video debe ocupar entre 1 byte y 1 GB. Para videos mayores usa una ruta local.")
                 filename = parse_qs(parsed.query).get("name",[""])[0]
                 suffix = Path(filename).suffix.lower()
                 if suffix not in (".mp4",".avi",".mov",".mkv",".webm",".m4v"):
                     raise ValueError("Formato de video no admitido.")
                 directory = ROOT / "data" / "uploads"
                 directory.mkdir(parents=True,exist_ok=True)
+                validar_tamano_de_video(size, shutil.disk_usage(directory).free)
                 target = directory / (secrets.token_hex(16)+suffix)
+                import hashlib
+                import video_web
+                huella = hashlib.sha256()
                 try:
                     remaining = size
                     with target.open("xb") as output:
@@ -1653,10 +2097,13 @@ class Handler(BaseHTTPRequestHandler):
                             if not chunk:
                                 raise ValueError("La carga quedó incompleta.")
                             output.write(chunk)
+                            huella.update(chunk)
                             remaining -= len(chunk)
                 except Exception:
                     target.unlink(missing_ok=True)
                     raise
+                target = video_web.deduplicar(directory, target, huella.hexdigest())      # el mismo video no se guarda dos veces
+                video_web.preparar(target)       # copia .webm para reproducirlo en el navegador (AVI y MKV no se reproducen)
                 with engine.lock:
                     engine.record("Video cargado",f"Archivo de prueba {suffix} · {size} bytes")
                 return self.send_data(200,{"path":str(target)})
@@ -1735,9 +2182,6 @@ class Handler(BaseHTTPRequestHandler):
                         conexion.close()
             if not isinstance(data, dict):
                 raise ValueError("Solicitud inválida.")
-            if parsed.path.startswith("/api/counting/"):
-                from counting.api import post
-                return post(self, parsed.path, data, ROOT)
             if self.path == "/api/calibration-check":
                 import numpy as np
                 import cv2
@@ -1753,7 +2197,16 @@ class Handler(BaseHTTPRequestHandler):
                 if spread<.005:
                     raise ValueError("Referencias casi alineadas: distribuye los nodos por todo el suelo visible.")
                 from live_core import calibration_diagnostics
-                return self.send_data(200,calibration_diagnostics(pairs))
+                zone=data.get("zone")
+                if zone is not None and (not isinstance(zone,list) or len(zone)<3 or any(not isinstance(q,list) or len(q)!=2 for q in zone)):
+                    raise ValueError("Zona de detección inválida.")
+                plan=data.get("plan", [engine.config["width"],engine.config["height"]])
+                if (not isinstance(plan,list) or len(plan)!=2 or any(not isinstance(v,(int,float)) or isinstance(v,bool)
+                                                                    or not np.isfinite(v) or v<=0 for v in plan)):
+                    raise ValueError("Dimensiones del plano inválidas.")
+                if (points[:,2] < 0).any() or (points[:,2] > plan[0]).any() or (points[:,3] < 0).any() or (points[:,3] > plan[1]).any():
+                    raise ValueError("Una referencia cae fuera del plano seleccionado.")
+                return self.send_data(200,calibration_diagnostics(pairs,zone,tuple(plan)))
             if self.path == "/api/camera-preview":
                 import cv2
                 cid=data.get("camera")
@@ -1785,8 +2238,7 @@ class Handler(BaseHTTPRequestHandler):
                     if seconds: cap.set(cv2.CAP_PROP_POS_MSEC,seconds*1000)
                     ok,frame=cap.read()
                     if not ok: raise ValueError("No hay imagen en ese instante.")
-                    from counting.engine import CountingEngine
-                    encoded=CountingEngine.encode(frame)
+                    encoded=engine._preview_jpeg(frame, width=1280, quality=82)
                     h,w=frame.shape[:2]
                     with engine.lock:
                         engine.frames[cid]=encoded
@@ -1881,6 +2333,21 @@ class Handler(BaseHTTPRequestHandler):
                 engine.start(data)
             elif self.path == "/api/settings":
                 engine.settings(data)
+            elif self.path == "/api/person-pairs/check":
+                return self.send_data(200, engine.person_pairs_check(str(data.get("base", "")), str(data.get("target", "")), data.get("pairs", [])))
+            elif self.path == "/api/insights/compute":
+                from replay import manifest
+                sid = str(data.get("session", ""))
+                meta = manifest(engine.data_root, sid)
+                if meta.get("status") == "running":
+                    raise ValueError("Finaliza el monitoreo antes de calcular los insights.")
+                if engine.project_id and meta.get("projectId") not in (engine.project_id, None):
+                    raise ValueError("La sesión no pertenece al proyecto abierto.")
+                if engine.compute_insights(sid) is None:
+                    raise ValueError("No se pudieron calcular los insights; revisa la auditoría.")
+                return self.send_data(200, {"ok": True})
+            elif self.path == "/api/identity/purge":
+                return self.send_data(200, {"ok": True, "borradas": engine.purge_identities()})
             elif self.path == "/api/stop":
                 engine.stop()
             elif self.path == "/api/pause":
@@ -1906,9 +2373,7 @@ def main():
     server.server_bind()
     server.server_activate()
     server.engine = Engine(args.config_path)
-    # La interfaz y la configuración pueden abrirse mientras P2PNet prepara sus
-    # pesos en segundo plano. Así el primer monitoreo no paga toda la carga del
-    # modelo después de que el operador pulsa «Iniciar».
+    # La interfaz y la configuración pueden abrirse mientras YOLO carga sus pesos en segundo plano.
     server.engine.warm_detector_async()
     from replay import recover_interrupted
     recover_interrupted(server.engine.data_root)
@@ -1920,10 +2385,6 @@ def main():
     finally:
         server.engine.stop()
         server.engine.preview_stop()
-        if getattr(server.engine, "counting", None):
-            server.engine.counting.stop()
-            if server.engine.counting.worker:
-                server.engine.counting.worker.join(timeout=10)
         server.server_close()
 
 

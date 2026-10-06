@@ -26,7 +26,7 @@ export function readiness(config: Config, session: Session) {
   return [
     { step:'project' as SetupStepId, title:'Proyecto', subtitle:'Espacio y modo de trabajo', done:!!config.airport?.trim()&&!!config.floor?.trim(), icon:'grid' },
     { step:'source' as SetupStepId, title:'Cámaras', subtitle:`${cameras.length} cámaras · ${tests.length} probadas`, done:cameras.length>0&&cameras.every(c=>mode==='demo'||(c.source!==''&&isStream(c.source)===(mode==='live'))), icon:'camera' },
-    { step:'calibrate' as SetupStepId, title:'Homografía y alcance', subtitle:!config.mapConfigured?'Falta el plano':mode==='demo'?'Plano preparado':`${calibrated}/${cameras.length} calibradas · ${useful}/${cameras.length} zonas útiles`, done:!!config.mapConfigured&&(mode==='demo'||(cameras.length>0&&cameras.every(c=>c.pairs.length>=4&&!!c.detectionZone&&c.coverageShape==='free'&&(c.coveragePolygon?.length||0)>=3&&Number(c.height||0)>Number(config.personHeight||1.7)))), icon:'map' },
+    { step:'calibrate' as SetupStepId, title:'Homografía y cámaras relacionadas', subtitle:!config.mapConfigured?'Falta el plano':mode==='demo'?'Plano preparado':`${useful}/${cameras.length} zonas útiles · ${calibrated}/${cameras.length} con referencias del suelo (opcional)${cameras.length>1?` · ${config.clocksVerified?'cámaras sincronizadas':'falta marcar la misma persona en dos cámaras'}`:''}`, done:!!config.mapConfigured&&(mode==='demo'||(cameras.length>0&&cameras.every(c=>!!c.detectionZone)&&(cameras.length===1||!!config.clocksVerified))), icon:'map' },
     { step:'zones' as SetupStepId, title:'Contexto comercial', subtitle:config.commercialContext?.hasBusinesses===false?'Piso sin negocios existentes':businesses?`${businesses} negocios registrados`:'Indica si existen negocios', done:commercialReady&&config.radius>0&&config.minPeople>=2&&config.dwell>=0, icon:'layers' },
     { step:'review' as SetupStepId, title:'Validación', subtitle:mode==='demo'?'Preparar demostración':'Validar antes de operar', done:mode==='demo'||(cameras.length>0&&tests.length===cameras.length&&(cameras.length===1||config.clocksVerified)), icon:'check' },
   ];
@@ -37,7 +37,7 @@ const LABELS: Record<SetupStepId,{title:string;hint:string}> = {
   plan:{title:'Plano',hint:'Importa un plano o dibújalo con figuras'},
   source:{title:'Conexión',hint:'Conecta la cámara y comprueba que responde'},
   test:{title:'Zona útil',hint:'Excluye espejos y deja solo el área real'},
-  calibrate:{title:'Homografía y alcance',hint:'Relaciona el video con el plano y dibuja el campo visible real'},
+  calibrate:{title:'Homografía y cámaras relacionadas',hint:'Puntos del suelo y, con 2 o más cámaras, la misma persona marcada en cada par'},
   zones:{title:'Contexto y oportunidades',hint:'Registra negocios; AeroTrack propondrá las nuevas zonas'},
   review:{title:'Revisión',hint:'Comprueba todo y abre el monitoreo'},
 };
@@ -109,7 +109,7 @@ export default function SetupFlow({ session, selected, onSelected, onNavigate, s
     plan:!!config.mapConfigured,
     source:!!camera&&camera.source!==''&&isStream(camera.source)===((config.sourceMode||'recordings')==='live'),
     test:tested&&!!camera&&!!camera.detectionZone,
-    calibrate:!!camera&&camera.pairs.length>=4&&camera.coverageShape==='free'&&(camera.coveragePolygon?.length||0)>=3&&Number(camera.height||0)>Number(config.personHeight||1.7),
+    calibrate:!!camera,   // los puntos del suelo son opcionales; con 2 o más cámaras se pide la misma persona en cada par
     zones:(config.commercialContext?.hasBusinesses===false||(config.commercialContext?.hasBusinesses===true&&config.zones.some(z=>z.kind==='commercial')))&&config.radius>0&&config.minPeople>=2&&config.dwell>=0,
     review:stages.every(s=>s.done),
   };
@@ -117,7 +117,7 @@ export default function SetupFlow({ session, selected, onSelected, onNavigate, s
   if(screen==='home')return <section className="setup-flow config-home">
     <header className="config-home-head"><div><h1>Configurar proyecto</h1><p>Ajusta el proyecto abierto. Para crear, abrir o eliminar espacios de trabajo usa la sección Proyectos.</p></div><span className="pill blue">{config.airport||'Proyecto sin nombre'}</span></header>
     <div className="config-home-grid">
-      <button className="config-home-primary" disabled={disabled} onClick={()=>openWizard('project')}><Icon name="map" size={28}/><span><strong>Espacio completo</strong><small>Pisos, planos, fuentes, homografía, alcance, zonas y validación.</small></span></button>
+      <button className="config-home-primary" disabled={disabled} onClick={()=>openWizard('project')}><Icon name="map" size={28}/><span><strong>Espacio completo</strong><small>Pisos, planos, fuentes, homografía, relaciones entre cámaras, zonas y validación.</small></span></button>
       <button className="config-home-primary" disabled={disabled} onClick={()=>openWizard('camera')}><Icon name="camera" size={28}/><span><strong>Añadir una cámara</strong><small>Conecta una fuente nueva al piso activo y calibra su posición.</small></span></button>
     </div>
     <section className="config-scope" aria-label="Contenido del proyecto abierto"><div><Icon name="layers"/><strong>{Math.max(1,Object.keys(config.plans||{}).length)} pisos</strong><small>Planos independientes por nivel</small></div><div><Icon name="camera"/><strong>{config.cameras.length} cámaras</strong><small>Fuentes asignadas por piso</small></div><div><Icon name="pin"/><strong>{config.zones.length} zonas</strong><small>Áreas y reglas operativas</small></div><div><Icon name="check"/><strong>{config.setupComplete?'Validado':'En configuración'}</strong><small>Estado del proyecto abierto</small></div></section>
@@ -194,7 +194,7 @@ export default function SetupFlow({ session, selected, onSelected, onNavigate, s
       </div>}
 
       {id==='calibrate'&&<div className="wizard-step-block">
-        <p className="wizard-help">Marca cuatro puntos visibles del suelo y sus posiciones equivalentes. Después dibuja el contorno real de cobertura de la cámara; puede ser cualquier polígono.</p>
+        <p className="wizard-help">A: marca puntos visibles del suelo y su posición en el plano (4 o más; 6 a 8 repartidos es mejor) para ubicar a las personas. B: con varias cámaras, marca los pies de la misma persona en cada par de cámaras que se ven o se suceden; con 4 parejas quedan relacionadas y sincronizadas.</p>
         <PlanWorkspace embedded section="calibration" session={session} selected={selected} onSelected={onSelected} startTest={startTest}/>
       </div>}
 
@@ -211,7 +211,11 @@ export default function SetupFlow({ session, selected, onSelected, onNavigate, s
             <span className={`check-circle ${s.done?'good':''}`}><Icon name={s.done?'check':'clock'} size={16}/></span>
             <span><strong>{s.title}</strong><small>{s.subtitle}</small></span><b>{s.done?'Preparado':'Pendiente'}</b></div>)}</div>
           {config.cameras.length>1&&<>
-            <label className="check"><input type="checkbox" disabled={disabled} checked={config.clocksVerified} onChange={e=>update({clocksVerified:e.target.checked})}/> Verifiqué el mismo tiempo de contenido en las cámaras y ajusté sus desfases.</label>
+            {(config.sourceMode||'recordings')==='live'
+              ? <label className="check"><input type="checkbox" disabled={disabled} checked={config.clocksVerified} onChange={e=>update({clocksVerified:e.target.checked})}/> Las cámaras en vivo comparten la misma hora (relojes sincronizados).</label>
+              : <p className={`notice compact ${config.clocksVerified?'':'warning'}`}>{config.clocksVerified
+                  ? 'Cámaras sincronizadas con la misma persona marcada en ambas.'
+                  : 'Falta la sincronización entre cámaras. Marca a la misma persona en dos cámaras (Homografía, parte B): con 4 o más parejas el sistema calcula y corrige el desfase de tiempo.'}</p>}
             <p className="subtle">Si no está verificado, el sistema mantiene IDs locales y no asocia personas entre cámaras. La llegada de dos streams al mismo equipo no demuestra sincronización.</p>
           </>}
         </div>

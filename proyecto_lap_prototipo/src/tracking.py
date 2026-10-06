@@ -1,16 +1,11 @@
 """
-Tracking mono-camara adaptado de ByteTrack (arXiv:2110.06864) para puntos de
-cabeza en vez de cajas completas.
+Tracking mono-camara adaptado de ByteTrack (arXiv:2110.06864) sobre el punto de
+los pies de cada caja YOLO.
 
-La asociacion usa distancia euclidiana en pixeles (no IoU de cajas): se
-probo con una caja fija de 20px por punto y se rompia constantemente -- con
-gente caminando junta, dos cabezas pueden estar a 15-25px de distancia en
-esta vista tan oblicua, y apenas P2PNet fallaba una deteccion por 1 frame
-(pasa seguido), el Kalman quedaba a 10px de la reaparicion, lo cual ya
-bastaba para tirar el IoU de dos cajas de 20x20 por debajo del umbral y
-crear un id nuevo en vez de recuperar el track. La distancia euclidiana con
-la asignacion hungara (que igual busca el emparejamiento global optimo, no
-"nearest neighbor" ingenuo) tolera mejor ese jitter tipico del detector.
+La asociacion usa distancia euclidiana en pixeles con la asignacion hungara (no
+IoU de cajas): con gente caminando junta y detecciones que fallan un frame, la
+distancia entre el Kalman y la reaparicion tolera mejor ese jitter que el IoU.
+La caja y su firma de apariencia se conservan para la reidentificacion.
 
 No se reimplementa el filtro de Kalman: se usa filterpy con un modelo de
 velocidad constante (x, y, vx, vy). La asignacion usa `lap` (Jonker-Volgenant),
@@ -247,3 +242,67 @@ class ByteTrackPuntos:
         self.tracks_activos.extend(nuevos)
 
         return self.tracks_activos, nuevos, expirados
+
+
+class BoTSortPuntos(ByteTrackPuntos):
+    """Seguimiento tipo BoT-SORT conservando el punto de los pies.
+
+    El proyecto necesita el punto inferior de la caja para la homografía, por
+    eso no se sustituye el tracker por el flujo de cajas de una librería
+    externa. Esta variante conserva el Kalman y las dos etapas de ByteTrack y
+    añade una asociación visual más fuerte durante la recuperación: distancia
+    de la posición predicha, IoU de la caja trasladada y firma de color. OSNet
+    continúa siendo el encoder de reidentificación entre cámaras.
+    """
+    def __init__(self, *args, appearance_weight: float = 18.0,
+                 iou_weight: float = 10.0, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.appearance_weight = float(appearance_weight)
+        self.iou_weight = float(iou_weight)
+
+    @staticmethod
+    def _iou(a, b):
+        if a is None or b is None:
+            return 0.0
+        ix1, iy1 = max(a[0], b[0]), max(a[1], b[1])
+        ix2, iy2 = min(a[2], b[2]), min(a[3], b[3])
+        inter = max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
+        area_a = max(0.0, a[2] - a[0]) * max(0.0, a[3] - a[1])
+        area_b = max(0.0, b[2] - b[0]) * max(0.0, b[3] - b[1])
+        union = area_a + area_b - inter
+        return inter / union if union > 1e-9 else 0.0
+
+    @staticmethod
+    def _caja_predicha(track):
+        """Traslada la última caja por el desplazamiento del Kalman."""
+        box = track.ultima_caja
+        if box is None or track.ultima_posicion_real is None:
+            return None
+        dx = track.posicion[0] - track.ultima_posicion_real[0]
+        dy = track.posicion[1] - track.ultima_posicion_real[1]
+        return (box[0] + dx, box[1] + dy, box[2] + dx, box[3] + dy)
+
+    def _asignar_con_prediccion(self, costo, candidatos, base, detecciones=None):
+        if costo.size == 0 or not detecciones:
+            return _asignar(costo, base)
+
+        # Recalcular la asignación con señales BoT-SORT. La puerta espacial
+        # sigue siendo obligatoria para evitar intercambios entre personas
+        # cercanas; estas señales solo ordenan las coincidencias válidas.
+        gates = []
+        for track in candidatos:
+            missing = min(track.frames_sin_actualizar, 12)
+            speed = min(float(np.hypot(*track.velocidad)), 8.0)
+            gates.append(base * (1.0 + missing * .10) + speed * missing * .45)
+        limite = max(gates, default=base) + base * .55 + self.appearance_weight + self.iou_weight
+        combinado = costo.astype(np.float32, copy=True)
+        for i, track in enumerate(candidatos):
+            caja_predicha = self._caja_predicha(track)
+            for j, detection in enumerate(detecciones):
+                firma = _distancia_apariencia(track.apariencia, getattr(detection, "appearance", None))
+                iou = self._iou(caja_predicha, getattr(detection, "box", None))
+                combinado[i, j] += base * .55 * firma + self.appearance_weight * firma
+                combinado[i, j] += self.iou_weight * (1.0 - iou)
+                if costo[i, j] > gates[i]:
+                    combinado[i, j] = limite + 1.0
+        return _asignar(combinado, limite)
