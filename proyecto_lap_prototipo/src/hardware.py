@@ -103,10 +103,23 @@ def choose(config=None, elevated=False, info=None, models_dir=MODELS):
         weights = Path(models_dir) / (order[-1] if tier.startswith("cpu") else order[0]) if order else weights
     on_gpu = tier != "cpu"
     providers = ["CUDAExecutionProvider", "CPUExecutionProvider"] if on_gpu and "CUDAExecutionProvider" in info["ortProviders"] else ["CPUExecutionProvider"]
+    requested = str(config.get("reidProvider", "auto"))
+    provider_names = {"cpu": "CPUExecutionProvider", "cuda": "CUDAExecutionProvider",
+                      "openvino": "OpenVINOExecutionProvider", "directml": "DmlExecutionProvider"}
+    provider_hint = None
+    if requested != "auto":
+        wanted_provider = provider_names.get(requested)
+        if wanted_provider is None:
+            raise ValueError("Proveedor ReID inválido.")
+        if wanted_provider in info["ortProviders"]:
+            providers = [wanted_provider] + ([] if requested == "cpu" else ["CPUExecutionProvider"])
+        else:
+            providers = ["CPUExecutionProvider"]
+            provider_hint = f"{requested} no está instalado; ReID usa CPU."
     hilos = config.get("reidThreads") or (None if on_gpu else max(1, min(4, (info["cpuThreads"] or 2) // 2)))
     return {"tier": tier, "device": "cuda:0" if on_gpu else "cpu", "weights": str(weights), "missingWeights": missing,
             "imgsz": int(config.get("yoloImgsz") or (size_elevated if elevated else size)), "half": half and on_gpu,
-            "osnetProviders": providers, "osnetInterval": interval, "hint": info["hint"],
+            "osnetProviders": providers, "osnetInterval": interval, "hint": provider_hint or info["hint"],
             # En CPU un tope de hilos evita que OSNet se pelee con el resto (medido en un i5 de 8 hilos, lote de 16: 461 ms con 1 hilo,
             # 219 con 2, 163 con 4 y 271 con 8). Se puede fijar con reidThreads.
             "osnetThreads": int(hilos) if hilos else None,

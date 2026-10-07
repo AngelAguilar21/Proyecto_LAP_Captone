@@ -29,6 +29,9 @@ def path_for(settings_root):
 
 
 def _read(settings_root):
+    from storage import operational
+    if operational.enabled(path_for(settings_root)):
+        return operational.read_document(path_for(settings_root))
     try:
         data = json.loads(path_for(settings_root).read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -37,6 +40,10 @@ def _read(settings_root):
 
 
 def _write(settings_root, data):
+    from storage import operational
+    if operational.enabled(path_for(settings_root)):
+        operational.write_document(path_for(settings_root), data)
+        return
     path = path_for(settings_root)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")

@@ -100,6 +100,9 @@ def path_for(project_path):
 
 
 def connect(project_path):
+    from storage import operational
+    if operational.enabled(project_path):
+        return operational.business_connect(project_path)
     path = path_for(project_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     conexion = sqlite3.connect(path, timeout=15)
@@ -158,7 +161,9 @@ def guardar_negocio(conexion, datos, config, catalogo=None):
     if not isinstance(ubicacion, dict):
         raise ValueError("Marca la ubicación del negocio en el plano.")
     plano = ubicacion.get("planId")
-    planos = config.get("plans") or {config.get("planId", "custom"): config}
+    planos = dict(config.get("plans") or {})
+    activo = config.get("planId", "custom")
+    planos[activo] = {**planos.get(activo, {}), **config}
     punto = ubicacion.get("point")
     if plano not in planos or not isinstance(punto, list) or len(punto) != 2:
         raise ValueError("Marca la ubicación del negocio en un plano del proyecto.")

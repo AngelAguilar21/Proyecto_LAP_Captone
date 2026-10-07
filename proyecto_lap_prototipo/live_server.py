@@ -149,7 +149,7 @@ def rendimiento_elegido(pedido, n_camaras, tier="cpu"):
     if pedido not in ("auto", *RENDIMIENTO):
         raise ValueError("performance inválido: auto, precise, balanced o fast.")
     if pedido == "auto":
-        pedido = "precise" if tier != "cpu" or n_camaras <= 2 else "balanced" if n_camaras <= 4 else "fast"
+        pedido = "precise" if tier != "cpu" or n_camaras <= 1 else "balanced" if n_camaras <= 4 else "fast"
     return pedido, RENDIMIENTO[pedido]
 
 
@@ -662,9 +662,9 @@ class Engine:
     def read_config_file(self):
         self.config = default_config()
         self.config_error = None
-        if self.config_path.exists():
+        if projects.document_exists(self.config_path):
             try:
-                self.config = validate_config({**self.config, **json.loads(self.config_path.read_text(encoding="utf-8"))})
+                self.config = validate_config({**self.config, **projects.read_document(self.config_path)})
             except (ValueError, OSError) as exc:
                 self.config_error = str(exc)
         if self.config.get("background") and "planLines" not in self.config:
@@ -815,6 +815,8 @@ class Engine:
             con = business_data.connect(self.config_path)
             try:
                 businesses = business_catalog.sync(con, self.config, ROOT / "dashboard" / "public")
+                from identity.spatial_graph import build_graph, persist_graph
+                persist_graph(con, build_graph(self.config, businesses))
                 observed = self.runtime_config or self.config
                 analytics = self.state.get("cameraAnalytics", {})
                 mode, sid, elapsed = self.state.get("mode"), self.state.get("session"), self.state.get("t", 0)
@@ -822,7 +824,7 @@ class Engine:
                     histories = []
                     for path in (self.data_root / "data/replays").glob("*/manifest.json"):
                         try:
-                            candidate = json.loads(path.read_text(encoding="utf-8"))
+                            candidate = projects.read_document(path)
                             if candidate.get("projectId") == self.project_id and candidate.get("status") in ("ended", "stopped") and candidate.get("cameraAnalytics"):
                                 histories.append(candidate)
                         except (OSError, ValueError):
@@ -884,6 +886,7 @@ class Engine:
                     self.preview_frames.pop(cid,None)
                     self.state["cameras"] = [c for c in self.state["cameras"] if c["id"]!=cid]
             self.config = copy.deepcopy(config)
+            self.config_error = None
             self.revision += 1
             self.record("Configuración guardada",f"{len(config['cameras'])} cámaras · {len(config.get('zones',[]))} zonas")
 
@@ -901,6 +904,8 @@ class Engine:
             self.record("Reglas actualizadas",f"Mínimo {draft['minPeople']} · radio {draft['radius']} · permanencia {draft['dwell']} s")
 
     def start(self, request):
+        if self.config_error:
+            raise ValueError(f"Corrige la configuración del proyecto antes de iniciar: {self.config_error}")
         self.preview_stop()
         with self.lock:
             if self.worker and self.worker.is_alive():
@@ -929,6 +934,9 @@ class Engine:
                 selected=[c for c in self.config["cameras"] if c["id"] in camera_ids and c.get("active",True)]
             if not selected:
                 raise ValueError("Activa al menos una cámara.")
+            source_modes = {isinstance(c.get('source'), int) or str(c.get('source', '')).isdigit() or '://' in str(c.get('source', '')) for c in selected}
+            if mode == 'yolo' and len(source_modes) > 1:
+                raise ValueError('Selecciona solo videos grabados o solo cámaras en vivo. No se pueden mezclar sus relojes en un monitoreo.')
             if mode == "yolo":
                 if any(c.get("illustrative") for c in selected) and not test_run:
                     raise ValueError("Las ubicaciones ilustrativas no sirven para medir ocupación comercial.")
@@ -964,7 +972,10 @@ class Engine:
             self.runtime_config["cameras"] = copy.deepcopy(selected)
             # Cámaras vecinas: las que el usuario relacionó marcando a la misma persona en ambas (o enlaces manuales).
             selected_ids = {camera['id'] for camera in selected}
-            vecinas = related_cameras(self.runtime_config)
+            if self.runtime_config.get('cameraRoutes') is not None:
+                self.runtime_config['cameraRoutes'] = [r for r in self.runtime_config['cameraRoutes']
+                                                       if r['from'] in selected_ids and r['to'] in selected_ids]
+            vecinas = {cid: set(v) for cid, v in related_cameras(self.runtime_config).items()}
             bloqueadas_geometria = []
             if mode == "yolo":
                 # Una similitud OSNet no basta si las homografías de dos cámaras
@@ -1044,6 +1055,12 @@ class Engine:
                 insights_ventas.guardar(con, sid, dataset, resultado, eventos)
             finally:
                 con.close()
+            try:
+                from storage.archive_queue import ArchiveQueue
+                ArchiveQueue(self.data_root / 'data' / 'storage-outbox.sqlite').enqueue(
+                    self.data_root / 'data' / 'replays' / sid, insights=resultado)
+            except Exception as exc:
+                self.record("PostGIS", f"Archivo pendiente de reintento ({type(exc).__name__}). Los resultados locales se conservan.")
             return resultado
         except Exception as exc:  # los insights son derivados: nunca pueden romper el cierre de una sesión
             self.record("Insights", f"No se pudieron calcular los insights de la sesión: {type(exc).__name__}: {exc}")
@@ -1353,16 +1370,18 @@ class Engine:
                 raise ValueError("No mezcles archivos y cámaras en vivo en una sesión; sus relojes no son equivalentes.")
             occupancy, metrics = Occupancy(config), SessionMetrics()
             # Re-ID: OSNet (models/osnet.onnx). Sin él no hay identidad entre cámaras fiable y no se inicia.
-            embedder = OSNetEmbedder(None, providers=profile["osnetProviders"], threads=profile.get("osnetThreads"))
+            model_name = config.get('reidModel', 'osnet.onnx')
+            embedder = OSNetEmbedder(ROOT / 'models' / model_name, providers=profile["osnetProviders"], threads=profile.get("osnetThreads"))
             if not embedder.available:
-                raise ValueError("Falta el modelo de reidentificación models/osnet.onnx: ejecuta preparar_sistema para instalarlo.")
+                raise ValueError(f"No se pudo cargar el modelo {model_name}. Instálalo o selecciona OSNet ligero. {embedder.error}")
             # Motor de identidad: tracklets por cámara + OSNet + compuerta de tiempo y plano; al cerrar se reagrupa la grabación.
             from identity import crear_motor_identidad
             from identity.engine import crear_memoria
             if config.get("appearanceMemory", True):
                 # Solo vectores de apariencia, con retención corta; si el disco falla la memoria queda en RAM.
-                appearance_memory = crear_memoria(config, self.data_root / "data" / "identidad" / f"{self.project_id or 'local'}_apariencia.sqlite",
-                                                  embedder.name, embedder.dimension)
+                huella = getattr(embedder, 'fingerprint', None) or embedder.name
+                appearance_memory = crear_memoria(config, self.data_root / "data" / "identidad" / f"{self.project_id or 'local'}_{huella}_apariencia.sqlite",
+                                                  f"{embedder.name}:{huella}", embedder.dimension)
             self.appearance_memory_live = appearance_memory
             identities = crear_motor_identidad(config, memoria=appearance_memory, encoder_nombre=embedder.name)
             reid_interval = int(config.get("reidInterval") or profile["osnetInterval"])
@@ -1694,11 +1713,18 @@ class Engine:
                     camera=next(c for c in cams if c['id']==cid)
                     for line in camera.get('countLines',[]):
                         a,b=[(round(p[0]*frame.shape[1]),round(p[1]*frame.shape[0])) for p in (line['a'],line['b'])]
-                        cv2.line(frame,a,b,(90,240,180),line_width)
+                        crossing = next((x for x in camera_analytics.get(cid,{}).get('crossings',[]) if x['id']==line['id']), {})
+                        recent = [e for e in crossing.get('events',[]) if 0 <= t-e['t'] <= .8]
+                        directions = {e['direction'] for e in recent}
+                        color = (220,100,220) if len(directions)>1 else (120,220,50) if 'entries' in directions else (255,165,50) if directions else (90,240,180)
+                        cv2.line(frame,a,b,color,line_width*(2 if directions else 1))
+                        if directions:
+                            crossing_label = 'Entrada + salida' if len(directions)>1 else f"Entrada +{len(recent)}" if 'entries' in directions else f"Salida +{len(recent)}"
+                            cv2.putText(frame, crossing_label, a, cv2.FONT_HERSHEY_SIMPLEX, .6*overlay_scale, color, line_width)
                         dx,dy=b[0]-a[0],b[1]-a[1];length=max(1.,(dx*dx+dy*dy)**.5)
                         middle=((a[0]+b[0])//2,(a[1]+b[1])//2);side=line.get('entrySide',1)
                         tip=(round(middle[0]-dy/length*35*side),round(middle[1]+dx/length*35*side))
-                        cv2.arrowedLine(frame,middle,tip,(90,240,180),line_width,tipLength=.3)
+                        cv2.arrowedLine(frame,middle,tip,color,line_width,tipLength=.3)
                     if frame.shape[1] > 1440:
                         frame = cv2.resize(frame, (1440, round(frame.shape[0]*1440/frame.shape[1])))
                     ok, jpg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 88])
@@ -1759,6 +1785,11 @@ class Engine:
                 try:
                     replay.meta['reportAnalytics'] = copy.deepcopy(self.state['analytics'])
                     replay.meta['totals'] = copy.deepcopy(self.state.get('totals', {}))
+                    if 'identities' in locals():
+                        replay.meta['identityDiagnostics'] = identities.resumen()
+                        replay.meta['inferenceRuntime'] = {'detector': profile['device'],
+                                                          'reidProviders': getattr(embedder, 'providers', []),
+                                                          'modelFingerprint': getattr(embedder, 'fingerprint', None)}
                     replay.finish("error" if self.state["status"]=="error" else "stopped" if self.stop_event.is_set() else "ended")
                     # Con el análisis terminado la CPU queda libre: se prepara la copia que el navegador puede reproducir (AVI/MKV).
                     import video_web
@@ -1844,6 +1875,21 @@ class Engine:
         replay.finish("stopped")
 
 
+def storage_response(method):
+    """La indisponibilidad de la BD es un 503 recuperable, nunca un login vacío."""
+    from functools import wraps
+    @wraps(method)
+    def handle(self, *args, **kwargs):
+        try:
+            return method(self, *args, **kwargs)
+        except Exception as exc:
+            from storage import operational
+            if operational.is_database_error(exc):
+                return self.send_data(503, {'error': 'La base de datos no está disponible. Revisa Docker y vuelve a intentar. No se cambiaron los datos locales.'})
+            raise
+    return handle
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
@@ -1871,19 +1917,52 @@ class Handler(BaseHTTPRequestHandler):
             return False
         return self.headers.get("Sec-Fetch-Site", "same-origin") != "cross-site"
 
+    @storage_response
     def do_GET(self):
         if not self.allowed():
             return self.send_data(403, {"error": "Acceso local requerido."})
         url = urlparse(self.path)
         engine = self.server.engine
+        if url.path == '/api/storage':
+            if auth.hay_usuarios(engine.settings_root) and not engine.sessions.leer(self.headers.get('X-LAP-Session', '')):
+                return self.send_data(401, {'error': 'Inicia sesión.'})
+            from storage.postgis import health
+            from storage.archive_queue import ArchiveQueue
+            from storage import operational
+            queue = ArchiveQueue(engine.data_root / 'data' / 'storage-outbox.sqlite')
+            return self.send_data(200, {**health(), **queue.status(), 'scope': 'operational' if operational.enabled(engine.config_path) else 'session_archive',
+                                       'operationalStorage': 'PostgreSQL: usuarios, proyectos, negocios y ventas' if operational.enabled(engine.config_path) else 'SQLite y JSON locales'})
+        if url.path in ("/api/commercial/trial", "/api/commercial/trial-template"):
+            if auth.hay_usuarios(engine.settings_root) and not engine.sessions.leer(self.headers.get("X-LAP-Session", "")):
+                return self.send_data(401, {"error": "Inicia sesión."})
+            import commercial_trial
+            with engine.lock:
+                con = business_data.connect(engine.config_path)
+                try:
+                    businesses = business_catalog.sync(con, engine.config, ROOT / "dashboard/public")
+                    options = commercial_trial.session_options(engine.data_root, engine.project_id, businesses, engine.config)
+                    if url.path.endswith('trial-template'):
+                        query = parse_qs(url.query)
+                        selected = next((b for s in options if s['id'] == query.get('session', [''])[0] for b in s['businesses'] if b['id'] == query.get('business', [''])[0]), None)
+                        if not selected:
+                            return self.send_data(400, {'error': 'Selecciona una tienda y un video finalizado.'})
+                        return self.send_data(200, commercial_trial.example_csv(selected['id'], selected['date'], selected['hour']).encode('utf-8-sig'), 'text/csv; charset=utf-8')
+                    return self.send_data(200, {'sessions': options, 'saved': commercial_trial.saved(con)})
+                finally:
+                    con.close()
         if url.path == "/api/commercial/sample":
             if auth.hay_usuarios(engine.settings_root) and not engine.sessions.leer(self.headers.get("X-LAP-Session", "")):
                 return self.send_data(401,{"error":"Inicia sesión."})
             try:
-                sample = json.loads((ROOT / "data/commercial-tests/validacion.json").read_text(encoding="utf-8"))
-                if sample.get("projectId") != engine.project_id:
-                    raise ValueError("No hay una prueba comercial guardada en este proyecto.")
-                return self.send_data(200,sample)
+                con = business_data.connect(engine.config_path)
+                try:
+                    commercial.setup(con)
+                    row = con.execute("SELECT session,negocio_id,fecha,hora FROM commercial_traffic WHERE dataset='demo' AND session NOT LIKE 'demo-%' ORDER BY fecha DESC,hora DESC,coverage DESC,session DESC LIMIT 1").fetchone()
+                    if not row:
+                        raise ValueError('Todavía no hay videos de prueba con accesos vinculados en este proyecto.')
+                    return self.send_data(200,dict(session=row[0],businessId=row[1],date=row[2],hour=row[3],projectId=engine.project_id))
+                finally:
+                    con.close()
             except (OSError, ValueError) as exc:
                 return self.send_data(404,{"error":str(exc)})
         if url.path in ("/api/camera-frame", "/api/camera-frame-info"):
@@ -1927,9 +2006,9 @@ class Handler(BaseHTTPRequestHandler):
                                 for incident in row['incidents']:
                                     writer.writerow([row['name'],result['dataset'],incident['start'],incident['duration'],incident['peak'],incident['sales'],incident['baseline'],incident['sampleDays'],incident['differencePercent'],incident['scope']])
                             return self.send_data(200, output.getvalue().encode('utf-8-sig'), 'text/csv; charset=utf-8')
-                        writer.writerow(["Negocio","Fecha","Hora","Origen","Entradas","Ventas PEN","Proyección PEN","Días históricos","Salidas emparejadas","Objetos nuevos","Salidas sin emparejar"])
+                        writer.writerow(["Negocio","Fecha","Hora Lima","Origen","Sesión de video","Cobertura segundos","Entradas","Ventas PEN","Transacciones","Transacciones por entrada %","Proyección PEN","Alcance de proyección","Ingreso histórico por entrada PEN","Días históricos","Siguiente hora","Entradas esperadas","Pronóstico siguiente hora PEN","Salidas emparejadas","Objetos nuevos","Salidas sin emparejar"])
                         for row in result["businesses"]:
-                            writer.writerow([row["name"],result["date"],result["hour"],result["dataset"],row["entries"],row["sales"],row["forecast"]["estimate"],row["forecast"]["days"],row["bags"]["matched"],row["bags"]["changed"],row["bags"]["unmatched"]])
+                            writer.writerow([row["name"],result["date"],result["hour"],result["dataset"],row["session"],row["coverage"],row["entries"],row["sales"],row["transactions"],row["conversion"],row["forecast"]["estimate"],row["estimateScope"],row["forecast"].get("perEntry"),row["forecast"]["days"],row["nextForecast"].get("target"),row["nextForecast"].get("expectedEntries"),row["nextForecast"].get("estimate"),row["bags"]["matched"],row["bags"]["changed"],row["bags"]["unmatched"]])
                         return self.send_data(200, output.getvalue().encode("utf-8-sig"), "text/csv; charset=utf-8")
                     return self.send_data(200,result)
                 except (ValueError, TypeError) as exc:
@@ -1940,13 +2019,19 @@ class Handler(BaseHTTPRequestHandler):
             if auth.hay_usuarios(engine.settings_root) and not engine.sessions.leer(self.headers.get("X-LAP-Session", "")):
                 return self.send_data(401, {"error": "Inicia sesión."})
             return self.send_data(200, engine.business_metrics())
-        if url.path == "/api/businesses":
+        if url.path in ("/api/businesses", "/api/spatial-graph"):
             if auth.hay_usuarios(engine.settings_root) and not engine.sessions.leer(self.headers.get("X-LAP-Session", "")):
                 return self.send_data(401, {"error": "Inicia sesión para consultar los negocios."})
             with engine.lock:
                 conexion = business_data.connect(engine.config_path)
                 try:
-                    return self.send_data(200, {"negocios": business_catalog.sync(conexion, engine.config, ROOT / "dashboard" / "public"), "projectId": engine.project_id})
+                    businesses = business_catalog.sync(conexion, engine.config, ROOT / "dashboard" / "public")
+                    if url.path == '/api/spatial-graph':
+                        from identity.spatial_graph import build_graph, persist_graph
+                        graph = build_graph(engine.config, businesses)
+                        persist_graph(conexion, graph)
+                        return self.send_data(200, graph)
+                    return self.send_data(200, {"negocios": businesses, "projectId": engine.project_id})
                 finally:
                     conexion.close()
         if url.path.startswith("/api/replay/"):
@@ -2020,7 +2105,7 @@ class Handler(BaseHTTPRequestHandler):
     # Rutas de configuracion: solo el operador. El administrador entra al
     # sistema, ve todo y ajusta umbrales de alerta, pero no toca la geometria
     # ni la calibracion, para no romper por error algo que costo calibrar.
-    SOLO_OPERADOR = ("/api/commercial/import", "/api/commercial/simulate", "/api/businesses", "/api/config", "/api/import-plan", "/api/plan-lines", "/api/upload", "/api/camera-restart",
+    SOLO_OPERADOR = ("/api/commercial/trial", "/api/commercial/import", "/api/commercial/simulate", "/api/businesses", "/api/config", "/api/import-plan", "/api/plan-lines", "/api/upload", "/api/camera-restart",
                      "/api/camera-preview", "/api/calibration-check", "/api/person-pairs/check")
 
     def reject(self, size, code, message):
@@ -2040,6 +2125,7 @@ class Handler(BaseHTTPRequestHandler):
             pass
         return self.send_data(code, {"error": message})
 
+    @storage_response
     def do_POST(self):
         engine = self.server.engine
         size = int(self.headers.get("Content-Length", "0"))
@@ -2112,6 +2198,24 @@ class Handler(BaseHTTPRequestHandler):
             data = json.loads(self.rfile.read(size))
             if not isinstance(data, dict):
                 raise ValueError("Solicitud inválida.")
+            if parsed.path == "/api/commercial/trial":
+                import commercial_trial
+                with engine.lock:
+                    if data.get('projectId') != engine.project_id:
+                        raise ValueError('El proyecto cambió. Vuelve a seleccionar el video.')
+                    con = business_data.connect(engine.config_path)
+                    try:
+                        businesses = business_catalog.sync(con, engine.config, ROOT / 'dashboard/public')
+                        options = commercial_trial.session_options(engine.data_root, engine.project_id, businesses, engine.config)
+                        observed = next((b for s in options if s['id'] == data.get('session') for b in s['businesses'] if b['id'] == data.get('businessId')), None)
+                        if not observed:
+                            raise ValueError('Selecciona un video de prueba finalizado y una tienda con cruces medidos.')
+                        rows, fingerprint = commercial_trial.read_history(data.get('file'), str(data.get('filename', '')), observed['id'])
+                        result = commercial_trial.calculate(rows, {k: v for k, v in observed.items() if k not in ('id', 'name')})
+                        business = next(b for b in businesses if b['id'] == observed['id'])
+                        return self.send_data(200, commercial_trial.save(con, result, business, str(data.get('filename', '')), fingerprint))
+                    finally:
+                        con.close()
             if parsed.path == "/api/commercial/simulate":
                 with engine.lock:
                     if data.get("projectId") != engine.project_id:
@@ -2362,6 +2466,10 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    from storage.environment import load_environment
+    load_environment(ROOT.parent)
+    from storage import operational
+    operational.configure(ROOT)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--config-path", type=Path, help="Archivo de configuración alternativo para pruebas aisladas.")
@@ -2377,6 +2485,10 @@ def main():
     server.engine.warm_detector_async()
     from replay import recover_interrupted
     recover_interrupted(server.engine.data_root)
+    from storage.archive_queue import ArchiveQueue
+    archive = ArchiveQueue(server.engine.data_root / 'data' / 'storage-outbox.sqlite')
+    archive.recover(server.engine.data_root / 'data' / 'replays')
+    archive.start()
     print(f"LAP: http://127.0.0.1:{args.port} — solo equipo local", flush=True)
     try:
         server.serve_forever()
@@ -2385,6 +2497,7 @@ def main():
     finally:
         server.engine.stop()
         server.engine.preview_stop()
+        archive.close()
         server.server_close()
 
 

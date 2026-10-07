@@ -8,6 +8,7 @@ import ReplayWorkspace from './ReplayWorkspace';
 import { CameraVideo } from './CameraPanel';
 import Metric from './Metric';
 import Icon from './Icon';
+import './camera-routes.css';
 
 export default function MonitoringWorkspace({ session, onSetup, onReplay, active = true }: {
   active?: boolean;
@@ -25,6 +26,8 @@ export default function MonitoringWorkspace({ session, onSetup, onReplay, active
   const [level, setLevel] = useState(propio);
   const [mapOrientation, setMapOrientation] = useState<'horizontal'|'vertical'>(() => config.orientation || 'horizontal');
   const [camera, setCamera] = useState('all');
+  const [analysisIds, setAnalysisIds] = useState<string[]>([]);
+  useEffect(() => { setAnalysisIds([]); }, [session.projects.active]);
   const [zone, setZone] = useState('all');
   const [plan, setPlan] = useState<Config | null>(null);
   const [archived, setArchived] = useState<any>(null);
@@ -193,9 +196,11 @@ export default function MonitoringWorkspace({ session, onSetup, onReplay, active
   const sinCamaras = !config.cameras.length;
   const hayDatos = busy || !!archived;
   const enVivo = session.state.cameras.filter(c => nivelCameras.some(v => v.id === c.id) && c.status === 'live').length;
+  const sessionCameraCount = session.state.cameras.filter(c => nivelCameras.some(v => v.id === c.id)).length;
   const availableCameras = camera === 'all' && allLevels ? config.cameras : cameras;
   const detailCameras = nivelCameras.filter(c=>detailCameraIds.includes(c.id));
-  const canStart = availableCameras.some(c => c.active !== false);
+  const analysisCameras = availableCameras.filter(c => c.active !== false && analysisIds.includes(c.id));
+  const canStart = analysisCameras.length > 0;
 
   function toggleMonitoring() {
     void session.action(async () => {
@@ -204,12 +209,13 @@ export default function MonitoringWorkspace({ session, onSetup, onReplay, active
         return;
       }
       await session.save();
+      setDetailCameraIds(analysisCameras.map(c => c.id));
       await session.post('start', {
         detector: 'yolo',
         combined: true,
         testRun,
         inferenceSize: quality,
-        cameraIds: (camera === 'all' ? availableCameras : cameras).filter(c => c.active !== false).map(c => c.id),
+        cameraIds: analysisCameras.map(c => c.id),
         requireUnified: unified,
         identityGroupCrops: groupCrops,
         performance,
@@ -261,7 +267,7 @@ export default function MonitoringWorkspace({ session, onSetup, onReplay, active
         <Metric label="Entradas" value={hayDatos?entries:'—'} icon="arrow" tone="blue" note={hayDatos ? 'Durante la sesión' : 'Esperando monitoreo'} />
         <Metric label="Salidas" value={hayDatos?exits:'—'} icon="arrow" tone="blue" note={hayDatos ? 'Durante la sesión' : 'Esperando monitoreo'} />
         <Metric label="Alertas activas" value={pendientes??'—'} icon="alert" tone={pendientes ? 'red' : pendientes === 0 ? 'green' : 'muted'} note={pendientes === null ? 'Sin lectura disponible' : pendientes ? 'Pendientes de revisión' : 'Operación normal'} />
-        <Metric label="Cámaras activas" value={busy ? `${enVivo}/${nivelCameras.length}` : `${nivelCameras.filter(c => c.active !== false).length}/${nivelCameras.length}`} icon="camera" tone={busy && enVivo === nivelCameras.length ? 'green' : 'blue'} note={busy ? 'Con señal en vivo' : 'Configuradas en el nivel'} />
+        <Metric label="Cámaras activas" value={busy ? `${enVivo}/${sessionCameraCount}` : `${nivelCameras.filter(c => c.active !== false).length}/${nivelCameras.length}`} icon="camera" tone={busy && enVivo === sessionCameraCount ? 'green' : 'blue'} note={busy ? 'Fuentes de esta sesión' : 'Configuradas en el nivel'} />
         <Metric label="Tiempo de análisis" value={hayDatos ? formatTime(base.t) : '--:--'} icon="clock" tone="muted" note={busy ? 'Sesión en curso' : archived ? 'Última duración' : 'Esperando monitoreo'} />
       </section>
 
@@ -284,6 +290,13 @@ export default function MonitoringWorkspace({ session, onSetup, onReplay, active
         </div>
       </section>
 
+      <fieldset className="analysis-camera-picker" disabled={busy || session.busy}>
+        <legend>Cámaras del análisis · {analysisCameras.length} seleccionadas</legend>
+        <p>Marca las cámaras que quieres procesar. Para probar continuidad selecciona dos cámaras relacionadas. Usa archivos o fuentes en vivo en una misma sesión.</p>
+        <div className="analysis-camera-options">{availableCameras.filter(c => c.active !== false).map(c => <label key={c.id}><input type="checkbox" checked={analysisIds.includes(c.id)} onChange={e => setAnalysisIds(ids => e.target.checked ? [...ids, c.id] : ids.filter(id => id !== c.id))} />{c.name || c.id}</label>)}</div>
+        <button type="button" onClick={() => setAnalysisIds([])}>Limpiar selección</button>
+        {!canStart && <p role="status">Selecciona al menos una cámara para iniciar.</p>}
+      </fieldset>
       <section className="monitor-map-card" ref={mapRef}>
         <header className="monitor-map-header">
           <div><span className="map-title-icon"><Icon name="map" size={19} /></span><div><h2>Plano operativo</h2><p>Distribución espacial y nodos detectados</p></div></div>

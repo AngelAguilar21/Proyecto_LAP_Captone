@@ -10,6 +10,7 @@ import PreviewControls from './PreviewControls';
 import PlanWorkspace from './PlanWorkspace';
 import PlanSelector from './PlanSelector';
 import ZoneWorkspace from './ZoneWorkspace';
+import CameraRoutes from './CameraRoutes';
 
 export type SetupStepId = 'project' | 'plan' | 'source' | 'test' | 'calibrate' | 'zones' | 'review';
 export const PROJECT_STEPS: SetupStepId[] = ['project','plan','source','test','calibrate','zones','review'];
@@ -116,6 +117,7 @@ export default function SetupFlow({ session, selected, onSelected, onNavigate, s
 
   if(screen==='home')return <section className="setup-flow config-home">
     <header className="config-home-head"><div><h1>Configurar proyecto</h1><p>Ajusta el proyecto abierto. Para crear, abrir o eliminar espacios de trabajo usa la sección Proyectos.</p></div><span className="pill blue">{config.airport||'Proyecto sin nombre'}</span></header>
+    <CameraRoutes session={session}/>
     <div className="config-home-grid">
       <button className="config-home-primary" disabled={disabled} onClick={()=>openWizard('project')}><Icon name="map" size={28}/><span><strong>Espacio completo</strong><small>Pisos, planos, fuentes, homografía, relaciones entre cámaras, zonas y validación.</small></span></button>
       <button className="config-home-primary" disabled={disabled} onClick={()=>openWizard('camera')}><Icon name="camera" size={28}/><span><strong>Añadir una cámara</strong><small>Conecta una fuente nueva al piso activo y calibra su posición.</small></span></button>
