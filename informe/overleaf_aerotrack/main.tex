@@ -6,17 +6,20 @@
 %
 %  Compilacion en Overleaf: pdfLaTeX (motor por defecto), dos pasadas.
 %  No requiere biber/biblatex: las referencias se listan como texto
-%  con formato APA en secciones/referencias.tex, igual que en el
-%  documento original.
+%  con formato APA en secciones/referencias.tex.
 %
 %  Archivos .tex codificados en UTF-8.
 %=====================================================================
 \documentclass[12pt,a4paper]{article}
 
-%--------------------- Codificacion e idioma -------------------------
+%--------------------- Codificacion, fuente e idioma ------------------
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
+% Times New Roman 12 en texto y formulas.
+\usepackage{newtxtext}
+\usepackage{newtxmath}
 \usepackage[spanish,es-tabla,es-noquoting,es-lcroman]{babel}
+\usepackage{csquotes}
 
 %--------------------- Geometria y estilo ----------------------------
 \usepackage[a4paper,left=3cm,right=2.5cm,top=3cm,bottom=2.5cm,headheight=15pt]{geometry}
@@ -28,6 +31,7 @@
 
 %--------------------- Tablas, listas, graficos ----------------------
 \usepackage{graphicx}
+\usepackage{float}
 \usepackage{xcolor}
 \usepackage{booktabs}
 \usepackage{array}
@@ -35,33 +39,54 @@
 \usepackage{enumitem}
 \usepackage{ragged2e}
 \usepackage{longtable}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,shapes.geometric,calc}
+% Permite cortar las direcciones web largas de las referencias en los guiones.
+\PassOptionsToPackage{hyphens}{url}
 \usepackage{hyperref}
+\Urlmuskip=0mu plus 1mu
+
+% Todo el documento va en negro: texto, tablas, diagramas y enlaces.
+\color{black}
 
 % Tipos de columna para tablas anchas (casos de uso, requisitos).
 \newcolumntype{L}[1]{>{\RaggedRight\arraybackslash}p{#1}}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
 \newcolumntype{Y}{>{\RaggedRight\arraybackslash}X}
 
-%--------------------- Figuras con reemplazo pendiente ----------------
-% El informe original trae 12 diagramas UML (uno por caso de uso) y una
-% figura compuesta de arquitectura que no se pudieron extraer del PDF
-% fuente. \figuraPendiente deja el hueco reservado (mismo tamano que
-% tendria la figura) para que no rompa la compilacion en Overleaf:
-% si el archivo ya existe en imagenes/, lo muestra; si no, dibuja un
-% recuadro con el nombre de archivo esperado para que se sepa que
-% imagen subir y donde.
-%   \figuraPendiente{archivo}{ancho}{alto-recuadro}{pie}{etiqueta}
-\newcommand{\figuraPendiente}[5]{%
-  \begin{figure}[htbp]
+% Tablas: booktabs sin rayas verticales ni sombreado, con un poco de aire.
+\renewcommand{\arraystretch}{1.15}
+
+%--------------------- Figuras ----------------------------------------
+% Todas las capturas y figuras se centran al mismo ancho.
+\newlength{\anchofigura}
+\setlength{\anchofigura}{0.85\textwidth}
+%   \figura{archivo}{pie}{etiqueta}
+\newcommand{\figura}[3]{%
+  \begin{figure}[H]
     \centering
-    \IfFileExists{imagenes/#1}{%
-      \includegraphics[width=#2]{imagenes/#1}%
-    }{%
-      \fbox{\parbox[c][#3][c]{#2}{\centering\itshape
-        Figura pendiente\\ \texttt{imagenes/#1}}}%
-    }
-    \caption{#4}
-    \label{#5}
+    \includegraphics[width=\anchofigura]{imagenes/#1}
+    \caption{#2}
+    \label{#3}
   \end{figure}}
+
+%--------------------- Marcadores [VERIFICAR] -------------------------
+% \verificar{texto} marca una afirmacion que sigue sin confirmar contra
+% su fuente. NO se imprime en el PDF: el texto queda en el fuente y cada
+% marcador deja rastro en el registro de compilacion, con un recuento
+% final ("MARCADORES [VERIFICAR] EN EL CUERPO: n").
+% La macro abre con \unskip para no dejar doble espacio cuando el
+% marcador va en una linea propia, y no termina en \ignorespaces para no
+% comerse el espacio siguiente.
+\newcounter{verificarcount}
+\newcommand{\verificar}[1]{%
+  \ifhmode\unskip\fi
+  \stepcounter{verificarcount}%
+  \typeout{[VERIFICAR \theverificarcount] marcador oculto en pagina \thepage.}}
+\AtEndDocument{%
+  \typeout{^^J=====================================================^^J%
+    MARCADORES [VERIFICAR] EN EL CUERPO: \theverificarcount^^J%
+    =====================================================^^J}}
 
 %--------------------- Hiperenlaces -----------------------------------
 \hypersetup{
@@ -76,19 +101,20 @@
 }
 
 %--------------------- Encabezado y pie --------------------------------
+% Sin filetes: ni bajo el encabezado ni sobre el pie.
 \pagestyle{fancy}
 \fancyhf{}
 \fancyhead[L]{\small Aerotrack}
 \fancyhead[R]{\small Universidad ESAN}
 \fancyfoot[C]{\small\thepage}
-\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrulewidth}{0pt}
 \renewcommand{\footrulewidth}{0pt}
 \fancypagestyle{plain}{%
   \fancyhf{}%
   \fancyhead[L]{\small Aerotrack}%
   \fancyhead[R]{\small Universidad ESAN}%
   \fancyfoot[C]{\small\thepage}%
-  \renewcommand{\headrulewidth}{0.4pt}%
+  \renewcommand{\headrulewidth}{0pt}%
   \renewcommand{\footrulewidth}{0pt}}
 
 \onehalfspacing
@@ -145,12 +171,17 @@ Moreno Ugarte, Fabián & 25200717 & Validación ética, legal y documentación \
 \vspace{0.3cm}
 {\large Lima, Perú.\par}
 
+
 \end{titlepage}
 
 %--------------------------- INDICE ----------------------------------
 \pagenumbering{roman}
 \setcounter{tocdepth}{2}
 {\singlespacing\tableofcontents}
+\clearpage
+{\singlespacing\listoffigures}
+\clearpage
+{\singlespacing\listoftables}
 \clearpage
 \pagenumbering{arabic}
 

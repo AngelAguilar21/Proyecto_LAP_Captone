@@ -5,27 +5,16 @@
 cuatro presentaciones quincenales de avance (semanas 5, 8, 11 y 14) y la sustentación final en
 la semana 16.
 
-\begin{center}
-\begin{tabular}{@{}ll@{}}
-\toprule
-\textbf{Estado} & \\
-\midrule
-Completado & \\
-En curso & \\
-Pendiente & \\
-Programado & \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-\figuraPendiente{gantt.png}{\textwidth}{10cm}{Cronograma de fases y actividades del
-proyecto Aerotrack, semanas S1 a S16.}{fig:gantt}
+\figura{gantt.png}{Cronograma de fases y actividades del proyecto Aerotrack, semanas S1 a
+S16.}{fig:gantt}
 
 Las fases de organización del equipo, antecedentes y desarrollo del prototipo (incluida la
 incorporación posterior del monitoreo integrado) están completadas. Requisitos y arquitectura
-tiene completos los requisitos funcionales y los doce casos de uso, pero mantiene dos
-decisiones abiertas: la arquitectura definitiva (granularidad de salida) y la localización del
-procesamiento. Licencias de datos públicos y pruebas/validación están en curso: las pruebas
+tiene completos los dieciocho casos de uso, los dieciocho requisitos funcionales y los ocho no
+funcionales, y la arquitectura quedó fijada en el detector YOLO, el seguimiento en dos etapas y la
+reidentificación con OSNet. Quedan abiertas dos decisiones: la retención de los datos por
+persona (memoria de apariencia y grabaciones de sesión), cuya corrección es la primera acción
+pendiente del equipo, y la localización del procesamiento en el despliegue final. Licencias de datos públicos y pruebas/validación están en curso: las pruebas
 sintéticas y la validación cualitativa sobre videos propios están completas; la solicitud formal
 de acceso a datos del terminal sigue pendiente de respuesta de LAP. La redacción del informe
 está en curso, de la cual este documento es la entrega más reciente. La entrega y sustentación
@@ -34,7 +23,7 @@ final es la única fase íntegramente pendiente, programada para las semanas 15 
 \subsection{Roles y Responsabilidades}
 \label{subsec:roles-responsabilidades}
 
-\begin{longtable}{@{}L{4cm}L{4cm}L{7.5cm}@{}}
+\begin{longtable}{@{}L{3.6cm}L{3.8cm}L{7.2cm}@{}}
 \toprule
 \textbf{Integrante} & \textbf{Frente} & \textbf{Responsabilidad principal} \\
 \midrule
@@ -42,7 +31,7 @@ final es la única fase íntegramente pendiente, programada para las semanas 15 
 Angel Aguilar & Liderazgo e integración & Coordinación general; consolidación de secciones;
   redacción de este documento \\
 Stephano Rivadeneyra & Ciencia de datos & Metodología del informe oficial; desarrollo del
-  monitoreo integrado (conteo, seguimiento por flujo, cartografía, dashboard) \\
+  monitoreo integrado (conteo, seguimiento, cartografía y dashboard) \\
 José Ortega & Ingeniería de datos & Resultados del informe oficial; verificación de licencias
   de los conjuntos de datos públicos \\
 Fabián Moreno Ugarte & Validación ética, legal y documentación & Antecedentes, marco

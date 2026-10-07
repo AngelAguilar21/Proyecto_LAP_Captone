@@ -1,42 +1,372 @@
 \section{Diseño del Sistema}
 \label{sec:diseno-sistema}
 
-\textbf{Arquitectura Conceptual.} El prototipo se organiza en seis componentes
-secuenciales:
+Esta sección describe el diseño del prototipo AeroTrack, la consola con la que se configura y
+opera el sistema. El apartado~\ref{subsec:arquitectura} presenta los seis componentes que
+organizan el procesamiento de las imágenes y el motor de identidad entre cámaras. Los
+apartados siguientes documentan la consola: la gestión de usuarios por roles, la gestión de
+proyectos independientes, el asistente de configuración y las alertas de seguridad con aviso
+por correo.
 
-\figuraPendiente{arquitectura.png}{\textwidth}{9cm}{Arquitectura conceptual del sistema
-Aerotrack: adquisición, detección, seguimiento, calibración y proyección, fusión de
-identidad entre cámaras, y persistencia/analítica/presentación.}{fig:arquitectura}
+\subsection{Arquitectura propuesta}
+\label{subsec:arquitectura}
 
-\begin{enumerate}
-  \item \textbf{Adquisición.} Lectura de cada fuente de cámara (archivo, USB o RTSP),
-  abierta una sola vez por cámara.
+El prototipo organiza el procesamiento en seis componentes, cada uno con una
+responsabilidad única (Figura~\ref{fig:arquitectura}). Todo se ejecuta en el equipo local: el
+servidor solo acepta conexiones del propio equipo y ningún fotograma sale de él.
 
-  \item \textbf{Detección.} Un detector intercambiable (HOG, P2PNet o YOLO11n) produce
-  posiciones con confianza asociada; la elección es explícita del operador porque
-  ninguno de los tres es adecuado para todos los casos.
+\begin{figure}[H]
+\centering
+\resizebox{\anchofigura}{!}{%
+\begin{tikzpicture}[
+  comp/.style={draw=black,thick,rounded corners=2pt,align=center,font=\small,
+               minimum width=7.6cm,minimum height=1.25cm,inner sep=4pt},
+  dato/.style={draw=black,dashed,rounded corners=2pt,align=center,font=\small,
+               minimum width=4.6cm,minimum height=1.1cm,inner sep=4pt},
+  flecha/.style={-{Stealth[length=2.2mm]},thick}]
+  \node[comp] (a) at (0,0) {\textbf{1. Adquisición}\\archivo de video, cámara USB o flujo de red, por cámara};
+  \node[comp,below=0.55cm of a] (d) {\textbf{2. Detección}\\YOLO11 (variante según hardware) y filtros de\\zona útil, tamaño relativo e inmovilidad};
+  \node[comp,below=0.55cm of d] (s) {\textbf{3. Seguimiento por cámara}\\ByteTrack en dos etapas sobre el punto de los pies,\\con caja predicha y firma de color del torso};
+  \node[comp,below=0.55cm of s] (c) {\textbf{4. Calibración y proyección}\\homografía por cámara hacia el plano (opcional)};
+  \node[comp,below=0.55cm of c] (i) {\textbf{5. Identidad entre cámaras}\\vector OSNet de cuerpo entero, tramos, compuerta de\\tiempo y plano, reagrupación al cerrar la sesión};
+  \node[comp,below=0.55cm of i] (p) {\textbf{6. Persistencia, analítica y presentación}\\conteos, alertas, reportes y consola web};
+  \node[dato,right=1.0cm of i] (m) {Memoria de apariencia\\(base local, 24 h por defecto)};
+  \node[dato,right=1.0cm of p] (g) {Grabación de la sesión\\(identificadores y posiciones)};
+  \foreach \x/\y in {a/d,d/s,s/c,c/i,i/p} { \draw[flecha] (\x) -- (\y); }
+  \draw[flecha,{Stealth[length=2.2mm]}-{Stealth[length=2.2mm]}] (i) -- (m);
+  \draw[flecha] (p) -- (g);
+\end{tikzpicture}}
+\caption{Arquitectura del prototipo AeroTrack. Los recuadros discontinuos son los datos por
+persona que el sistema conserva en el equipo.}
+\label{fig:arquitectura}
+\end{figure}
 
-  \item \textbf{Seguimiento.} La variante mono-cámara por puntos adapta ByteTrack con
-  Kalman de velocidad constante y asignación húngara en dos etapas, usando distancia
-  euclidiana como costo. La variante de cajas usa ByteTrack sin modificar sobre
-  YOLO11n. Un componente complementario de conteo denso (P2PNet por ROI) opera sin
-  identidad.
+El primer componente es la adquisición, que lee cada fuente de cámara, sea un archivo de
+video, una cámara USB o un flujo de red, y la abre una sola vez. El segundo es la detección: el
+detector YOLO11 (Jocher y Qiu, 2024) localiza personas en cada muestra con una caja y una
+confianza. La variante del detector no la elige el operador, sino el sistema según el hardware
+del equipo: nano en CPU, y pequeña o mediana con GPU. Tras la detección se aplican tres filtros
+contra falsos positivos: se descarta lo que cae fuera de la zona útil de la imagen o del área de
+trabajo del plano, las detecciones dudosas mucho más pequeñas que las personas seguras de la
+misma cámara (gorros, carteles) y los objetos que nunca se mueven y se detectan con baja
+confianza.
 
-  \item \textbf{Calibración y proyección.} Homografía por cámara, calculada con al menos
-  cuatro correspondencias suelo-plano y validada por consistencia geométrica. La
-  primera calibración del equipo, con puntos agrupados en un área pequeña, produjo
-  extrapolaciones absurdas lejos de esa zona; se corrigió con 6 a 8 puntos repartidos
-  por toda el área de interés.
+El tercero es el seguimiento dentro de cada cámara. Aplica la asociación en dos etapas de
+ByteTrack (Zhang et al., 2022) sobre el punto de los pies, que es el que la homografía puede
+proyectar, con un filtro de Kalman de velocidad constante: primero se emparejan las
+detecciones de alta confianza y después las de baja confianza, para no perder a una persona
+parcialmente ocluida. Dentro de la puerta espacial, las coincidencias se ordenan además con
+dos señales al estilo de BoT-SORT (Aharon et al., 2022): la superposición entre la caja predicha
+y la detectada, y una firma de color de la ropa calculada sobre dos franjas del torso.
 
-  \item \textbf{Fusión de identidad entre cámaras.} Como las cámaras tienen campos de
-  visión superpuestos, la fusión se basa en cercanía espacial simultánea en el plano
-  compartido, con desempate por un descriptor no biométrico (histograma de color HSV
-  del torso, más proporción alto/ancho) solo ante ambigüedad.
+El cuarto componente es la calibración y proyección: cada cámara tiene una homografía propia
+hacia el plano, calculada con al menos cuatro correspondencias entre el suelo del video y el
+plano, que se valida por consistencia geométrica antes de aceptarse. La calibración es
+opcional; sin ella la cámara cuenta y sigue personas, pero no las ubica en el plano.
 
-  \figuraPendiente{algoritmo_fusion.png}{0.9\textwidth}{6.5cm}{Algoritmo de fusión de
-  identidad entre cámaras por cercanía espacio-temporal, con desempate por
-  descriptor no biométrico.}{fig:fusion}
+El quinto es el motor de identidad entre cámaras (Figura~\ref{fig:identidad}). Para cada vista
+confiable de una persona calcula un vector de apariencia OSNet (Zhou et al., 2019) de 512
+dimensiones sobre el recorte de cuerpo entero, con las partes tapadas por otra persona
+rellenadas de gris, y lo acumula en el tramo continuo de seguimiento al que pertenece. Una
+persona lleva un identificador provisional hasta reunir suficientes vistas y solo entonces recibe
+un identificador confirmado, que es el único que cuenta en los conteos. La unión entre cámaras
+exige a la vez parecido de apariencia y coherencia de tiempo y, si hay calibración, de posición
+en el plano, y solo se intenta entre cámaras que el operador declaró relacionadas y cuyos relojes
+declaró sincronizados; ante una candidata ambigua, la asociación se marca como incierta en
+lugar de forzarse. Con la memoria de apariencia activa, que es la configuración por defecto, el
+motor compara además cada identidad nueva con todas las personas guardadas en una base
+de datos local del proyecto durante el plazo de retención (24 horas por defecto, hasta 168), de
+modo que reconoce a la misma persona en sesiones y días posteriores. Al cerrar la sesión,
+reagrupa los tramos con la grabación completa a la vista y renumera a las personas de 1 a N.
 
-  \item \textbf{Persistencia, analítica y presentación.} Estado de sesión agregado en
-  SQLite, expuesto por la consola web AeroTrack.
-\end{enumerate}
+\begin{figure}[H]
+\centering
+\resizebox{\anchofigura}{!}{%
+\begin{tikzpicture}[
+  paso/.style={draw=black,thick,rounded corners=2pt,align=center,font=\small,
+               minimum width=6.4cm,minimum height=1.0cm,inner sep=3pt},
+  decision/.style={draw=black,thick,diamond,aspect=2.6,align=center,font=\small,inner sep=1pt},
+  fin/.style={draw=black,thick,rounded corners=6pt,align=center,font=\small,
+              minimum width=3.6cm,minimum height=0.9cm,inner sep=3pt},
+  flecha/.style={-{Stealth[length=2.2mm]},thick}]
+  \node[paso] (n1) at (0,0) {Vista confiable de una persona seguida\\(confianza, altura, borde, oclusión)};
+  \node[paso,below=0.5cm of n1] (n2) {Vector OSNet de cuerpo entero (512 dimensiones)\\y prototipo del tramo de seguimiento};
+  \node[decision,below=0.5cm of n2] (d1) {¿Vistas suficientes\\para confirmar?};
+  \node[fin,left=1.2cm of d1] (f0) {Identificador\\provisional};
+  \node[decision,below=0.6cm of d1] (d2) {¿Coincide con una\\persona guardada?};
+  \node[fin,right=1.2cm of d2] (f1) {Recupera su ID\\(reidentificada)};
+  \node[decision,below=0.6cm of d2] (d3) {¿Candidata en cámara\\relacionada, coherente en\\apariencia, tiempo y plano?};
+  \node[fin,left=1.2cm of d3] (f3) {ID nuevo\\(local)};
+  \node[decision,below=0.6cm of d3] (d4) {¿Es inequívoca?};
+  \node[fin,right=1.2cm of d4] (f2) {Reutiliza su ID\\(estimada)};
+  \node[fin,left=1.2cm of d4] (f4) {No fuerza la unión\\(incierta)};
+  \draw[flecha] (n1) -- (n2);
+  \draw[flecha] (n2) -- (d1);
+  \draw[flecha] (d1) -- node[above,font=\small]{no} (f0);
+  \draw[flecha] (d1) -- node[right,font=\small]{sí} (d2);
+  \draw[flecha] (d2) -- node[above,font=\small]{sí} (f1);
+  \draw[flecha] (d2) -- node[right,font=\small]{no} (d3);
+  \draw[flecha] (d3) -- node[above,font=\small]{no} (f3);
+  \draw[flecha] (d3) -- node[right,font=\small]{sí} (d4);
+  \draw[flecha] (d4) -- node[above,font=\small]{sí} (f2);
+  \draw[flecha] (d4) -- node[above,font=\small]{no} (f4);
+  \node[font=\small\itshape,align=center,below=0.5cm of d4]
+    {La consulta a personas guardadas solo ocurre con la memoria de apariencia activa,\\que es la configuración por defecto (RNF-01 no conforme).};
+\end{tikzpicture}}
+\caption{Decisión de identidad de una persona en el motor de identidad entre cámaras.}
+\label{fig:identidad}
+\end{figure}
+
+El sexto componente reúne persistencia, analítica y presentación. Calcula la ocupación por
+zona, el flujo por los accesos y las alertas de aglomeración a partir de las personas
+confirmadas, y lo expone en la consola, que ofrece configuración, plano en vivo, video por
+cámara, alertas y reportes. No se limita a mantener un estado agregado en memoria: guarda en
+el equipo una grabación de cada sesión con, por muestra y por persona, el identificador, la caja,
+la posición en el plano y su trayectoria reciente, sin plazo de retención automático, y a partir de
+esas grabaciones calcula las métricas comerciales por negocio. No guarda fotogramas de las
+cámaras en vivo ni vectores de apariencia en la grabación. Las consecuencias de esa
+persistencia se examinan en el Anexo~\ref{anx:marco}, apartado B.9.
+
+\subsection{Gestión de usuarios y roles}
+\label{subsec:diseno-usuarios}
+
+El acceso a la consola requiere usuario y contraseña. En la primera ejecución el sistema pide
+crear un primer usuario (Figura~\ref{fig:primer-usuario}), que queda con el rol de operador y
+puede dar de alta a los demás. La contraseña debe tener al menos seis caracteres y se guarda
+en el equipo como resumen criptográfico con sal propia, nunca en texto plano.
+
+\figura{aerotrack-01-primer-usuario.png}
+  {Creación del primer usuario en la primera ejecución de la consola.}
+  {fig:primer-usuario}
+
+Una vez dentro, la vista general muestra en la cabecera el proyecto activo junto al usuario y su
+rol, y organiza la consola en pestañas: vista general, alertas, videos y resultados, reportes y
+configuración (Figura~\ref{fig:vista-general}). Desde esta vista se filtra por nivel, cámara, zona
+de imagen y rendimiento, y se inicia el monitoreo sobre el plano del nivel. En la captura los
+contadores de cámaras seleccionadas, entradas, salidas y tiempo de análisis están en cero
+porque el proyecto aún no tiene cámaras configuradas.
+
+\figura{aerotrack-02-vista-general.png}
+  {Vista general de la consola, con el proyecto activo en la cabecera y el plano del nivel 3.}
+  {fig:vista-general}
+
+El sistema distingue dos roles (Figura~\ref{fig:usuarios}). El operador configura cámaras y
+plano; el administrador consulta resultados y ajusta los umbrales de alerta, sin acceso a la
+configuración. Los roles se aplican en el servidor y no solo en la interfaz. El panel de usuarios
+lista las cuentas existentes con su rol, permite eliminarlas y permite crear otras indicando
+nombre, contraseña y rol.
+
+\figura{aerotrack-03-usuarios.png}
+  {Panel de usuarios del sistema y formulario de alta con selección de rol.}
+  {fig:usuarios}
+
+\subsection{Gestión de proyectos}
+\label{subsec:diseno-proyectos}
+
+Un proyecto representa un espacio monitoreado, por ejemplo un nivel de un terminal. Cada
+proyecto guarda por separado su propio plano, sus cámaras, su calibración, sus incidentes y su
+memoria de apariencia, de modo que la configuración y los datos de un espacio no se mezclan
+con los de otro. Al entrar en la configuración, la consola ofrece dos acciones: crear un proyecto
+nuevo, que conduce al asistente descrito en el apartado~\ref{subsec:diseno-asistente}, o añadir
+una cámara al proyecto abierto (Figura~\ref{fig:crear-proyecto}). Para crear el proyecto basta
+con darle un nombre.
+
+\figura{aerotrack-04-crear-proyecto.png}
+  {Opciones para crear un proyecto nuevo o añadir una cámara al proyecto abierto.}
+  {fig:crear-proyecto}
+
+Los proyectos guardados se listan con su nombre, el espacio al que corresponden, el número
+de cámaras y de planos, el momento de la última edición y su estado
+(Figura~\ref{fig:proyectos-guardados}). En la captura figuran dos proyectos, ambos marcados
+como incompletos: el proyecto principal, sobre el nivel 3 del aeropuerto y con cuatro planos, y
+el proyecto Terminal~A, Nivel~1, con un plano. Desde la lista se abre un proyecto, se retoma su
+configuración en el punto en que quedó, se renombra directamente sobre su tarjeta
+(Figura~\ref{fig:renombrar}) o se elimina.
+
+\figura{aerotrack-05-proyectos-guardados.png}
+  {Lista de proyectos guardados, cada uno con sus cámaras, planos y estado.}
+  {fig:proyectos-guardados}
+
+\figura{aerotrack-06-renombrar-proyecto.png}
+  {Cambio de nombre de un proyecto sobre su propia tarjeta.}
+  {fig:renombrar}
+
+Al entrar en la consola, una pantalla pregunta en qué proyecto se quiere trabajar, muestra para
+cada uno su espacio, su número de cámaras y el estado de su configuración, y señala el último
+abierto (Figura~\ref{fig:selector-proyecto}). Así el usuario elige de forma expresa el espacio en
+el que va a trabajar y no mezcla datos de dos lugares distintos.
+
+\figura{aerotrack-07-selector-proyecto.png}
+  {Selección del proyecto de trabajo al entrar en la consola.}
+  {fig:selector-proyecto}
+
+\subsection{Asistente de configuración}
+\label{subsec:diseno-asistente}
+
+La configuración de un proyecto se completa con un asistente. Las capturas de este apartado
+corresponden a su versión de ocho pasos: proyecto, plano, conexión, prueba, ubicación,
+calibración, zonas y alertas, y revisión. Una barra superior muestra los pasos, marca los
+completados y lleva la cuenta de cuántos están listos, y una indicación en la cabecera confirma
+que el avance queda guardado, de modo que un proyecto incompleto puede retomarse desde la
+lista de proyectos. Las capturas de los pasos 4, 6 y 8 se tomaron sin video, porque no se
+dispone de grabaciones del terminal.
+
+La versión vigente del asistente conserva las mismas tareas, pero las reúne en cinco etapas. La
+Tabla~\ref{tab:asistente} muestra la correspondencia, y los pasos se describen a continuación
+en el orden de las capturas.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Correspondencia entre los pasos de las capturas y las etapas del asistente vigente.}
+\label{tab:asistente}
+\begin{tabular}{@{}L{5.2cm}L{9.4cm}@{}}
+\toprule
+\textbf{Etapa vigente} & \textbf{Pasos de las capturas que reúne} \\
+\midrule
+Proyecto & Paso 1 (datos del espacio y tipo de fuente) y paso 2 (plano) \\
+Cámaras & Paso 3 (cámaras, fuente, zona útil y accesos) y paso 4 (prueba y vista en vivo) \\
+Homografía y cámaras relacionadas & Paso 5 (ubicación) y paso 6 (calibración, ahora opcional), más la relación entre cámaras y la sincronización de sus relojes \\
+Contexto comercial & Paso 7 (zonas, negocios y parámetros de aviso de aglomeración) \\
+Validación & Paso 8 (revisión) \\
+\bottomrule
+\end{tabular}
+\end{table}
+\verificar{ubicación de la cámara sobre el plano (paso 5 de las capturas) dentro de la etapa de
+homografía del asistente vigente: inferida de la estructura de la consola, sin captura nueva que
+la muestre.}
+
+\subsubsection*{Paso 1: proyecto}
+
+Se identifica el espacio con el nombre del aeropuerto o proyecto y el del terminal y nivel, y se
+elige el tipo de fuente: videos grabados, para analizar grabaciones y consultar resultados por
+periodo, o cámaras en vivo, conectadas por USB, RTSP o IP (Figura~\ref{fig:paso1}). Una nota
+lateral recuerda que el análisis es de presencia y recorridos, sin reconocimiento facial.
+
+\figura{aerotrack-08-paso1-proyecto.png}
+  {Paso 1 del asistente: datos del espacio y tipo de fuente.}
+  {fig:paso1}
+
+\subsubsection*{Paso 2: plano}
+
+Se define el plano del espacio: se elige uno de los planos del aeropuerto, se importa una
+imagen o un PDF, o se dibuja el espacio con rectángulos, polígonos y líneas. El plano se
+acompaña de su ancho y su alto en metros, y admite marcar un área de trabajo como
+referencia opcional (Figura~\ref{fig:paso2}).
+
+\figura{aerotrack-09-paso2-plano.png}
+  {Paso 2 del asistente: plano del nivel y sus dimensiones en metros.}
+  {fig:paso2}
+
+\subsubsection*{Paso 3: conexión}
+
+Se añaden las cámaras del proyecto (Figura~\ref{fig:paso3}). Para cada una se indica el plano
+asociado, el nombre visible en el mapa, la ubicación, la orientación y la fuente, con la ruta del
+video o la dirección de la cámara, y se fijan el umbral de alerta en personas y el tiempo de
+concentración sostenida (Figura~\ref{fig:paso3-camara}). En el mismo paso se marca la zona
+útil de la imagen, que deja fuera reflejos, otras plantas y áreas que no deben analizarse, y, si la
+cámara ve una puerta, un acceso formado por un área exterior y otra interior, entre las que se
+cuenta el paso de personas (Figura~\ref{fig:paso3-zona}).
+
+\figura{aerotrack-10-paso3-conexion.png}
+  {Paso 3 del asistente: lista de cámaras del proyecto, todavía vacía.}
+  {fig:paso3}
+
+\figura{aerotrack-11-paso3-camara.png}
+  {Paso 3 del asistente: datos de la cámara, fuente y umbrales de alerta.}
+  {fig:paso3-camara}
+
+\figura{aerotrack-12-paso3-zona-util.png}
+  {Paso 3 del asistente: zona útil de la imagen y acceso de un local.}
+  {fig:paso3-zona}
+
+\subsubsection*{Paso 4: prueba}
+
+Se comprueba la cámara en movimiento para revisar encuadre, luz y retardo. El panel muestra
+el estado de la fuente, su resolución, su frecuencia de cuadros y si está calibrada, y permite
+iniciar una prueba de seguimiento en modo laboratorio que presenta el video procesado con
+identificadores temporales (Figura~\ref{fig:paso4}).
+
+\figura{aerotrack-13-paso4-prueba.png}
+  {Paso 4 del asistente: prueba de la cámara, con el visor sin señal.}
+  {fig:paso4}
+
+\subsubsection*{Paso 5: ubicación}
+
+Se coloca la cámara sobre el plano en el punto donde está instalada y se orienta hacia donde
+apunta, con su dirección, alcance, altura y ancho de cobertura (Figura~\ref{fig:paso5}). Esa
+cobertura es orientativa: la precisión la aporta la calibración del paso siguiente.
+
+\figura{aerotrack-14-paso5-ubicacion.png}
+  {Paso 5 del asistente: posición y cobertura de la cámara sobre el plano.}
+  {fig:paso5}
+
+\subsubsection*{Paso 6: calibración}
+
+Se relaciona el suelo del video con el plano marcando puntos de referencia, como esquinas o
+cruces de baldosas, primero en la imagen y después en el mapa (Figura~\ref{fig:paso6}). Se
+requieren al menos cuatro puntos repartidos; con cinco o más, cada referencia se comprueba
+además dejándola fuera del ajuste. En la versión vigente la calibración es opcional, y la misma
+etapa recoge qué cámaras están relacionadas y si sus relojes están sincronizados, condición sin
+la cual el sistema no asocia personas entre cámaras.
+
+\figura{aerotrack-15-paso6-calibracion.png}
+  {Paso 6 del asistente: calibración del suelo del video con el plano.}
+  {fig:paso6}
+
+\subsubsection*{Paso 7: zonas y alertas}
+
+Se dibujan sobre el plano las zonas de interés con polígonos, rectángulos o círculos, y se define
+cuándo avisar de una aglomeración mediante un radio en metros, un número mínimo de
+personas y un tiempo de permanencia (Figura~\ref{fig:paso7}). La pantalla advierte que una fila y
+una aglomeración pueden parecerse geométricamente, por lo que los límites deben ajustarse al
+uso de cada zona. En la versión vigente esta etapa recoge además los negocios del piso, que
+alimentan el panel comercial.
+
+\figura{aerotrack-16-paso7-zonas.png}
+  {Paso 7 del asistente: trazado de una zona y parámetros de aviso de aglomeración.}
+  {fig:paso7}
+
+\subsubsection*{Paso 8: revisión}
+
+Se revisa el proyecto antes de abrir el monitoreo: una lista indica qué está preparado y qué
+sigue pendiente, y un resumen muestra el número de cámaras, zonas dibujadas y fuentes
+probadas, junto con la escala (Figura~\ref{fig:paso8}). En la captura, con la cámara sin probar ni
+calibrar, la opción de guardar y abrir el monitoreo aparece desactivada y queda disponible la
+de continuar las pruebas en laboratorio. La pantalla aclara que una verificación completada no
+sustituye la validación de precisión.
+
+\figura{aerotrack-17-paso8-revision.png}
+  {Paso 8 del asistente: revisión del proyecto antes de abrir el monitoreo.}
+  {fig:paso8}
+
+\subsection{Alertas de seguridad con aviso por correo}
+\label{subsec:diseno-alertas}
+
+La vista de alertas reúne lo que necesita el personal de seguridad para atender una
+aglomeración (Figura~\ref{fig:alertas-correo}). El apartado \enquote{Cuándo avisar} fija los
+umbrales que definen una aglomeración: el número mínimo de personas, la permanencia en
+segundos y el radio en metros; en la captura, 4 personas, 3 segundos y 1,5 metros. Estos
+umbrales se cambian desde la misma vista, sin entrar en la configuración, y son el único ajuste
+que también puede hacer el administrador.
+
+El panel \enquote{Avisar por correo}, desplegado en la captura y todavía desactivado, pide la
+cuenta que envía, su contraseña de aplicación y los correos que reciben el aviso, separados por
+coma, hasta un máximo de veinte, y permite enviar un correo de prueba. Una nota aclara que el
+servicio de correo no acepta la contraseña normal de la cuenta, sino una contraseña de
+aplicación generada con la verificación en dos pasos. Debajo, tres contadores muestran las
+alertas activas, el total de la sesión y los incidentes sin revisar, y la bitácora de incidentes
+conserva cada caso aunque la sesión termine, para que el personal lo marque como revisado,
+falsa alarma o resuelto. En la captura la bitácora aparece sin registros porque no se han
+procesado grabaciones del terminal.
+
+Con el aviso activado, el sistema envía un correo por cada incidente nuevo de aglomeración,
+con el lugar, la cámara y el motivo del aviso, y la advertencia de que requiere comprobación
+humana; un aviso ya enviado no se reenvía y una misma zona no genera más de un correo cada
+120 segundos. La contraseña se guarda solo en el equipo, fuera de los archivos del proyecto: la
+interfaz nunca la muestra de vuelta y no se copia al duplicar un proyecto.
+
+\figura{aerotrack-18-alertas-correo.png}
+  {Vista de alertas: umbrales de aglomeración, aviso por correo desplegado, contadores y
+   bitácora de incidentes.}
+  {fig:alertas-correo}

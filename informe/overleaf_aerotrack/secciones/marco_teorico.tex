@@ -1,9 +1,13 @@
 \section{Marco Teórico}
 \label{sec:marco-teorico}
 
-El marco teórico revisa cuatro trabajos que sostienen, en conjunto, las decisiones técnicas
-del prototipo: dos resuelven el problema de cuántos y dónde (conteo y localización), y dos
-resuelven el problema de quién sigue siendo quién a lo largo del tiempo (seguimiento).
+El marco teórico revisa dos grupos de trabajos. El primero (CSRNet, P2PNet y P2R) aborda el
+conteo y la localización de personas en escenas congestionadas; se estudió como antecedente
+porque de él se desprende la discusión sobre la granularidad de la salida, que es la decisión de
+mayor consecuencia normativa del proyecto. El prototipo final no usa ninguno de esos tres
+modelos: detecta personas con YOLO. El segundo grupo reúne las técnicas que el prototipo sí
+implementa: el detector YOLO, el seguimiento multiobjeto de ByteTrack y BoT-SORT, y el
+descriptor de apariencia OSNet para la reidentificación de personas.
 
 \subsection{CSRNet: redes convolucionales dilatadas para conteo de multitudes (Li, Zhang
 y Chen, 2018)}
@@ -26,6 +30,10 @@ relevante porque las cámaras de un terminal no comparten resolución, altura ni
 queda por detrás de la mayoría de métodos salvo MCNN en MAE: su ventaja se concentra en
 alta densidad, y buena parte de la jornada de un terminal aéreo transcurre en baja densidad.
 
+\textbf{Papel en el proyecto.} Antecedente. Representa el extremo más protector de la
+granularidad de salida (una superficie agregada sin posiciones individuales), y sirve de
+referencia para el examen de proporcionalidad del Anexo~\ref{anx:marco}.
+
 \subsection{P2PNet: localización pura por puntos (Song et al., 2021)}
 \label{subsec:p2pnet}
 
@@ -46,6 +54,11 @@ aglomeraciones.
 \textbf{Limitación reconocida por los autores.} En UCF-QNRF su precisión no es tan
 competitiva frente a ADSCNet; en NWPU-Crowd su desempeño es inferior por depender de un
 único mapa de características de una sola escala.
+
+\textbf{Papel en el proyecto.} Antecedente. Una versión temprana del prototipo lo empleó para
+localizar cabezas, pero se retiró: localiza cabezas y no pies, lo que impide proyectar la posición
+al plano sin un error no validado, y su inferencia en CPU resultó demasiado lenta para la
+operación. El prototipo vigente no lo usa.
 
 \subsection{P2R: pérdida punto a región para conteo semi-supervisado (Lin, Zhao y Chan,
 2025)}
@@ -68,31 +81,110 @@ el volumen de imágenes que deberían anotarse manualmente.
 multitud, la norma y no la excepción en un terminal aéreo; los autores documentan
 explícitamente la brecha de dominio.
 
-\subsection{ByteTrack: seguimiento multiobjeto asociando toda caja de detección (Zhang
-et al., 2022)}
+\textbf{Papel en el proyecto.} Antecedente. Su documentación de la brecha de dominio es la
+base de la restricción técnica principal de este informe (Sección~\ref{subsec:restricciones}).
+
+\subsection{YOLO: detección de objetos en una sola pasada (Redmon et al., 2016; Jocher y Qiu, 2024)}
+\label{subsec:yolo}
+
+\textbf{Qué propone.} YOLO formula la detección como un único problema de regresión: una red
+convolucional recorre la imagen una sola vez y predice a la vez las cajas de los objetos y su clase,
+en lugar de evaluar por separado miles de regiones candidatas (Redmon et al., 2016). La familia
+ha evolucionado desde entonces; el prototipo usa YOLO11, distribuido por Ultralytics con
+pesos preentrenados sobre el conjunto COCO en variantes de distinto tamaño (Jocher y Qiu,
+2024).
+
+\textbf{Por qué aplica al caso LAP.} Entrega por cada persona una caja completa, de cuyo borde
+inferior se obtiene el punto de los pies, que es el que la homografía puede proyectar al suelo
+del plano. Sus variantes permiten ajustar el costo al equipo: la variante nano en CPU y las
+variantes pequeña o mediana con GPU.
+
+\textbf{Limitación.} Está preentrenado sobre escenas generales, no sobre terminales aéreos: en
+cámaras elevadas las personas ocupan pocos píxeles y la detección empeora, por lo que el
+prototipo sube la resolución de entrada y baja el umbral de confianza en ese caso, a costa de
+más falsos positivos que luego filtra.
+
+\textbf{Papel en el proyecto.} Detector único del prototipo vigente.
+
+\subsection{ByteTrack y BoT-SORT: seguimiento multiobjeto (Zhang et al., 2022; Aharon et al., 2022)}
 \label{subsec:bytetrack}
 
-\textbf{Qué propone.} Asociar todas las cajas de detección, no solo las de alta confianza:
-para las de baja puntuación, aprovecha su similitud con las trayectorias activas para recuperar
-objetos reales y descartar detecciones de fondo, combinado con un filtro de Kalman.
+\textbf{Qué proponen.} ByteTrack asocia todas las cajas de detección, no solo las de alta
+confianza: primero empareja las detecciones seguras con las trayectorias activas y después usa
+las de baja puntuación para recuperar personas parcialmente ocluidas, con un filtro de Kalman
+que predice la posición entre cuadros (Zhang et al., 2022). BoT-SORT añade a esa base señales
+de apariencia y de movimiento de la cámara para hacer más robusta la asociación (Aharon et al.,
+2022).
 
-\textbf{Resultados.} Desempeño de referencia en los benchmarks MOT20, HiEve y
-BDD100K.
+\textbf{Resultados.} ByteTrack obtiene desempeño de referencia en MOT20 (escenas densas),
+HiEve y BDD100K, benchmarks que penalizan la fragmentación de trayectorias.
 
-\textbf{Por qué aplica al caso LAP.} El prototipo adapta esta lógica a puntos en el
-seguimiento mono-cámara (Kalman de velocidad constante más asignación húngara en dos
-etapas), y la extensión de monitoreo integrado usa ByteTrack sin modificar sobre cajas de un
-detector YOLO11n.
+\textbf{Por qué aplica al caso LAP.} El prototipo aplica la asociación en dos etapas de ByteTrack
+sobre el punto de los pies, con un filtro de Kalman de velocidad constante, y ordena las
+coincidencias válidas con dos señales al estilo de BoT-SORT: la superposición de la caja
+predicha y una firma de color del torso. La puerta espacial sigue siendo obligatoria para evitar
+intercambios entre personas cercanas.
+
+\textbf{Limitación reconocida por los autores.} El filtro de Kalman asume movimiento lineal
+entre cuadros consecutivos; ante oclusiones largas el error se acumula y la identidad se
+fragmenta.
+
+\textbf{Papel en el proyecto.} Seguimiento de cada persona dentro de una cámara.
+
+\subsection{OSNet: características a escala completa para reidentificación de personas (Zhou et al., 2019)}
+\label{subsec:osnet}
+
+\textbf{Qué propone.} Una red convolucional ligera, de unos 2,2 millones de parámetros, diseñada
+para la reidentificación de personas: reconocer a la misma persona en imágenes tomadas por
+cámaras distintas. Sus bloques combinan características de varias escalas espaciales, desde
+detalles locales como el logotipo de una prenda hasta la silueta completa, y producen un
+vector de apariencia que se compara mediante similitud coseno (Zhou et al., 2019).
+
+\textbf{Por qué aplica al caso LAP.} Es lo bastante pequeña para ejecutarse en CPU junto al
+detector, y permite asociar entre cámaras a personas cuando la sola proximidad en el plano no
+basta para decidir.
+
+\textbf{Limitación.} El vector describe ropa, silueta y textura: personas con ropa parecida o con
+uniforme se confunden, y una persona que cambia de prenda deja de reconocerse. Además, y
+esto es lo decisivo para el análisis normativo, un vector construido para volver a reconocer a un
+individuo es una característica extraída de su cuerpo cuyo propósito es individualizarlo
+(Anexo~\ref{anx:marco}, apartado B.9).
+
+\textbf{Papel en el proyecto.} Descriptor de apariencia obligatorio del motor de identidad entre
+cámaras.
 
 \subsection{Síntesis de antecedentes}
 \label{subsec:sintesis-antecedentes}
 
-CSRNet resuelve cuántos con una superficie de densidad de la que no puede extraerse
-dónde. P2PNet resuelve dónde eliminando la representación intermedia, pero paga ese avance
-con un costo de anotación creciente. P2R resuelve ese costo llevando el enfoque a régimen
-semi-supervisado. ByteTrack resuelve quién sigue siendo quién entre cuadros consecutivos sin
-descartar evidencia débil. De la lectura conjunta se derivan tres criterios que gobiernan el
-diseño del sistema: la granularidad de la salida es una decisión de cumplimiento normativo y
-no solo de producto; la eficiencia de etiquetado de P2R es, además de una ventaja técnica, un
-argumento de minimización de datos; y ninguna cifra de la literatura revisada es transferible al
-Aeropuerto Jorge Chávez sin una validación local que hoy no se ha realizado.
+\begin{table}[H]
+\centering
+\small
+\caption{Síntesis de los trabajos revisados y su papel en el prototipo.}
+\label{tab:sintesis-antecedentes}
+\begin{tabular}{@{}L{2.4cm}L{2.6cm}L{4.4cm}L{4.4cm}@{}}
+\toprule
+\textbf{Trabajo} & \textbf{Año y foro} & \textbf{Qué resuelve} & \textbf{Papel en el prototipo} \\
+\midrule
+CSRNet & CVPR 2018 & Conteo por mapa de densidad agregado & Antecedente; referencia de granularidad mínima \\
+P2PNet & ICCV 2021 & Localización individual por puntos & Antecedente; retirado del prototipo \\
+P2R & CVPR 2025 & Conteo semi-supervisado con pocas etiquetas & Antecedente; evidencia de brecha de dominio \\
+YOLO & CVPR 2016; YOLO11 en 2024 & Detección de objetos en una pasada & Detector de personas \\
+ByteTrack y BoT-SORT & ECCV 2022; 2022 & Asociación de detecciones en dos etapas & Seguimiento por cámara \\
+OSNet & ICCV 2019 & Vector de apariencia para reidentificación & Asociación entre cámaras y memoria de apariencia \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+CSRNet resuelve cuántos con una superficie de densidad de la que no puede extraerse dónde.
+P2PNet resuelve dónde eliminando la representación intermedia, y P2R abarata su anotación.
+El prototipo, sin embargo, necesitaba algo que ninguno de los tres da: seguir a cada persona y
+no contarla dos veces cuando aparece en dos cámaras. Por eso adoptó un detector de cajas
+(YOLO), un seguimiento en dos etapas (ByteTrack con señales de BoT-SORT) y un descriptor de
+apariencia (OSNet). De la lectura conjunta se derivan tres criterios que gobiernan el resto del
+informe. El primero es que la granularidad de la salida es una decisión de cumplimiento
+normativo y no solo de producto, y el prototipo eligió la más granular de las disponibles, lo que
+obliga a justificarla y a acotarla. El segundo es que la reidentificación por apariencia convierte
+esa granularidad en un identificador que puede persistir, y que su retención es la variable que
+decide si el tratamiento se mantiene dentro de la sesión o se extiende en el tiempo. El tercero es
+que ninguna cifra de la literatura revisada es transferible al Aeropuerto Jorge Chávez sin una
+validación local que hoy no se ha realizado.

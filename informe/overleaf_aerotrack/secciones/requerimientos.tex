@@ -1,334 +1,541 @@
+% Ficha de caso de uso:
+%   \fichacu{ID}{Nombre}{Actor}{Precondicion}{items del flujo}{Postcondicion}{Excepcion o nota}
+\newcommand{\fichacu}[7]{%
+  \subsubsection*{#1. #2}
+  \noindent\textbf{Actor:} #3\par
+  \noindent\textbf{Precondición:} #4\par
+  \noindent\textbf{Flujo principal:}
+  \begin{enumerate}[leftmargin=2.2em,itemsep=0.1em,topsep=0.2em]
+  #5
+  \end{enumerate}
+  \noindent\textbf{Postcondición:} #6\par
+  \if\relax\detokenize{#7}\relax\else\noindent\textbf{Excepción o nota:} #7\par\fi
+  \medskip}
+
 \section{Especificación de Requerimientos}
 \label{sec:requerimientos}
 
-\subsection{Casos de Uso del Sistema}
+Este apartado describe el prototipo tal como está implementado, no una versión aspiracional.
+Adopta la numeración de la hoja maestra de requerimientos del equipo: dieciocho casos de uso
+(CU-01 a CU-18), dieciocho requisitos funcionales (RF-01 a RF-18) y ocho requisitos no
+funcionales (RNF-01 a RNF-08), relacionados en la matriz de trazabilidad del
+apartado~\ref{subsec:trazabilidad}. El estado de cada requisito se contrastó con el código del
+prototipo vigente. Donde la hoja maestra describía una versión anterior del sistema (el detector
+seleccionable en CU-03 y RF-03, el desempate por color en CU-04, la cifra de inferencia de
+RNF-06 y el estado de RNF-01), este informe recoge el comportamiento actual. La
+reidentificación por apariencia y la asociación entre cámaras se documentan en CU-04 y RF-04.
+
+\subsection{Requerimientos funcionales}
+\label{subsec:rf}
+
+\subsubsection{Casos de uso del sistema}
 \label{subsec:casos-uso-tabla}
 
-La numeración de casos de uso reproduce la del informe original: la tabla resumen no
-incluye una fila CU-09 (salta de CU-08 a CU-10), mientras que las fichas detalladas de la
-Sección~\ref{subsec:casos-uso-detalle} sí numeran un CU-09 (Consultar el Dashboard
-Ejecutivo). Se mantiene tal cual figura en la fuente.
+La Tabla~\ref{tab:casos-uso} resume los dieciocho casos de uso y la
+Figura~\ref{fig:casos-uso} los relaciona con sus actores. El caso CU-16 conserva su número en
+la hoja maestra, pero corresponde a un módulo retirado del prototipo vigente.
 
-\begin{longtable}{@{}L{1.6cm}L{3.4cm}L{2.2cm}L{4.3cm}L{4.3cm}@{}}
+{\small
+\setlength{\LTleft}{0pt}\setlength{\LTright}{0pt}
+\begin{longtable}{@{}L{1.3cm}L{6.0cm}L{3.8cm}L{2.6cm}@{}}
+\caption{Casos de uso del sistema AeroTrack.}\label{tab:casos-uso}\\
 \toprule
-\textbf{ID} & \textbf{Nombre} & \textbf{Actor} & \textbf{Flujo principal} & \textbf{Resultado / excepción} \\
+\textbf{ID} & \textbf{Caso de uso} & \textbf{Actor} & \textbf{Estado} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Caso de uso} & \textbf{Actor} & \textbf{Estado} \\
 \midrule
 \endhead
-CU-01 & Configurar el plano y las cámaras & Operador &
-  Crea un plano o importa imagen/PDF/DXF, reducido a dibujo esquemático de líneas; ubica
-  cámaras y declara vecinas &
-  El plano queda disponible para calibración \\
-CU-02 & Calibrar una cámara & Operador &
-  Marca correspondencias suelo-plano, mínimo cuatro (6 a 8 recomendadas) &
-  Calcula homografía; rechaza si es geométricamente inconsistente \\
-CU-03 & Procesar una fuente y hacer seguimiento & Operador &
-  Elige detector (HOG, P2PNet o YOLO) e inicia la sesión &
-  Con P2PNet la posición no se proyecta al plano (detecta cabezas, no pies) \\
-CU-04 & Detectar y alertar aglomeraciones (global) & Administrador &
-  Define radio, cantidad mínima y tiempo de permanencia &
-  Alerta cuando se cumplen los tres criterios de forma sostenida \\
-CU-05 & Visualizar plano en vivo y video por cámara & Operador &
-  Observa nodos, trayectorias y aglomeraciones; alterna a video real &
-  Visibilidad operativa en tiempo real \\
-CU-06 & Exportar reportes & Operador &
-  Selecciona tipo y formato &
-  Exporta en PDF, Excel, CSV o JSON, señalando origen real o sintético \\
-CU-07 & Gestionar zonas de interés (ROI) & Operador &
-  Dibuja y clasifica zonas; acepta sugerencias automáticas &
-  Zonas registradas para reglas y reportes \\
-CU-08 & Configurar reglas de aglomeración por zona & Operador &
-  Regla independiente por zona &
-  Alertas específicas por zona \\
-CU-10 & Consultar el dashboard ejecutivo & Administrador &
-  Revisa ranking de zonas y evolución temporal &
-  Información de negocio sin identificación individual \\
-CU-11 & Validar una fuente en modo laboratorio & Operador &
-  Prueba señal, resolución, calibración y seguimiento de forma aislada &
-  Cámara validada o rechazada antes de una sesión real \\
-CU-12 & Consultar la auditoría del sistema & Auditor &
-  Revisa registro de acciones del operador &
-  Trazabilidad operativa sin identidades reales \\
 \bottomrule
-\caption{Casos de uso del sistema Aerotrack.}
-\label{tab:casos-uso}
+\endlastfoot
+CU-01 & Configurar el plano y las cámaras & Operador & Implementado \\
+CU-02 & Calibrar una cámara & Operador & Implementado \\
+CU-03 & Procesar una fuente y hacer seguimiento & Operador & Implementado \\
+CU-04 & Asociar identidad entre cámaras y reidentificar personas & Sistema & Implementado \\
+CU-05 & Detectar y alertar aglomeraciones (regla global) & Operador o administrador & Implementado \\
+CU-06 & Visualizar el plano en vivo y el video por cámara & Operador o administrador & Implementado \\
+CU-07 & Exportar reportes & Operador o administrador & Implementado \\
+CU-08 & Gestionar zonas de interés & Operador & Implementado \\
+CU-09 & Configurar reglas de aglomeración por zona & Operador & Implementado \\
+CU-10 & Consultar el dashboard ejecutivo y el panel comercial & Operador o administrador & Implementado \\
+CU-11 & Validar una fuente en modo laboratorio & Operador & Implementado \\
+CU-12 & Consultar la auditoría del sistema & Operador o administrador & Implementado \\
+CU-13 & Gestionar proyectos independientes & Operador o administrador & Implementado \\
+CU-14 & Iniciar sesión según el rol & Operador o administrador & Implementado \\
+CU-15 & Revisar la cámara en vivo antes de calibrar & Operador & Implementado \\
+CU-16 & Configurar y recibir avisos de equipaje sin custodia & No aplica & Retirado \\
+CU-17 & Configurar y recibir alertas de seguridad por correo & Operador o administrador; personal de seguridad & Implementado \\
+CU-18 & Gestionar la bitácora de incidentes & Operador o administrador & Implementado \\
 \end{longtable}
+}
 
-\subsection{Fichas Detalladas de Casos de Uso}
+\begin{figure}[H]
+\centering
+\resizebox{\anchofigura}{!}{%
+\begin{tikzpicture}[
+  cu/.style={ellipse,draw=black,thick,minimum width=5.6cm,minimum height=1.05cm,
+             text width=4.5cm,align=center,font=\footnotesize,inner sep=0pt},
+  retirado/.style={cu,dashed},
+  asoc/.style={black,thin}]
+  \draw[thick] (-1.0,0.9) rectangle (13.6,-15.58);
+  \node[font=\small\bfseries,anchor=north] at (6.3,0.8) {Sistema AeroTrack};
+  \node[cu] (c01) at (2.0,-1.42) {CU-01\\Configurar plano y cámaras};
+  \node[cu] (c02) at (2.0,-3.04) {CU-02\\Calibrar una cámara};
+  \node[cu] (c03) at (2.0,-4.66) {CU-03\\Procesar fuente y seguir};
+  \node[cu] (c08) at (2.0,-6.28) {CU-08\\Gestionar zonas de interés};
+  \node[cu] (c09) at (2.0,-7.90) {CU-09\\Reglas por zona};
+  \node[cu] (c11) at (2.0,-9.52) {CU-11\\Validar en laboratorio};
+  \node[cu] (c15) at (2.0,-11.14) {CU-15\\Revisar cámara en vivo};
+  \node[cu] (c05) at (10.6,-1.42) {CU-05\\Alertar aglomeraciones};
+  \node[cu] (c06) at (10.6,-3.04) {CU-06\\Visualizar plano y video};
+  \node[cu] (c07) at (10.6,-4.66) {CU-07\\Exportar reportes};
+  \node[cu] (c10) at (10.6,-6.28) {CU-10\\Dashboard y panel comercial};
+  \node[cu] (c12) at (10.6,-7.90) {CU-12\\Consultar auditoría};
+  \node[cu] (c13) at (10.6,-9.52) {CU-13\\Gestionar proyectos};
+  \node[cu] (c14) at (10.6,-11.14) {CU-14\\Iniciar sesión por rol};
+  \node[cu] (c17) at (10.6,-12.76) {CU-17\\Alertas por correo};
+  \node[cu] (c18) at (10.6,-14.38) {CU-18\\Bitácora de incidentes};
+  \node[cu] (c04) at (2.0,-12.76) {CU-04\\Identidad y reidentificación};
+  \node[retirado] (c16) at (4.6,-14.38) {CU-16 (retirado)\\Equipaje sin custodia};
+  \begin{scope}[shift={(-2.90,-6.48)}]
+    \draw[thick] (0,0.55) circle (0.22); \draw[thick] (0,0.33)--(0,-0.35);
+    \draw[thick] (-0.35,0.1)--(0.35,0.1); \draw[thick] (0,-0.35)--(-0.3,-0.85); \draw[thick] (0,-0.35)--(0.3,-0.85);
+    \node[font=\small,below,align=center] at (0,-0.9) {Operador};
+  \end{scope}
+  \begin{scope}[shift={(15.60,-8.10)}]
+    \draw[thick] (0,0.55) circle (0.22); \draw[thick] (0,0.33)--(0,-0.35);
+    \draw[thick] (-0.35,0.1)--(0.35,0.1); \draw[thick] (0,-0.35)--(-0.3,-0.85); \draw[thick] (0,-0.35)--(0.3,-0.85);
+    \node[font=\small,below,align=center] at (0,-0.9) {Operador o\\administrador};
+  \end{scope}
+  \begin{scope}[shift={(-2.90,-13.36)}]
+    \draw[thick] (0,0.55) circle (0.22); \draw[thick] (0,0.33)--(0,-0.35);
+    \draw[thick] (-0.35,0.1)--(0.35,0.1); \draw[thick] (0,-0.35)--(-0.3,-0.85); \draw[thick] (0,-0.35)--(0.3,-0.85);
+    \node[font=\small,below,align=center] at (0,-0.9) {Sistema\\(automático)};
+  \end{scope}
+  \coordinate (op) at (-2.5,-6.38);
+  \coordinate (ad) at (15.2,-8.00);
+  \coordinate (si) at (-2.5,-13.26);
+  \foreach \id in {01,02,03,08,09,11,15} { \draw[asoc] (op) -- (c\id.west); }
+  \foreach \id in {05,06,07,10,12,13,14,17,18} { \draw[asoc] (ad) -- (c\id.east); }
+  \draw[asoc] (si) -- (c04.west);
+  \draw[asoc,dashed] (si) -- (c16.west);
+\end{tikzpicture}}
+\caption{Diagrama de casos de uso del sistema AeroTrack. La línea discontinua señala el
+módulo retirado del prototipo vigente.}
+\label{fig:casos-uso}
+\end{figure}
+
+\subsubsection{Fichas de casos de uso}
 \label{subsec:casos-uso-detalle}
 
-Cada ficha incluye el diagrama de caso de uso del informe original. Los 11 diagramas no
-se pudieron extraer del PDF fuente; el recuadro marcado \texttt{imagenes/cu-XX.png} debe
-reemplazarse por la figura correspondiente.
+\fichacu{CU-01}{Configurar el plano y las cámaras}
+  {Operador.}
+  {el servidor local está en ejecución, el usuario inició sesión con el rol de operador y hay un
+   proyecto abierto.}
+  {\item El operador elige uno de los planos del aeropuerto, crea un plano en blanco o importa
+         una imagen, un PDF o un archivo DXF.
+   \item Si importa una imagen o un PDF, recorta la región útil y el sistema la reduce a un dibujo
+         esquemático de líneas por detección de bordes, en lugar de conservar la fotografía.
+   \item Coloca cada cámara sobre el plano y define su alcance orientativo.
+   \item Declara qué cámaras están relacionadas entre sí.}
+  {el plano queda registrado con sus cámaras y disponible para la calibración (CU-02).}
+  {}
 
-\subsubsection{CU-01: Configurar el Plano y las Cámaras}
-\textbf{Actor Principal:} Operador.
+\fichacu{CU-02}{Calibrar una cámara}
+  {Operador.}
+  {la cámara tiene una fuente de video válida.}
+  {\item El operador marca un punto de referencia del suelo en el video y su correspondencia en
+         el plano.
+   \item Repite la marcación un mínimo de cuatro veces; se recomiendan de seis a ocho puntos
+         repartidos por toda el área de interés.
+   \item El sistema calcula la homografía y, con cinco o más puntos, comprueba cada referencia
+         dejándola fuera del ajuste.}
+  {la cámara queda habilitada para proyectar posiciones al plano compartido.}
+  {el sistema rechaza la calibración si hay referencias repetidas, casi alineadas o
+   geométricamente inconsistentes. La calibración es opcional: sin ella la cámara detecta y sigue
+   personas en la imagen, pero no las ubica en el plano ni usa la posición para asociarlas entre
+   cámaras.}
 
-\textbf{Precondiciones:} El servidor local está en ejecución.
+\fichacu{CU-03}{Procesar una fuente y hacer seguimiento}
+  {Operador.}
+  {la cámara tiene una fuente configurada (archivo de video, cámara USB o flujo de red) y su zona
+   útil marcada; los pesos del detector YOLO y el modelo OSNet están instalados en el equipo.}
+  {\item El operador inicia la sesión de monitoreo y elige el modo de rendimiento (automático,
+         preciso, equilibrado o rápido).
+   \item El sistema elige la variante de YOLO11 según el hardware del equipo y detecta personas en
+         cada muestra de video.
+   \item Descarta las detecciones fuera de la zona útil, las dudosas mucho más pequeñas que las
+         personas seguras de la misma cámara y los objetos inmóviles de baja confianza.
+   \item Sigue a cada persona con asociación en dos etapas sobre el punto de los pies, reforzada
+         por la superposición de la caja predicha y una firma de color del torso, y le asigna un
+         identificador local estable dentro de esa cámara.
+   \item Si la cámara está calibrada, proyecta el punto de los pies al plano.}
+  {cada persona detectada tiene un identificador local en esa cámara y, si la cámara está
+   calibrada, una posición en el plano; las vistas confiables pasan al motor de identidad
+   (CU-04).}
+  {si falta el modelo OSNet, la sesión no se inicia. Si faltan los pesos de la variante de YOLO
+   recomendada, el sistema usa la mejor variante disponible en el equipo y lo advierte.}
 
-\textbf{Flujo Principal:}
-\begin{enumerate}
-  \item El operador crea un plano en blanco o importa una imagen, PDF o DXF.
-  \item Si la fuente es una imagen o un PDF, el operador recorta la región útil; el sistema la
-  reduce a un dibujo esquemático de líneas mediante detección de bordes, en vez de
-  conservar la fotografía completa.
-  \item El operador coloca cada cámara sobre el plano y define su alcance orientativo.
-  \item El operador declara qué cámaras son vecinas entre sí.
-\end{enumerate}
+\fichacu{CU-04}{Asociar identidad entre cámaras y reidentificar personas}
+  {Sistema (automático), a partir de la declaración de sincronización que hace el operador.}
+  {sesión de monitoreo en curso. Para asociar personas entre cámaras: al menos dos cámaras
+   relacionadas y la declaración expresa del operador de que los relojes de las fuentes están
+   sincronizados. La calibración es opcional.}
+  {\item Para cada persona seguida cuya vista es confiable (buena confianza, altura suficiente,
+         lejos del borde y sin oclusión), el sistema calcula un vector de apariencia OSNet de 512
+         dimensiones sobre el recorte de cuerpo entero; las partes tapadas por otra persona se
+         rellenan con un gris neutro.
+   \item Agrupa las vistas de cada tramo continuo de seguimiento y forma con ellas un prototipo
+         de apariencia.
+   \item La persona lleva un identificador provisional hasta reunir al menos cinco vistas durante
+         dos segundos; entonces recibe un identificador confirmado, que es el único que cuenta en
+         ocupación, flujo y alertas.
+   \item Busca, entre las identidades de las cámaras relacionadas, una candidata con parecido de
+         apariencia sobre el umbral y coherente en tiempo y, si hay calibración, en posición en el
+         plano. Si hay una candidata inequívoca, reutiliza su identificador; si la mejor candidata es
+         ambigua, marca la asociación como incierta en lugar de forzarla.
+   \item Si la memoria de apariencia está activa, que es la configuración por defecto, compara
+         cada identidad nueva con todas las personas guardadas dentro del plazo de retención y,
+         si coincide sin ambigüedad, le devuelve su identificador anterior, aunque se trate de otra
+         sesión u otro día.
+   \item Al cerrar la sesión, reagrupa los tramos con la grabación completa a la vista y renumera
+         a las personas contadas de 1 a N.}
+  {cada observación queda con un identificador, provisional o confirmado, y un estado de
+   asociación: local, estimada (une cámaras), reidentificada (recupera un tramo o una persona de
+   la memoria) o incierta.}
+  {sin sincronización declarada, el sistema no asocia personas entre cámaras en la sesión, pero
+   la memoria de apariencia sigue comparando cada identidad nueva con las personas guardadas.
+   La memoria conserva el vector en el disco del equipo durante 24 horas por defecto
+   (configurable hasta 168), lo que constituye la reidentificación individual persistente que
+   RNF-01 prohíbe (apartado~\ref{subsec:privacidad}).}
 
-\textbf{Postcondiciones:} El plano queda registrado con sus cámaras y disponible para la
-calibración (CU-02).
+\fichacu{CU-05}{Detectar y alertar aglomeraciones (regla global)}
+  {Operador o administrador.}
+  {sesión de monitoreo en ejecución.}
+  {\item Desde la vista de alertas, el usuario fija un radio en metros, una cantidad mínima de
+         personas y un tiempo de permanencia, aplicables a todo el plano.
+   \item El sistema evalúa en cada muestra las posiciones de las personas confirmadas.
+   \item Marca una alerta cuando una concentración cumple los tres criterios de forma
+         sostenida.}
+  {la alerta queda registrada como incidente en la bitácora (CU-18) y se envía por correo si el
+   aviso está configurado (CU-17).}
+  {}
 
-\figuraPendiente{cu-01.png}{11cm}{4.5cm}{Diagrama de caso de uso CU-01: Configurar el
-Plano y las Cámaras.}{fig:cu01}
+\fichacu{CU-06}{Visualizar el plano en vivo y el video por cámara}
+  {Operador o administrador.}
+  {sesión activa o grabación de una sesión anterior disponible.}
+  {\item El usuario observa el plano con las personas, sus trayectorias recientes y las
+         aglomeraciones resaltadas.
+   \item Alterna al video real de una cámara, con la caja y el identificador de cada persona
+         superpuestos.
+   \item Puede revisar las sesiones grabadas desde la vista de videos y resultados.}
+  {la consulta no modifica la configuración ni la sesión.}
+  {}
 
-\subsubsection{CU-02: Calibrar una Cámara}
-\textbf{Actor Principal:} Operador.
+\fichacu{CU-07}{Exportar reportes}
+  {Operador o administrador.}
+  {sesión con datos observados.}
+  {\item El usuario elige el tipo de reporte: zonas de ocupación, comparación de sectores,
+         ocupación por zona, flujo horario, trayectorias recientes o reporte comercial.
+   \item Elige el formato: PDF, Excel, CSV o JSON.}
+  {el sistema genera el archivo indicando siempre el origen de los datos: simulación sintética,
+   videos de prueba o fuente real sin validación de precisión.}
+  {el reporte de trayectorias contiene recorridos por identificador, por lo que hereda la
+   calificación de dato personal de las grabaciones (Anexo~\ref{anx:marco}).}
 
-\textbf{Precondiciones:} Existe una fuente de video válida asociada a la cámara.
+\fichacu{CU-08}{Gestionar zonas de interés}
+  {Operador.}
+  {plano configurado.}
+  {\item El operador dibuja polígonos, rectángulos o círculos sobre el plano.
+   \item Clasifica cada área como zona de interés, cola, zona restringida, sala, pasillo, muro,
+         puerta o zona comercial.
+   \item Puede aceptar puntos sugeridos por el sistema según la ocupación observada.}
+  {las zonas quedan registradas y disponibles para reglas y reportes por zona.}
+  {}
 
-\textbf{Flujo Principal:}
-\begin{enumerate}
-  \item El operador marca un punto de referencia del suelo en el video y su correspondencia
-  exacta en el plano.
-  \item El operador repite la marcación un mínimo de cuatro veces (6 a 8 correspondencias
-  recomendadas, repartidas por toda el área de interés).
-  \item El sistema calcula la homografía píxel a plano a partir de esas correspondencias.
-\end{enumerate}
+\fichacu{CU-09}{Configurar reglas de aglomeración por zona}
+  {Operador.}
+  {al menos una zona dibujada.}
+  {\item El operador activa una regla independiente para una zona, con su propia cantidad mínima
+         de personas y su propio tiempo de permanencia.}
+  {la zona genera alertas específicas según su uso; por ejemplo, una cola tolera más personas
+   que una sala de espera.}
+  {}
 
-\textbf{Postcondiciones:} La cámara queda calibrada y habilitada para proyectar posiciones
-al plano compartido.
+\fichacu{CU-10}{Consultar el dashboard ejecutivo y el panel comercial}
+  {Operador o administrador.}
+  {sesión con datos observados.}
+  {\item El usuario revisa el ranking de zonas por ocupación acumulada, la evolución de las
+         personas observadas y las zonas sugeridas para evaluación comercial.
+   \item En el panel comercial consulta las zonas ordenadas por oportunidad comercial, el
+         tráfico por acceso y las métricas de cada negocio (visitas, permanencias y regresos).}
+  {la información se presenta agregada y el panel indica si procede de una fuente real o es
+   sintética.}
+  {aunque se presentan agregadas, las métricas por negocio se calculan a partir de las
+   trayectorias por identificador, lo que constituye una finalidad distinta de la estimación de
+   aglomeraciones (Sección~\ref{subsec:impacto-etico}).}
 
-\textbf{Excepción:} el sistema rechaza la calibración si las correspondencias resultan
-geométricamente inconsistentes.
+\fichacu{CU-11}{Validar una fuente en modo laboratorio}
+  {Operador.}
+  {cámara agregada al proyecto.}
+  {\item El operador prueba la cámara de forma aislada: señal, resolución, frecuencia de cuadros,
+         tiempo de procesamiento, calidad de la calibración y estabilidad del seguimiento, con
+         identificadores temporales sobre el video.}
+  {la cámara queda validada o rechazada antes de sumarse a una sesión real.}
+  {}
 
-\figuraPendiente{cu-02.png}{11cm}{4.5cm}{Diagrama de caso de uso CU-02: Calibrar una
-Cámara.}{fig:cu02}
+\fichacu{CU-12}{Consultar la auditoría del sistema}
+  {Operador o administrador.}
+  {al menos una acción registrada.}
+  {\item El usuario revisa el registro de acciones de la ejecución del servidor (guardar, iniciar,
+         pausar, detener, abrir una vista en vivo o borrar la memoria de identidad, entre otras),
+         con fecha, hora y detalle.}
+  {queda disponible la trazabilidad operativa de la sesión, sin identidades reales.}
+  {}
 
-\subsubsection{CU-03: Procesar una Fuente y Hacer Seguimiento}
-\textbf{Actor Principal:} Operador.
+\fichacu{CU-13}{Gestionar proyectos independientes}
+  {Operador; el administrador solo puede abrir proyectos existentes.}
+  {servidor en ejecución con al menos un proyecto.}
+  {\item El usuario ve la lista de proyectos desde la pantalla de inicio o el selector de la
+         cabecera.
+   \item El operador crea un proyecto nuevo, abre uno existente, lo renombra o lo elimina.}
+  {el sistema cambia el proyecto activo; el plano, las cámaras, la calibración, los incidentes, las
+   ventas y la memoria de apariencia de un proyecto nunca aparecen en otro.}
+  {no se puede eliminar el único proyecto existente, y el sistema rechaza los cambios destinados
+   a un proyecto distinto del abierto.}
 
-\textbf{Precondiciones:} La cámara está calibrada o en modo de prueba (CU-11).
+\fichacu{CU-14}{Iniciar sesión según el rol}
+  {Operador o administrador.}
+  {existe al menos un usuario; si no existe ninguno, el primero que se registra queda como
+   operador.}
+  {\item El usuario ingresa su nombre y su contraseña.
+   \item El sistema valida las credenciales contra el resumen criptográfico almacenado y abre una
+         sesión con el rol correspondiente.}
+  {el operador accede a la configuración y a todo lo demás; el administrador accede a todo
+   menos a la configuración y puede ajustar los umbrales de alerta desde la vista de alertas.}
+  {las credenciales incorrectas se rechazan sin indicar cuál de los dos datos falló.}
 
-\textbf{Flujo Principal:}
-\begin{enumerate}
-  \item El operador elige un detector: HOG de referencia, P2PNet, o YOLO con pesos locales
-  propios.
-  \item El operador inicia la sesión de procesamiento.
-  \item El sistema detecta personas en cada cuadro de video.
-  \item El sistema asigna a cada persona un identificador local estable dentro de esa cámara,
-  mediante seguimiento por distancia euclidiana y asignación húngara en dos etapas.
-\end{enumerate}
+\fichacu{CU-15}{Revisar la cámara en vivo antes de calibrar}
+  {Operador.}
+  {la cámara tiene una fuente configurada y no hay una sesión de seguimiento en curso.}
+  {\item El operador abre la vista en vivo de la cámara desde la etapa de cámaras del asistente.
+   \item El sistema muestra la imagen en movimiento sin ejecutar detección; si la fuente es una
+         grabación, permite pausar, reanudar y saltar a un instante.
+   \item El operador puede obtener una imagen fija para marcar la zona útil.}
+  {el operador confirma encuadre, luz y retardo; la apertura queda en el registro de auditoría y,
+   con la imagen fija, la fuente queda comprobada con su resolución y su frecuencia de cuadros.}
+  {si nadie solicita imágenes durante 20 segundos, el sistema libera la cámara.}
 
-\textbf{Postcondiciones:} Las personas quedan detectadas y seguidas de forma continua
-dentro de la cámara, cada una con su identificador local.
+\fichacu{CU-16}{Configurar y recibir avisos de equipaje sin custodia}
+  {no aplica en el prototipo vigente.}
+  {no aplica.}
+  {\item Este caso describía la detección de mochilas, bolsos y maletas inmóviles durante un
+         tiempo configurable y la emisión de un aviso para revisión humana.}
+  {no aplica.}
+  {el módulo se retiró del prototipo al simplificarlo al esquema de seguimiento multicámara. Al
+   abrir proyectos antiguos, su configuración se elimina. Se conserva el número para no alterar
+   la numeración maestra. Los incidentes y los correos actuales se refieren solo a
+   aglomeraciones.}
 
-\textbf{Excepción:} si el detector elegido es P2PNet, la posición no se proyecta al plano,
-porque ese modelo localiza cabezas y no pies; ese modo sirve solo para validar detección y
-seguimiento por cámara.
+\fichacu{CU-17}{Configurar y recibir alertas de seguridad por correo}
+  {Operador o administrador, que configura; personal de seguridad, que recibe.}
+  {se cuenta con una cuenta de correo remitente y su contraseña de aplicación.}
+  {\item Desde la vista de alertas, el usuario activa el aviso por correo e indica la cuenta
+         remitente, su contraseña de aplicación y hasta veinte destinatarios.
+   \item Puede enviar un correo de prueba.
+   \item Ante cada incidente nuevo de aglomeración, el sistema envía un correo con el lugar, la
+         cámara, el motivo del aviso y la advertencia de que requiere comprobación humana.}
+  {la configuración queda guardada fuera de los archivos del proyecto, la contraseña no se
+   muestra nunca en la interfaz y el cambio queda en el registro de auditoría.}
+  {una misma zona no genera más de un correo cada 120 segundos y un aviso ya enviado no se
+   reenvía; un fallo de envío queda registrado sin interrumpir la sesión.}
 
-\figuraPendiente{cu-03.png}{11cm}{5.5cm}{Diagrama de caso de uso CU-03: Procesar una
-Fuente y Hacer Seguimiento.}{fig:cu03}
+\fichacu{CU-18}{Gestionar la bitácora de incidentes}
+  {Operador o administrador.}
+  {existen incidentes de aglomeración registrados.}
+  {\item El usuario consulta la lista de incidentes del proyecto activo, con su hora, zona,
+         magnitud y estado.
+   \item Marca cada incidente como revisado, falsa alarma o resuelto, o lo devuelve a
+         pendiente.}
+  {el incidente queda con su estado actualizado, lo que distingue las alertas atendidas de las
+   pendientes.}
+  {los incidentes se conservan aunque la sesión termine, y los de un proyecto nunca aparecen
+   en otro.}
 
-\subsubsection{CU-04: Detectar y Alertar Aglomeraciones (Regla Global)}
-\textbf{Actor Principal:} Operador.
+\subsubsection{Requisitos funcionales}
+\label{subsec:rf-tabla}
 
-\textbf{Precondiciones:} Hay una sesión en ejecución.
-
-\textbf{Flujo Principal:}
-\begin{enumerate}
-  \item El operador define un radio de agrupamiento, una cantidad mínima de personas y un
-  tiempo de permanencia, de forma global o por zona.
-  \item El sistema evalúa de forma continua si una concentración de personas cumple los tres
-  criterios de forma sostenida.
-  \item El sistema marca una alerta cuando se cumple esa condición.
-\end{enumerate}
-
-\textbf{Postcondiciones:} La alerta queda registrada y disponible para su visualización
-(CU-06) y su exportación (CU-07).
-
-\figuraPendiente{cu-04.png}{11cm}{5cm}{Diagrama de caso de uso CU-04: Detectar y
-Alertar Aglomeraciones (Regla Global).}{fig:cu04}
-
-\subsubsection{CU-05: Visualizar el Plano en Vivo y el Video por Cámara}
-\textbf{Actor Principal:} Operador.
-
-\textbf{Precondiciones:} Existe una sesión activa o una imagen retenida disponible.
-
-\textbf{Flujo Principal:}
-\begin{enumerate}
-  \item El operador observa el plano compartido, con los nodos activos, sus trayectorias
-  recientes y las aglomeraciones resaltadas.
-  \item El operador alterna a la vista de video real de una cámara específica.
-  \item El sistema superpone sobre ese video las cajas de detección y el identificador de cada
-  persona.
-\end{enumerate}
-
-\textbf{Postcondiciones:} El operador cuenta con visibilidad operativa en tiempo real del
-estado del terminal, con ambas vistas disponibles en todo momento.
-
-\figuraPendiente{cu-05.png}{11cm}{5cm}{Diagrama de caso de uso CU-05: Visualizar el
-Plano en Vivo y el Video por Cámara.}{fig:cu05}
-
-\subsubsection{CU-06: Exportar Reportes}
-\textbf{Actor Principal:} Operador.
-
-\textbf{Precondiciones:} La sesión activa tiene datos observados.
-
-\textbf{Flujo Principal:}
-\begin{enumerate}
-  \item El operador selecciona el tipo de reporte: zonas calientes, flujo horario, ocupación,
-  trayectorias o comparativas.
-  \item El operador selecciona el formato de salida.
-  \item El sistema genera el archivo en PDF, Excel, CSV o JSON.
-  \item El sistema señala explícitamente si el origen de los datos es una fuente real o la
-  demostración sintética.
-\end{enumerate}
-
-\textbf{Postcondiciones:} El sistema entrega un archivo exportado con la ocupación por
-zona, la evolución temporal y las trayectorias de la sesión, con su origen declarado.
-
-\figuraPendiente{cu-06.png}{11cm}{5cm}{Diagrama de caso de uso CU-06: Exportar
-Reportes.}{fig:cu06}
-
-\subsubsection{CU-07: Gestionar Zonas de Interés (ROI)}
-\textbf{Actor Principal:} Operador.
-
-\textbf{Precondiciones:} El plano está configurado (CU-01).
-
-\textbf{Flujo Principal:}
-\begin{enumerate}
-  \item El operador dibuja polígonos, rectángulos o círculos sobre el plano.
-  \item El operador clasifica cada área (ROI, comercio, cola, restringida, sala, pasillo, muro,
-  puerta).
-  \item El sistema puede sugerir automáticamente sectores según la ocupación observada.
-  \item El operador acepta, ajusta o descarta cada sugerencia.
-\end{enumerate}
-
-\textbf{Postcondiciones:} Las zonas quedan registradas y disponibles para las reglas de
-aglomeración (CU-09) y los reportes por zona (CU-07).
-
-\figuraPendiente{cu-07.png}{11cm}{5cm}{Diagrama de caso de uso CU-07: Gestionar Zonas
-de Interés (ROI).}{fig:cu07}
-
-\subsubsection{CU-08: Configurar Reglas de Aglomeración por Zona}
-\textbf{Actor Principal:} Operador.
-
-\textbf{Precondiciones:} Existe al menos una zona dibujada (CU-08).
-
-\textbf{Flujo Principal:}
-\begin{enumerate}
-  \item El operador selecciona una zona registrada.
-  \item El operador define para esa zona una cantidad mínima de personas y un tiempo de
-  permanencia propios, independientes de la regla global.
-  \item El sistema activa la regla y la evalúa de forma continua sobre esa zona.
-\end{enumerate}
-
-\textbf{Postcondiciones:} La zona queda con una regla de aglomeración propia, y el sistema
-emite alertas específicas ajustadas a su uso (por ejemplo, una cola frente a una sala de
-espera).
-
-\figuraPendiente{cu-08.png}{11cm}{5cm}{Diagrama de caso de uso CU-08: Configurar
-Reglas de Aglomeración por Zona.}{fig:cu08}
-
-\subsubsection{CU-09: Consultar el Dashboard Ejecutivo}
-\textbf{Actor Principal:} Administrador.
-
-\textbf{Precondiciones:} La sesión tiene datos observados.
-
-\textbf{Flujo Principal:}
-\begin{enumerate}
-  \item El usuario abre el dashboard ejecutivo.
-  \item El sistema muestra el ranking de zonas por ocupación acumulada.
-  \item El sistema muestra la evolución de personas observadas en el tiempo.
-  \item El sistema sugiere zonas a evaluar comercialmente según el tránsito medido.
-\end{enumerate}
-
-\textbf{Postcondiciones:} El usuario obtiene información de negocio derivada del tránsito
-medido, sin identificación individual de las personas observadas.
-
-\figuraPendiente{cu-09.png}{11cm}{5cm}{Diagrama de caso de uso CU-09: Consultar el
-Dashboard Ejecutivo.}{fig:cu09}
-
-\subsubsection{CU-10: Validar una Fuente en Modo Laboratorio}
-\textbf{Actor Principal:} Operador.
-
-\textbf{Precondiciones:} La cámara fue agregada al proyecto.
-
-\textbf{Flujo Principal:}
-\begin{enumerate}
-  \item El operador selecciona la cámara a validar de forma aislada, antes de integrarla a la
-  operación real.
-  \item El sistema prueba la señal y la resolución de la fuente.
-  \item El sistema mide el tiempo de procesamiento.
-  \item El sistema evalúa la calidad de la calibración y la estabilidad del seguimiento.
-\end{enumerate}
-
-\textbf{Postcondiciones:} La cámara queda validada o rechazada, con un registro de las
-métricas medidas, antes de sumarse a una sesión real.
-
-\figuraPendiente{cu-10.png}{11cm}{5.5cm}{Diagrama de caso de uso CU-10: Validar una
-Fuente en Modo Laboratorio.}{fig:cu10}
-
-\subsubsection{CU-11: Consultar la Auditoría del Sistema}
-\textbf{Actor Principal:} Auditor.
-
-\textbf{Precondiciones:} Existe al menos una acción registrada (guardar, iniciar, pausar o
-detener).
-
-\textbf{Flujo Principal:}
-\begin{enumerate}
-  \item El usuario abre el registro de auditoría.
-  \item El sistema muestra las acciones del operador durante la ejecución del servidor, con
-  fecha, hora y detalle.
-\end{enumerate}
-
-\textbf{Postcondiciones:} Queda disponible la trazabilidad operativa completa de la
-sesión, sin que el registro contenga identidades reales de las personas observadas.
-
-\figuraPendiente{cu-11.png}{11cm}{4cm}{Diagrama de caso de uso CU-11: Consultar la
-Auditoría del Sistema.}{fig:cu11}
-
-\subsection{Requerimientos Funcionales y No Funcionales}
-\label{subsec:rf-rnf}
-
-La tabla original no incluye una fila RF-04 (salta de RF-03 a RF-05); se mantiene tal cual.
-
-\begin{longtable}{@{}L{1.4cm}L{1.8cm}L{5.2cm}L{3.3cm}L{2.8cm}@{}}
+{\small
+\setlength{\LTleft}{0pt}\setlength{\LTright}{0pt}
+\begin{longtable}{@{}L{1.3cm}L{6.6cm}L{4.2cm}L{1.9cm}@{}}
+\caption{Requisitos funcionales y su estado verificado en el prototipo.}\label{tab:rf}\\
 \toprule
-\textbf{ID} & \textbf{Tipo} & \textbf{Requisito} & \textbf{Estado / evidencia} & \textbf{Casos de uso relacionados} \\
+\textbf{ID} & \textbf{Requisito} & \textbf{Estado} & \textbf{CU} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Requisito} & \textbf{Estado} & \textbf{CU} \\
 \midrule
 \endhead
-RF-01 & Funcional & Configurar plano y cámaras, con recorte e importación como dibujo de
-  líneas. & Implementado & CU-01 \\
-RF-02 & Funcional & Calibrar por homografía con validación de consistencia geométrica. &
-  Implementado & CU-02 \\
-RF-03 & Funcional & Detectar y seguir personas con detector seleccionable (HOG, P2PNet,
-  YOLO). & Implementado; YOLO requiere pesos locales no incluidos. & CU-03, CU-11 \\
-RF-05 & Funcional & Reglas de aglomeración globales configurables por radio, cantidad y
-  permanencia. & Implementado. & CU-04 \\
-RF-06 & Funcional & Visualizar plano en vivo y video real por cámara con overlay de ID. &
-  Implementado. & CU-05 \\
-RF-07 & Funcional & Exportar reportes en PDF, Excel, CSV y JSON, por tipo (zonas, flujo,
-  ocupación, trayectorias, comparativas). & Implementado. & CU-06 \\
-RF-08 & Funcional & Dibujar y clasificar zonas de interés (ROI), incluyendo sugerencias
-  automáticas por ocupación observada. & Implementado. & CU-07 \\
-RF-09 & Funcional & Configurar reglas de aglomeración independientes por zona. &
-  Implementado. & CU-08 \\
-RF-10 & Funcional & Mostrar dashboard ejecutivo con ranking de zonas y evolución temporal
-  de personas observadas. & Implementado. & CU-09 \\
-RF-11 & Funcional & Permitir validar una fuente de video en modo laboratorio antes de
-  integrarla a la operación. & Implementado. & CU-10 \\
-RF-12 & Funcional & Registrar auditoría de acciones del operador (guardar, iniciar, pausar,
-  detener sesión). & Implementado. & CU-11 \\
-RNF-01 & No funcional & No derivar del video ningún rasgo que permita identificación
-  biométrica o reidentificación individual persistente. & Mejorar & CU-03, CU-07, CU-08 \\
-RNF-02 & No funcional & No persistir imágenes de forma permanente. & Cumplido. & CU-03,
-  CU-05 \\
-RNF-03 & No funcional & Declarar explícitamente cuándo el sistema opera en modo
-  demostración sintética. & Implementado. & CU-05, CU-06, CU-09 \\
-RNF-04 & No funcional & Tiempo de inferencia compatible con operación práctica. &
-  No verificado como cumplido & CU-03, CU-10 \\
 \bottomrule
-\caption{Requisitos funcionales y no funcionales del sistema Aerotrack.}
-\label{tab:rf-rnf}
+\endlastfoot
+RF-01 & Configurar plano y cámaras, con recorte e importación como dibujo de líneas. & Implementado. & CU-01 \\
+RF-02 & Calibrar por homografía con validación de consistencia geométrica. & Implementado. & CU-02 \\
+RF-03 & Detectar personas con YOLO11, en la variante que corresponda al hardware, y seguirlas dentro de cada cámara con asociación en dos etapas sobre el punto de los pies. & Implementado; los pesos se instalan al preparar el sistema. & CU-03, CU-11 \\
+RF-04 & Asociar identidad entre cámaras con el vector de apariencia OSNet y coherencia de tiempo y plano, solo entre cámaras relacionadas y con sincronización declarada, marcando \enquote{incierta} cuando corresponda, y reidentificar personas mediante la memoria de apariencia. & Implementado; su configuración por defecto incumple RNF-01. & CU-04 \\
+RF-05 & Reglas de aglomeración globales configurables por radio, cantidad y permanencia. & Implementado. & CU-05 \\
+RF-06 & Visualizar plano en vivo y video real por cámara con el identificador superpuesto. & Implementado. & CU-06 \\
+RF-07 & Exportar reportes en PDF, Excel, CSV y JSON, por tipo (zonas, comparación de sectores, ocupación, flujo, trayectorias y comercial). & Implementado. & CU-07 \\
+RF-08 & Dibujar y clasificar zonas de interés, incluyendo sugerencias automáticas por ocupación observada. & Implementado. & CU-08 \\
+RF-09 & Configurar reglas de aglomeración independientes por zona. & Implementado. & CU-09 \\
+RF-10 & Mostrar el dashboard ejecutivo con ranking de zonas y evolución temporal de personas observadas, y el panel comercial. & Implementado. & CU-10 \\
+RF-11 & Validar una fuente de video en modo laboratorio antes de integrarla a la operación. & Implementado. & CU-11 \\
+RF-12 & Registrar la auditoría de acciones del operador. & Implementado. & CU-12 \\
+RF-13 & Gestionar proyectos independientes (crear, abrir, renombrar, eliminar), con aislamiento de datos entre ellos. & Implementado. & CU-13 \\
+RF-14 & Autenticar usuarios con dos roles (operador y administrador) aplicados en el servidor, no solo ocultos en la interfaz. & Implementado. & CU-14 \\
+RF-15 & Mostrar la vista en vivo de una cámara sin ejecutar detección, con controles de reproducción para grabaciones. & Implementado. & CU-15 \\
+RF-16 & Detectar equipaje sin custodia por cámara, con tiempo de espera e intervalo de revisión configurables. & Retirado del prototipo vigente. & CU-16 \\
+RF-17 & Enviar alertas de seguridad por correo electrónico, con control de repetición por incidente. & Implementado. & CU-17 \\
+RF-18 & Registrar incidentes en una bitácora persistente con estado revisable (pendiente, revisado, falsa alarma, resuelto). & Implementado. & CU-18 \\
 \end{longtable}
+}
+
+\subsection{Requerimientos de privacidad}
+\label{subsec:privacidad}
+
+La normativa de protección de datos exige que las garantías se incorporen desde la
+concepción del tratamiento y que la configuración más protectora venga activada por defecto
+(Sección~\ref{subsec:restricciones-legales}). El sistema recoge esa exigencia como requisitos no
+funcionales, es decir, como condiciones que debe cumplir con independencia de su
+funcionalidad.
+
+El requisito rector es RNF-01, cuyo texto en la hoja maestra del equipo es: \enquote{No derivar
+del video ningún rasgo que permita identificación biométrica o reidentificación individual
+persistente}. \textbf{Al cierre de esta versión, RNF-01 es no conforme.} El sistema no construye
+plantillas faciales, pero calcula para cada persona un vector de apariencia OSNet de cuerpo
+entero y, con la memoria de apariencia activa, que es la configuración por defecto, lo guarda en
+una base de datos local del equipo durante 24 horas (el plazo admite valores de 1 a 168 horas) y
+lo usa para reconocer a la misma persona entre cámaras, entre sesiones y entre días. Eso es una
+reidentificación individual persistente. La corrección está identificada y depende solo del
+equipo: desactivar por defecto la memoria de apariencia, de modo que el vector viva
+únicamente en memoria durante la sesión y se descarte con ella. Queda como acción pendiente.
+
+De RNF-01 y del principio de proporcionalidad se derivan diez medidas de privacidad desde el
+diseño. La Tabla~\ref{tab:medidas} las recoge con su estado en el prototipo.
+
+{\small
+\setlength{\LTleft}{0pt}\setlength{\LTright}{0pt}
+\begin{longtable}{@{}L{1.2cm}L{5.8cm}L{7.4cm}@{}}
+\caption{Medidas de privacidad desde el diseño: lo exigido y lo implementado.}\label{tab:medidas}\\
+\toprule
+\textbf{ID} & \textbf{Medida exigida} & \textbf{Estado en el prototipo} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Medida exigida} & \textbf{Estado en el prototipo} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+M-01 & Procesamiento en el borde, de modo que el fotograma no salga del perímetro del terminal. & Cumplida en el prototipo: todo el procesamiento ocurre en el equipo local y el servidor solo acepta conexiones del propio equipo. La localización del despliegue final sigue pendiente con LAP. \\
+M-02 & No persistencia del fotograma, que se procesa en memoria y se descarta. & Cumplida para las cámaras en vivo. Los videos cargados para pruebas se conservan en el equipo. \\
+M-03 & Salida agregada por zona, sin coordenadas individuales persistidas. & No cumplida: las grabaciones de cada sesión conservan, por muestra y por persona, el identificador, la caja y la posición en el plano, sin plazo de retención automático. \\
+M-04 & Difuminado irreversible de rostros si algún fotograma debe conservarse. & No implementada: los videos de prueba se conservan sin difuminar. \\
+M-05 & Plazo de retención definido, con purga automática. & Parcial: la memoria de apariencia se purga sola tras 24 horas; las grabaciones de sesión no tienen plazo automático y se borran a mano. \\
+M-06 & Control de acceso por roles, con registro de auditoría. & Cumplida. \\
+M-07 & Cifrado en tránsito y en reposo. & No implementada: la conexión con la consola es local y sin cifrar, y las bases de datos locales no están cifradas. \\
+M-08 & Carteles informativos conforme al Anexo~\ref{anx:cartel}. & Pendiente: el modelo está propuesto, pero sus campos dependen de LAP. \\
+M-09 & Documentación del linaje de los datos. & Parcial: el informe describe qué se calcula y dónde se guarda, sin un registro formal de linaje. \\
+M-10 & Supervisión humana: el sistema alerta y no ejecuta acciones automáticas sobre personas. & Cumplida. \\
+\end{longtable}
+}
+
+Donde un parámetro admita un ajuste más protector y otro menos protector (resolución de
+captura, frecuencia de muestreo, granularidad de la salida, memoria de apariencia, plazo de
+retención), el valor predeterminado debe ser el más protector. \textbf{Estas medidas describen el
+sistema exigido y no el implementado}: una lista de medidas presentada al cliente como estado
+alcanzado, cuando es estado deseado, es exactamente el tipo de afirmación que este informe
+evita. A ello se suma una carencia de interfaz: el borrado inmediato de la memoria de identidad
+existe como servicio interno del servidor, pero la consola no ofrece ningún botón para
+ejecutarlo, de modo que un operador no puede atender una solicitud de supresión sin
+asistencia técnica.
+
+\subsection{Requerimientos no funcionales}
+\label{subsec:rnf}
+
+{\small
+\setlength{\LTleft}{0pt}\setlength{\LTright}{0pt}
+\begin{longtable}{@{}L{1.4cm}L{5.0cm}L{5.8cm}L{1.9cm}@{}}
+\caption{Requisitos no funcionales y su estado verificado en el prototipo.}\label{tab:rnf}\\
+\toprule
+\textbf{ID} & \textbf{Requisito} & \textbf{Estado} & \textbf{CU} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Requisito} & \textbf{Estado} & \textbf{CU} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+RNF-01 & No derivar del video ningún rasgo que permita identificación biométrica o reidentificación individual persistente. & \textbf{No conforme.} La memoria de apariencia, activa por defecto, guarda el vector OSNet de cuerpo entero 24 horas (hasta 168) y reidentifica entre sesiones y días; además, las grabaciones persisten posiciones individuales (M-03). Acción pendiente: desactivar la memoria por defecto y fijar una retención automática para las grabaciones. & CU-03, CU-04, CU-06, CU-07, CU-10 \\
+RNF-02 & Servidor accesible solo desde el propio equipo, con credencial de sesión en toda operación de escritura. & Implementado. & Transversal \\
+RNF-03 & No persistir imágenes de forma permanente. & Cumplido para fuentes en vivo: los fotogramas se procesan en memoria y se descartan. Los videos cargados para pruebas se conservan en el equipo y su retención queda pendiente de definir. & CU-03, CU-06 \\
+RNF-04 & Declarar expresamente cuándo el sistema opera en modo de demostración sintética. & Implementado. & CU-06, CU-07, CU-10 \\
+RNF-05 & No presentar ninguna cifra de desempeño sobre datos públicos ni sobre grabaciones propias como desempeño esperado en el Aeropuerto Jorge Chávez sin validación en sitio. & Aplicado en este informe (Secciones~\ref{subsec:variables-restricciones} y~\ref{subsec:analisis-teas}). & CU-03, CU-11 \\
+RNF-06 & Tiempo de inferencia compatible con la operación práctica. & No verificado como cumplido. Con YOLO11 nano y OSNet en CPU, analizar varias cámaras con una muestra cada 0,2 segundos va, según estimación del equipo, entre cinco y veinticinco veces más lento que el video; los modos de rendimiento espacian las muestras. Falta una medición con protocolo documentado. & CU-03, CU-11 \\
+RNF-07 & Almacenar las contraseñas con resumen criptográfico y sal por usuario, nunca en texto plano ni expuestas por la interfaz de programación. & Implementado (PBKDF2 con SHA-256 y 240\,000 iteraciones). & CU-14 \\
+RNF-08 & Los datos de un proyecto (plano, cámaras, incidentes, ventas, sesiones grabadas y memoria de apariencia) no deben ser accesibles desde otro proyecto. & Implementado y verificado con pruebas automatizadas. & CU-13, CU-18 \\
+\end{longtable}
+}
+
+\subsection{Matriz de trazabilidad}
+\label{subsec:trazabilidad}
+
+La Tabla~\ref{tab:trazabilidad} relaciona cada requisito con los casos de uso que lo realizan.
+Reproduce la matriz de la hoja maestra con una corrección: RNF-01 se vincula a los casos de uso
+que calculan, conservan o explotan identificadores y trayectorias por persona (CU-03, CU-04,
+CU-06, CU-07 y CU-10), en lugar de a la gestión de zonas y reglas.
+
+\begin{table}[H]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{2.2pt}
+\caption{Matriz de trazabilidad entre requisitos y casos de uso (columnas CU-01 a CU-18).}
+\label{tab:trazabilidad}
+\begin{tabular}{@{}lC{0.42cm}C{0.42cm}C{0.42cm}C{0.42cm}C{0.42cm}C{0.42cm}C{0.42cm}C{0.42cm}C{0.42cm}C{0.42cm}C{0.42cm}C{0.42cm}C{0.42cm}C{0.42cm}C{0.42cm}C{0.42cm}C{0.42cm}C{0.42cm}@{}}
+\toprule
+ & \multicolumn{18}{c}{\textbf{Caso de uso (CU-)}} \\
+\cmidrule(l){2-19}
+\textbf{Req.} & 01 & 02 & 03 & 04 & 05 & 06 & 07 & 08 & 09 & 10 & 11 & 12 & 13 & 14 & 15 & 16 & 17 & 18 \\
+\midrule
+RF-01 & X &  &  &  &  &  &  &  &  &  &  &  &  &  &  &  &  &  \\
+RF-02 &  & X &  &  &  &  &  &  &  &  &  &  &  &  &  &  &  &  \\
+RF-03 &  &  & X &  &  &  &  &  &  &  & X &  &  &  &  &  &  &  \\
+RF-04 &  &  &  & X &  &  &  &  &  &  &  &  &  &  &  &  &  &  \\
+RF-05 &  &  &  &  & X &  &  &  &  &  &  &  &  &  &  &  &  &  \\
+RF-06 &  &  &  &  &  & X &  &  &  &  &  &  &  &  &  &  &  &  \\
+RF-07 &  &  &  &  &  &  & X &  &  &  &  &  &  &  &  &  &  &  \\
+RF-08 &  &  &  &  &  &  &  & X &  &  &  &  &  &  &  &  &  &  \\
+RF-09 &  &  &  &  &  &  &  &  & X &  &  &  &  &  &  &  &  &  \\
+RF-10 &  &  &  &  &  &  &  &  &  & X &  &  &  &  &  &  &  &  \\
+RF-11 &  &  &  &  &  &  &  &  &  &  & X &  &  &  &  &  &  &  \\
+RF-12 &  &  &  &  &  &  &  &  &  &  &  & X &  &  &  &  &  &  \\
+RF-13 &  &  &  &  &  &  &  &  &  &  &  &  & X &  &  &  &  &  \\
+RF-14 &  &  &  &  &  &  &  &  &  &  &  &  &  & X &  &  &  &  \\
+RF-15 &  &  &  &  &  &  &  &  &  &  &  &  &  &  & X &  &  &  \\
+RF-16 &  &  &  &  &  &  &  &  &  &  &  &  &  &  &  & X &  &  \\
+RF-17 &  &  &  &  &  &  &  &  &  &  &  &  &  &  &  &  & X &  \\
+RF-18 &  &  &  &  &  &  &  &  &  &  &  &  &  &  &  &  &  & X \\
+\midrule
+RNF-01 &  &  & X & X &  & X & X &  &  & X &  &  &  &  &  &  &  &  \\
+RNF-02 & X & X & X & X & X & X & X & X & X & X & X & X & X & X & X & X & X & X \\
+RNF-03 &  &  & X &  &  & X &  &  &  &  &  &  &  &  &  &  &  &  \\
+RNF-04 &  &  &  &  &  & X & X &  &  & X &  &  &  &  &  &  &  &  \\
+RNF-05 &  &  & X &  &  &  &  &  &  &  & X &  &  &  &  &  &  &  \\
+RNF-06 &  &  & X &  &  &  &  &  &  &  & X &  &  &  &  &  &  &  \\
+RNF-07 &  &  &  &  &  &  &  &  &  &  &  &  &  & X &  &  &  &  \\
+RNF-08 &  &  &  &  &  &  &  &  &  &  &  &  & X &  &  &  &  & X \\
+\bottomrule
+\end{tabular}
+\end{table}

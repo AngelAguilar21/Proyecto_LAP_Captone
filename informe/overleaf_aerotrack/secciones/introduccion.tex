@@ -15,12 +15,16 @@ colas que se alargan, tiempos de espera que comprometen la conexión de un vuelo
 condiciones de incomodidad en un espacio cerrado. LAP cuenta ya con infraestructura de
 videovigilancia de circuito cerrado en el terminal; este proyecto explora si esa misma
 infraestructura puede aprovecharse, mediante visión computacional, para producir una
-estimación automatizada de esa concentración, sin identificar, individualizar ni caracterizar
-biométricamente a los pasajeros que aparecen en la imagen.
+estimación automatizada de esa concentración y de los recorridos entre cámaras, sin
+reconocimiento facial. Conviene adelantar desde aquí lo que el resto del informe desarrolla: para
+seguir a una persona de una cámara a otra el sistema la individualiza con un identificador
+anónimo y la reconoce por la apariencia de su cuerpo, y esa decisión de diseño es la que fija su
+régimen jurídico (Secciones~\ref{subsec:restricciones} y~\ref{subsec:analisis-teas}).
 
-Al momento de escribir este informe, con evidencia documentada por LAP (incidentes de
+El equipo no cuenta, al momento de escribir este informe, con evidencia documentada por LAP (incidentes de
 aglomeración registrados, tiempos de espera medidos, quejas de pasajeros contabilizadas) que
-cuantifique el problema en el propio terminal. El proyecto parte, por tanto, de una necesidad
+cuantifique el problema en el propio terminal.\verificar{incidentes por aglomeración
+documentados, tiempos de cola observados y quejas recibidas. Solicitado a LAP como punto C-07.} El proyecto parte, por tanto, de una necesidad
 operativa plausible y compartida por la literatura de conteo de multitudes en espacios de alto
 tránsito, y no de una cifra propia de incidentes del Aeropuerto Jorge Chávez.
 
@@ -53,12 +57,15 @@ de su finalidad. Diseñar bajo esa restricción obliga a hacer explícitas decis
 contextos quedarían implícitas: qué se persiste, por cuánto tiempo, y qué mecanismo de
 desempate se usa cuando dos lecturas del sistema son ambiguas. La segunda motivación es de
 integración bajo restricciones reales de hardware: el prototipo se ejecuta en CPU, sin GPU
-dedicada, con laptops universitarias, combinando piezas de procedencia distinta (un detector de
-puntos preentrenado, un detector de cajas preentrenado, un tracker adaptado, una homografía
-calibrada a mano, SQLite y una consola web) en un único flujo coherente; el costo de esa
-restricción se mide en la Sección de Resultados: un tiempo de inferencia de aproximadamente
-3.5 segundos por cada 0.2 segundos de video con P2PNet en CPU, muy por debajo de una
-operación en tiempo casi real.
+dedicada, en computadoras portátiles universitarias, combinando piezas de procedencia distinta
+(un detector de personas preentrenado, un seguimiento adaptado, un descriptor de apariencia
+preentrenado, una homografía calibrada a mano, una base de datos local y una consola web) en
+un único flujo coherente. El costo de esa restricción es concreto: en un procesador de gama
+media sin GPU, analizar varias cámaras con una muestra cada 0,2 segundos va entre cinco y
+veinticinco veces más lento que el video, por lo que el sistema ofrece modos de rendimiento que
+espacian las muestras según el número de cámaras.\verificar{rango de 5 a 25 veces más lento que
+el video: estimación del equipo sobre un procesador i5 sin GPU, no una medición formal con
+protocolo documentado.}
 
 \subsection{Objetivo General}
 \label{subsec:objetivo-general}
@@ -78,9 +85,9 @@ extracción de rasgos biométricos identificables.
   \item Determinar el marco de cumplimiento normativo aplicable al tratamiento de imágenes
   de un espacio de uso público bajo gestión concesionada, incluyendo el análisis de
   impacto y los requisitos de privacidad desde el diseño.
-  \item Diseñar e implementar el componente de detección, seguimiento y fusión de identidad
-  entre cámaras, con la granularidad de salida que resulte de aplicar el principio de
-  proporcionalidad y la síntesis de antecedentes.
+  \item Diseñar e implementar el componente de detección, seguimiento y asociación de identidad
+  entre cámaras, y documentar la granularidad de salida resultante frente al principio de
+  proporcionalidad.
   \item Extender el prototipo con analítica de flujo peatonal (cruces de acceso, ocupación por
   zona, dashboard ejecutivo) sobre una cartografía real del terminal, evaluando su
   desempeño con pruebas automatizadas.

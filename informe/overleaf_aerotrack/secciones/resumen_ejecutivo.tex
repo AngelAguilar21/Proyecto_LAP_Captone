@@ -2,42 +2,49 @@
 \label{sec:resumen-ejecutivo}
 
 Este informe documenta AeroTrack, un sistema de visión computacional que estima la
-concentración y tracking de personas por diferentes zonas dependiendo el plano y las
-configuraciones que se apliquen, en este caso lo aplicaremos en el Aeropuerto Internacional
-Jorge Chávez a partir de cámaras fijas. El sistema está diseñado para responder cuántas
-personas hay y dónde, nunca quién es cada una: no recurre a reconocimiento facial ni a rasgos
-biométricos identificables. Esta restricción no es una preferencia de producto, sino un límite
-que impone la Ley 29733 de Protección de Datos Personales y su reglamento vigente (Decreto
-Supremo 016-2024-JUS): un dato biométrico que por sí mismo identifica a su titular es un dato
-sensible, y el proyecto evita ese tratamiento desde el diseño en lugar de mitigarlo después de
-construido.
+concentración de personas por zona y sigue su recorrido entre cámaras sobre el plano de un
+espacio, pensado para el Aeropuerto Internacional Jorge Chávez a partir de sus cámaras fijas.
+El sistema no recurre a reconocimiento facial, pero sí individualiza a las personas: les asigna un
+identificador anónimo, las sigue dentro de cada cámara y las vuelve a reconocer entre cámaras
+por la apariencia de su cuerpo. Esa capacidad sitúa al proyecto de lleno bajo la Ley 29733 de
+Protección de Datos Personales y su reglamento vigente (Decreto Supremo 016-2024-JUS), y el
+informe la documenta tal como está implementada, sin presentarla como un tratamiento
+agregado que no es.
 
-El marco teórico revisa cuatro trabajos que sostienen técnicamente el prototipo: CSRNet
-(mapas de densidad mediante convoluciones dilatadas), P2PNet (localización de personas por
-puntos, sin representación intermedia), P2R (conteo semi-supervisado punto a región) y
-ByteTrack (asociación de detecciones de baja confianza para seguimiento multiobjeto). Su
-síntesis deja establecido un criterio que gobierna todo el diseño posterior: la granularidad con
-que el sistema reporta una posición es una decisión de cumplimiento normativo, no solo una
-decisión de producto.
+El marco teórico revisa los trabajos que sostienen el prototipo. CSRNet, P2PNet y P2R se
+estudian como antecedentes del conteo de multitudes, que orientaron la discusión sobre la
+granularidad de la salida, aunque el prototipo final no usa ninguno de los tres. El sistema
+construido descansa en tres piezas: un detector de personas YOLO de la familia YOLO11
+(Jocher y Qiu, 2024), cuya variante se elige según el hardware disponible; un seguimiento por
+cámara que aplica la asociación en dos etapas de ByteTrack (Zhang et al., 2022) sobre el punto
+de los pies, reforzada con señales de BoT-SORT (Aharon et al., 2022); y un descriptor de
+apariencia OSNet (Zhou et al., 2019) que sostiene la reidentificación entre cámaras.
 
-El equipo construyó dos líneas de prototipo que hoy conviven en el repositorio. La primera
-es un pipeline de detección por puntos (P2PNet), seguimiento mono-cámara adaptado de
-ByteTrack y fusión de identidad entre dos cámaras por proximidad espacio-temporal, validado
-sobre grabaciones propias de la universidad. La segunda, integra un detector de cajas
-(YOLO11n) con ByteTrack, conteo de cruces por zona, un dashboard ejecutivo y una
-cartografía vectorial real del terminal, validada con una suite de 65 pruebas automatizadas y
-sesiones de prueba documentadas por identificador. Ambas líneas comparten el mismo
-principio de diseño: declarar incertidumbre antes que forzar una asociación entre dos personas
-distintas.
+El prototipo funciona de punta a punta en un equipo sin GPU dedicada: configura el plano y
+las cámaras, calibra cada cámara con una homografía, detecta y sigue a las personas, las asocia
+entre cámaras, emite alertas de aglomeración con aviso por correo y produce reportes de
+ocupación, flujo y oportunidad comercial. Su evaluación disponible es limitada y así se declara:
+la identidad entre cámaras se midió sobre dos cámaras de demostración con cuatro personas y
+veinticuatro segundos de video, con umbrales elegidos sobre esos mismos datos, de modo que
+sus cifras son una demostración de funcionamiento y no una medida de precisión general.
 
-La especificación de requerimientos describe doce casos de uso implementados, doce
-requisitos funcionales y seis no funcionales, con su matriz de trazabilidad completa. El
-requisito no funcional rector, RNF-01, exige que del video no se derive ningún rasgo que
-permita identificación biométrica o reidentificación individual persistente; la auditoría del
-prototipo confirma que esa exigencia se cumple parcialmente: la fusión de identidad no usa
-biometría, pero la base de datos persiste coordenadas individuales por persona, lo que no
-satisface todavía la agregación por zona que la propia normativa exige.
+La especificación de requerimientos adopta la numeración maestra del equipo: dieciocho casos
+de uso, dieciocho requisitos funcionales y ocho no funcionales, con su matriz de trazabilidad.
+El requisito no funcional rector, RNF-01, prohíbe derivar del video rasgos que permitan
+identificación biométrica o reidentificación individual persistente. Con la configuración por
+defecto del prototipo \textbf{ese requisito no se cumple}: la memoria de apariencia, activa salvo
+que se desactive, guarda en el disco del equipo el vector OSNet de cuerpo entero de cada
+persona durante veinticuatro horas (configurable hasta siete días) y la reconoce entre sesiones y
+entre días. La corrección está identificada y depende solo del equipo: desactivar esa memoria
+por defecto, de modo que el vector viva únicamente en memoria durante la sesión. A ese
+hallazgo se suma el incumplimiento de la medida de salida agregada (M-03), porque las
+grabaciones de cada sesión conservan posiciones e identificadores por persona sin un plazo de
+retención automático.
 
-Las recomendaciones finales plantean, el despliegue en infraestructura en la nube (AWS)
-para escalar de dos a más de dos cámaras simultáneas y la integración con fuentes de datos
-operativas de los locales del terminal, ambas sujetas a la disponibilidad y autorización de LAP.
+Las recomendaciones plantean cerrar primero esos dos hallazgos, formalizar la Evaluación de
+Impacto en Protección de Datos cuyo contenido sustantivo recoge este informe, validar la
+exactitud del sistema con material del propio terminal y, solo después, considerar el despliegue
+en infraestructura de nube para escalar a más cámaras simultáneas y la integración con fuentes
+operativas de los locales del terminal. Ambas extensiones dependen de la autorización de LAP,
+y la primera exige analizar antes el flujo transfronterizo de datos que supondría procesar fuera
+del Perú (Anexo~\ref{anx:marco}).

@@ -5,121 +5,322 @@
 \label{subsec:descripcion-caso}
 
 El Aeropuerto Internacional Jorge Chávez no distribuye a sus pasajeros de manera
-uniforme. En determinadas franjas horarias y en puntos concretos del terminal se forman
-concentraciones muy superiores a las del resto del recinto en ese mismo momento. Medir esa
-combinación (cuántas personas, en qué zona, durante cuánto tiempo) importa porque las
-decisiones que la atienden son de corto plazo y reversibles: habilitar un mostrador adicional,
-redirigir el flujo hacia un filtro descargado, adelantar un relevo de personal o abrir una segunda
-fila. Todas dependen de conocer dónde se está formando la concentración mientras se forma; un
-recuento que llega al cierre de la jornada sirve para planificar el mes siguiente, pero no para
-resolver la cola de esa mañana.
+uniforme. En determinadas franjas horarias y en puntos concretos del terminal (filtros de
+seguridad, control migratorio, mostradores de \emph{check-in}, salas de embarque) se forman
+concentraciones muy superiores a las del resto del recinto en ese mismo momento. La
+aglomeración, por sí sola, no constituye el problema. Lo constituye cuando la cantidad de
+personas reunidas en un punto excede, durante un tiempo sostenido, la capacidad de atención
+dispuesta para ese punto. La magnitud que interesa medir no es, por tanto, el volumen total de
+pasajeros del terminal, sino una combinación de tres variables: cuántas personas, en qué zona
+y durante cuánto tiempo.
+
+Medir esa combinación importa porque las decisiones que la atienden son de corto plazo y
+reversibles: habilitar un mostrador adicional, redirigir el flujo hacia un filtro descargado,
+adelantar un relevo de personal o abrir una segunda fila. Todas dependen de conocer dónde se
+está formando la concentración mientras se forma; un recuento que llega al cierre de la jornada
+sirve para planificar el mes siguiente, pero no para resolver la cola de esa mañana.
+
+El procedimiento con que LAP resuelve hoy esa decisión no consta en la documentación
+disponible para el equipo, de modo que este informe no lo describe ni lo
+evalúa.\verificar{cómo se decide hoy la dotación de personal y la apertura de mostradores en el
+terminal: procedimiento, periodicidad y responsable. Solicitado a LAP como punto C-08.} Sí
+puede enunciarse la limitación genérica de cualquier método basado en observación humana
+periódica, que es la alternativa frente a la cual se plantea este proyecto: cubre un punto a la vez,
+produce una lectura discontinua en el tiempo y su registro depende de que alguien lo anote, de
+modo que no deja una serie homogénea sobre la que puedan compararse dos días, dos zonas o
+dos franjas horarias.
+
+Conviene precisar el alcance de todo lo anterior para no sobredimensionar el problema que
+el proyecto atiende. Como se indicó en la Introducción, el equipo no dispone de incidentes de
+aglomeración registrados, tiempos de cola medidos ni quejas de pasajeros contabilizadas en el
+propio terminal. Tampoco consta el aforo del terminal ni su superficie por
+zona.\verificar{aforo declarado y superficie de las zonas del terminal. No figura ninguna de las
+dos magnitudes en la documentación del proyecto.} Todas las magnitudes que este informe
+reporta proceden de conjuntos de datos públicos o de grabaciones propias del equipo, y se
+identifican como tales en cada caso.
 
 \subsection{Identificación de Variables y Restricciones}
 \label{subsec:variables-restricciones}
+
+\textbf{Alcance funcional.} El proyecto cubre la estimación de la concentración de personas
+por zona a partir de imágenes de cámaras fijas y, para que esa estimación no cuente dos veces a
+quien aparece en dos cámaras, el seguimiento de cada persona dentro de una cámara y su
+asociación entre cámaras. Queda fuera de su alcance la identificación civil de las personas
+(saber su nombre o su documento) y el reconocimiento facial. No queda fuera, en cambio, la
+individualización: el prototipo asigna a cada persona un identificador anónimo, conserva su
+trayectoria durante la sesión y la reconoce por la apariencia de su cuerpo. Ese es el punto que
+gobierna el análisis normativo de este informe.
+
+\textbf{Zonas cubiertas.} Las zonas concretas del terminal sobre las que se evaluaría el sistema
+dependen de qué cámaras y qué material audiovisual habilite LAP para el proyecto, dato que a
+la fecha de este informe no ha sido confirmado. Donde este informe menciona zonas a título de
+ejemplo lo hace como ilustración del tipo de espacio al que el sistema podría aplicarse, no como
+una cobertura acordada con el cliente. El número de zonas y de cámaras tampoco está
+fijado.\verificar{número de zonas del terminal a cubrir y número de cámaras disponibles por
+zona. El prototipo trabaja con dos cámaras de demostración grabadas por el equipo en la
+universidad, no en el terminal.}
 
 \subsubsection{Variables Operativas de Salida}
 
 \begin{itemize}
   \item \textbf{Variable de salida principal:} concentración de personas por zona (cuántas,
-  dónde, durante cuánto tiempo).
-  \item \textbf{Granularidad de salida:} admite dos niveles con consecuencias normativas
-  distintas: un mapa de densidad agregado por zona, que no requiere identificar
-  individuos, o una localización individual por puntos, que produce un dato
-  espacio-temporal atribuible a una persona si se persiste y se encadena en el tiempo.
+  dónde y durante cuánto tiempo), con alertas cuando una concentración supera los umbrales
+  configurados.
+  \item \textbf{Granularidad de salida implementada:} el prototipo no se limita a un conteo
+  agregado. Produce, además, la posición individual de cada persona en el plano, asociada a un
+  identificador anónimo y a su trayectoria reciente. Esa granularidad individual es un dato
+  espacio-temporal atribuible a una persona, y su tratamiento se examina en la
+  Sección~\ref{subsec:analisis-teas} y en el Anexo~\ref{anx:marco}.
 \end{itemize}
 
 \subsubsection{Variables Técnicas del Pipeline}
 
-Parámetros reales configurados en \texttt{proyecto\_lap\_prototipo/}:
+Parámetros configurados en el prototipo vigente:
 
 \begin{itemize}
-  \item \textbf{Detección:} umbral de confianza \texttt{umbral\_deteccion = 0.5}; resolución de
-  entrada del detector configurable en 480, 640 o 960 px.
-  \item \textbf{Seguimiento mono-cámara:} asociación húngara de alta confianza con
-  \texttt{DISTANCIA\_MAX\_ALTA\_PX = 45.0}; filtro de Kalman de velocidad constante.
-  \item \textbf{Fusión entre cámaras:} \texttt{umbral\_distancia\_fusion = 1.5 m};
-  \texttt{ventana\_temporal\_s = 1.0 s} de recencia.
-  \item \textbf{Filtrado geométrico:} \texttt{margen\_px = 15.0} de tolerancia en el borde del
-  polígono de alcance.
-  \item \textbf{Descriptor de apariencia:} sustracción de fondo MOG2 (\texttt{history=200},
-  \texttt{varThreshold=25}, \texttt{detectShadows=False}).
-  \item \textbf{Monitoreo integrado:} muestreo de 0.2 s por análisis; hasta 32 cámaras
-  configurables por servidor (sin garantía de procesamiento simultáneo de todas).
+  \item \textbf{Detección:} detector YOLO11, en su variante nano en equipos sin GPU y en las
+  variantes pequeña o mediana cuando hay GPU disponible; solo la clase persona; umbral de
+  confianza de 0,25 (0,15 cuando la cámara está a tres metros de altura o más); resolución de
+  entrada de 960 píxeles en CPU y de 1280 píxeles con cámaras elevadas.
+  \item \textbf{Filtros de detección:} se descartan las detecciones fuera de la zona útil de la
+  imagen o del área de trabajo del plano, las dudosas mucho más pequeñas que las personas
+  seguras de la misma cámara y los objetos inmóviles detectados con baja confianza.
+  \item \textbf{Seguimiento mono-cámara:} asociación en dos etapas sobre el punto de los pies,
+  con filtro de Kalman de velocidad constante, puerta espacial de 60 píxeles, umbral de alta
+  confianza de 0,4 y conservación de una persona perdida durante 45 muestras; la asignación
+  se ordena además por la superposición de la caja predicha y por una firma de color del torso.
+  \item \textbf{Reidentificación:} vector de apariencia OSNet de 512 dimensiones calculado
+  sobre el recorte de cuerpo entero, solo con vistas confiables (confianza de al menos 0,55,
+  altura de al menos 40 píxeles, lejos del borde y sin oclusión) y, como máximo, dieciséis
+  recortes por muestra.
+  \item \textbf{Asociación entre cámaras:} similitud mínima de apariencia de 0,75 entre cámaras
+  distintas y de 0,79 dentro de una misma cámara, con coherencia de tiempo (ventana de
+  traspaso de 12 segundos por defecto) y de posición en el plano; solo entre cámaras
+  relacionadas y con sincronización de relojes declarada.
+  \item \textbf{Memoria de apariencia:} activa por defecto, con retención de 24 horas
+  configurable entre 1 y 168 horas.
+  \item \textbf{Muestreo:} una muestra cada 0,2, 0,4 o 0,6 segundos según el modo de
+  rendimiento; hasta 32 cámaras configurables por servidor, sin garantía de procesamiento
+  simultáneo de todas.
 \end{itemize}
 
 \subsubsection{Variables de Desempeño y Evaluación}
 
-Medidas, no estimadas:
+Medidas registradas por el equipo, con su alcance:
 
 \begin{itemize}
-  \item Tiempo de inferencia de P2PNet en CPU: $\approx$3.5 s por cada 0.2 s de video de
-  origen.
-  \item Filtrado de identificadores: de 29 identificadores brutos a 10 personas reales en la
-  corrida de validación.
-  \item Fusiones cruzadas verificadas entre cámara A y B: 2, con distancia espacio-temporal
-  promedio 0.76 y máxima 1.18 sobre un umbral de 1.5.
-  \item Suite de pruebas del monitoreo integrado: 65 pruebas automatizadas, más compilación
-  de TypeScript y Vite.
+  \item Identidad entre cámaras: sobre dos cámaras de demostración, con cuatro personas y
+  veinticuatro segundos de video, el motor de identidad vigente cuenta cuatro personas donde
+  el motor anterior contaba diez, y la métrica IDF1 pasa de 0,48 a 0,73 con umbrales
+  recalibrados para OSNet, y hasta 1,00 cuando las calibraciones de ambas cámaras son
+  coherentes. Los umbrales se eligieron sobre esos mismos datos y las etiquetas de referencia
+  son provisionales, de modo que la cifra es optimista y no constituye una medida de precisión
+  general.\verificar{etiquetas de identidad de las cámaras de demostración: son provisionales y
+  no han sido revisadas una por una por un integrante del equipo.}
+  \item Costo del descriptor de apariencia: entre 17 y 20 milisegundos por recorte en CPU.
+  \item Rendimiento de punta a punta: no verificado como compatible con la operación en
+  tiempo real con varias cámaras en CPU (Sección~\ref{subsec:rnf}).
+  \item Pruebas automatizadas: el repositorio del prototipo incluye 322 pruebas unitarias y de
+  integración.
 \end{itemize}
 
 \subsection{Restricciones del Proyecto}
 \label{subsec:restricciones}
 
-\begin{itemize}
-  \item \textbf{Restricciones Técnicas.} Esta entrega corresponde a un desarrollo y validación
-  conceptual sobre datos públicos y grabaciones propias, sin acceso todavía a material
-  del Aeropuerto Jorge Chávez; la literatura revisada documenta una brecha de dominio
-  conocida entre esos conjuntos y un entorno de despliegue nuevo. El sistema debe
-  operar en CPU, sin GPU dedicada, sobre cámaras fijas que no comparten resolución,
-  altura ni ángulo de instalación.
-  \item \textbf{Restricciones Éticas.} El sistema no puede derivar del video ningún rasgo que
-  permita identificar a una persona, ni siquiera de forma indirecta (RNF-01). Un
-  identificador persistente que permite reagrupar apariciones de un mismo individuo es
-  disociación, no anonimización, y el dato disociado sigue siendo dato personal.
-  \item \textbf{Restricciones Legales.} La Ley 29733 y su reglamento (D.S. 016-2024-JUS)
-  exigen privacidad desde el diseño y por defecto. La Directiva 01-2020-JUS/DGTAIPD
-  fija plazos de conservación de imágenes de videovigilancia entre 30 y 60 días,
-  mientras que el D.S. 007-2020-IN (D.L. 1218 y Ley 30120, aplicable a
-  establecimientos con aforo de 50 personas o más, umbral que un terminal aéreo
-  supera con holgura) exige un mínimo de 45 días; ambos regímenes son compatibles
-  solo dentro de una ventana estrecha, porque responden a finalidades distintas.
-\end{itemize}
+\subsubsection{Restricciones Técnicas}
+
+\textbf{Fase del proyecto y limitación de dominio.} Esta entrega corresponde a Capstone I: un
+desarrollo y validación conceptual sobre datos públicos y grabaciones propias, sin acceso
+todavía a material del Aeropuerto Jorge Chávez. Esto impone la limitación más importante del
+proyecto en esta etapa, y conviene enunciarla sin atenuarla porque condiciona la lectura de
+todo lo que sigue: la literatura revisada reconoce una brecha de dominio entre los conjuntos
+públicos y un entorno de despliegue nuevo, y documenta que el desempeño se degrada de
+forma marcada cuando no media una etapa de adaptación (Lin et al., 2025). Ni el detector ni el
+descriptor de apariencia se han reentrenado con imágenes del terminal. En consecuencia,
+ninguna cifra de desempeño de este informe debe leerse como una predicción de exactitud
+para el Aeropuerto Jorge Chávez.
+
+A esa limitación se suman dos restricciones propias del entorno. El sistema debe operar en
+CPU, sin GPU dedicada, sobre las cámaras fijas ya instaladas, que no comparten resolución,
+altura ni ángulo. Y buena parte de la jornada el terminal opera en baja densidad, mientras que
+en las horas punta las oclusiones entre personas reducen las vistas útiles para la
+reidentificación.
+
+\subsubsection{Restricciones Éticas}
+\label{subsec:restricciones-eticas}
+
+El sistema debe responder cuántas personas hay y dónde, nunca quién es cada una, y de esa
+condición se siguen tres restricciones.
+
+La primera es no identificar ni individualizar más de lo que la finalidad exige: ninguna etapa
+debe extraer rasgos faciales ni construir plantillas biométricas, y la granularidad de salida debe
+ser la mínima que resuelva el problema, porque la diferencia entre estimar una aglomeración y
+seguir a una persona no depende solo del algoritmo sino de si las salidas se persisten y se
+encadenan. Contrastada con el prototipo, esta restricción no se satisface por completo: para
+asociar personas entre cámaras el sistema calcula un vector de apariencia del cuerpo entero de
+cada persona y, con la configuración por defecto, lo conserva en el disco del equipo y lo usa
+para reconocerla en sesiones y días posteriores. Es la reidentificación individual persistente que
+el requisito RNF-01 prohíbe, y se trata como hallazgo no conforme
+(Sección~\ref{subsec:privacidad} y apartado B.9 del Anexo~\ref{anx:marco}).
+
+La segunda es no deslizarse hacia otras finalidades. La reidentificación ya está implementada,
+de modo que añadir usos nuevos sobre ella (medir la permanencia de cada persona frente a un
+local, buscar a una persona concreta en las grabaciones o incorporar reconocimiento facial) es
+una decisión de configuración y no un rediseño. La barrera contra ese deslizamiento es
+documental y contractual, y por eso el proyecto incorpora una declaración expresa de
+finalidades excluidas (Sección~\ref{subsec:analisis-teas}).
+
+La tercera es no prometer exactitud sin validación: ninguna cifra obtenida sobre conjuntos
+públicos o grabaciones propias debe presentarse a LAP como desempeño esperable en el
+terminal.
+
+\subsubsection{Restricciones Legales}
+\label{subsec:restricciones-legales}
+
+El tratamiento de imágenes de personas en el terminal está sujeto a la Ley 29733, de
+Protección de Datos Personales, y a su reglamento, el Decreto Supremo 016-2024-JUS, cuya
+entrada en vigor se habría producido el 30 de marzo de 2025, fecha pendiente de contrastar
+contra la fuente oficial.\verificar{únicamente la fecha de entrada en vigor, el 30 de marzo de
+2025, que es el dato que fija el régimen transitorio. La expedición, la publicación y la
+disposición derogatoria sí se contrastaron contra la separata de El Peruano del 30 de noviembre
+de 2024.} Para videovigilancia rige además la Directiva 01-2020-JUS/DGTAIPD. Se superpone
+el régimen de seguridad ciudadana del Decreto Legislativo 1218 y la Ley 30120, cuya
+denominación oficial también falta confirmar, reglamentados por el Decreto Supremo
+007-2020-IN, que alcanza a los establecimientos comerciales abiertos al público con aforo de
+cincuenta personas o más, umbral que un terminal aéreo supera con
+holgura.\verificar{denominación oficial completa y fecha de publicación del D.L. 1218 y de la
+Ley 30120. El D.S. 007-2020-IN sí se contrastó contra el texto publicado en El Peruano.} Cómo
+encaja un terminal concesionado en ambos regímenes debe validarlo el área legal de LAP.
+
+De ese marco se derivan cinco restricciones de diseño. El consentimiento no es viable en un
+terminal, de modo que la licitud depende de un supuesto del artículo 14 que solo LAP puede
+invocar y de superar el examen de proporcionalidad del artículo 7: a igual utilidad, la salida
+agregada por zona prevalece sobre la localización individual y sobre la reidentificación. La
+finalidad declarada no puede extenderse (artículo 6), y medir permanencias por persona en
+zonas comerciales exigiría una base propia. La Directiva fija para las imágenes una
+conservación máxima de treinta a sesenta días y el Decreto Supremo 007-2020-IN exige
+conservar las de seguridad al menos cuarenta y cinco, lo que obliga a separar el subsistema de
+estimación del circuito cerrado de seguridad. El deber de información exige carteles como el
+del Anexo~\ref{anx:cartel}. Y ejecutar la inferencia fuera del Perú crearía un flujo
+transfronterizo (artículo 15), por lo que se prefiere el procesamiento local, que es como opera
+el prototipo. La privacidad desde el diseño y por defecto, exigible por el principio de
+responsabilidad proactiva, se concreta en los requisitos de la Sección~\ref{subsec:privacidad}.
+
+Contrastado con el prototipo, ninguna etapa construye plantillas faciales, pero el sistema sí
+calcula y conserva un descriptor de apariencia corporal con el que reidentifica a las personas, y
+persiste sus trayectorias individuales. Resultan cinco hallazgos no conformes: falta la
+Evaluación de Impacto en Protección de Datos, exigible antes de tratamientos de alto riesgo
+como la videovigilancia masiva; no se cumple RNF-01, porque la memoria de apariencia activa
+por defecto reidentifica entre sesiones y días; no se cumple el requisito de salida agregada
+(M-03), porque las grabaciones de cada sesión conservan posiciones e identificadores por
+persona sin retención automática; y faltan la validación de exactitud en el terminal y la
+evaluación de sesgo demográfico, que requieren acceso a material de LAP. Los tres primeros
+puede corregirlos el propio equipo. Siguen pendientes la política de retención de las
+grabaciones y la trazabilidad de licencias de los conjuntos de datos. El desarrollo completo
+figura en el Anexo~\ref{anx:marco}.
 
 \subsection{Análisis Técnico, Ético, Social, Ambiental}
 \label{subsec:analisis-teas}
 
-\begin{itemize}
-  \item \textbf{Análisis técnico.} La arquitectura separa deliberadamente cuántas personas hay
-  (disponible incluso sin calibrar cámaras) de quién es quién entre cámaras (que exige
-  calibración y sincronización declarada). La auditoría del prototipo muestra, sin
-  embargo, que la implementación actual sí persiste la información necesaria para
-  reconstruir la segunda, lo que reabre la pregunta de si esa capacidad debe exponerse
-  en producción.
+Este análisis sigue la estructura de una Evaluación de Impacto en Protección de Datos:
+identificar el tratamiento, valorar su necesidad y proporcionalidad, identificar los riesgos para
+los titulares y proponer medidas de mitigación. Esa evaluación es exigible antes de iniciar un
+tratamiento basado en la captación masiva y continua de imágenes, con independencia de lo
+que el modelo haga después con ellas, de modo que este apartado es su contenido sustantivo.
+Se prefiere declarar un impacto como no cuantificado antes que estimarlo sin base. El
+desarrollo completo figura en el Anexo~\ref{anx:impacto}.
 
-  \item \textbf{Análisis ético y legal.} El artículo 2 de la Constitución Política del Perú (1993)
-  reconoce el derecho a que los servicios informáticos no afecten la intimidad y el
-  derecho a la imagen propia. El sistema trata cuatro tipos de dato con régimen
-  distinto: el fotograma (dato personal), el punto con coordenadas (no identifica por sí
-  solo), el dato espacio-temporal (que encadenado reconstruye una trayectoria) y el
-  dato biométrico propiamente dicho, que ni un mapa de densidad ni un conjunto de
-  coordenadas de cabezas constituyen por sí mismos. El equipo detectó una
-  discrepancia terminológica relevante: describir como personas anonimizadas el
-  resultado de un proceso que asigna un identificador persistente es impreciso, porque
-  la anonimización debe ser irreversible. De las diez medidas de privacidad desde el
-  diseño que adopta el proyecto (M-01 a M-10), al cierre de esta versión se cumple
-  M-02 (no persistencia del fotograma) pero no M-03 (salida agregada por zona sin
-  coordenadas individuales persistidas): es el único hallazgo de incumplimiento que el
-  equipo puede cerrar por sí solo, sin depender de LAP.
+\textbf{Tratamiento identificado.} El sistema capta video de cámaras fijas, detecta personas en
+cada fotograma, las sigue dentro de cada cámara, calcula para cada una un vector de apariencia
+del cuerpo entero y lo usa para asociarla entre cámaras y, mientras la memoria de apariencia
+esté activa, para reconocerla en sesiones posteriores dentro del plazo de retención. Conserva
+en el equipo, por cada sesión, las posiciones e identificadores de cada persona, y deriva de ellos
+conteos por zona, alertas y métricas comerciales.
 
-  \item \textbf{Análisis social.} Un sistema que no toma decisiones sobre personas individuales
-  puede producir un daño distributivo si subcuenta sistemáticamente a un grupo:
-  estatura, vestimenta, equipaje voluminoso o sillas de ruedas son factores
-  identificables, aunque no cuantificados por ningún trabajo revisado. Existe además
-  un riesgo de sustitución progresiva del criterio humano por el del sistema, si un
-  operador aprueba mecánicamente las alertas automáticas.
+\subsubsection{Análisis Técnico}
 
-  \item \textbf{Análisis ambiental.} El equipo no ha medido el consumo energético del sistema.
-  Reutilizar modelos preentrenados sin reentrenar, procesar en el borde sin transmitir
-  el fotograma completo, y no persistir imágenes de forma permanente reducen, al
-  mismo tiempo, la exposición de datos personales y el cómputo necesario.
-\end{itemize}
+El riesgo técnico dominante es la brecha de dominio: los autores de P2R reconocen que el
+desempeño de los métodos de conteo se degrada de forma marcada cuando el entorno de
+despliegue difiere del de entrenamiento (Lin et al., 2025), y lo mismo cabe esperar de un
+detector y de un descriptor de apariencia preentrenados sobre otras escenas. Ninguna cifra
+obtenida sobre datos públicos o grabaciones propias predice, por tanto, la exactitud en el
+terminal. La arquitectura separa cuántas personas hay, que se obtiene incluso sin calibrar
+cámaras, de quién es quién entre cámaras, que exige apariencia, sincronización declarada y,
+para usar la posición, calibración. La reidentificación añade un modo de fallo propio: dos
+personas con ropa parecida pueden fusionarse en un solo identificador, y una misma persona
+que cambia de abrigo puede recibir dos. El sistema mitiga lo primero exigiendo coherencia de
+tiempo y posición y marcando como incierta la asociación ambigua, pero no lo elimina. A ello se
+suman el sesgo de anotación de los conjuntos públicos y el sesgo demográfico, que ninguno de
+los trabajos revisados evalúa de forma desagregada: la estatura, los cubrimientos de cabeza, el
+equipaje voluminoso, las sillas de ruedas o los uniformes del personal pueden inducir
+desempeño desigual en una población tan heterogénea como la de un aeropuerto
+internacional. Se recomienda que la validación en sitio incluya una evaluación desagregada, al
+menos por franja de estatura, por presencia de equipaje voluminoso y por vestimenta
+uniforme.
+
+\subsubsection{Análisis Ético y Legal}
+\label{subsec:impacto-etico}
+
+El artículo 2 de la Constitución Política del Perú (1993) reconoce el derecho a que los servicios
+informáticos no suministren informaciones que afecten la intimidad personal y familiar, y el
+derecho a la voz y a la imagen propias. El sistema trata cinco tipos de dato con régimen distinto:
+el fotograma, que es dato personal; el punto con coordenadas, que no identifica por sí solo; el
+dato espacio-temporal, que encadenado reconstruye una trayectoria; el vector de apariencia,
+una característica extraída del cuerpo cuyo propósito es volver a reconocer a la persona; y el
+dato biométrico propiamente dicho, que el sistema no calcula en forma de plantilla facial. El
+vector de apariencia no identifica a nadie por su nombre, pero su función es individualizar, y
+con la memoria de apariencia activa se convierte en un identificador persistente: es, en la
+terminología de la Ley 29733, una disociación y no una anonimización, porque el
+procedimiento es reversible, y el dato disociado sigue siendo dato personal.
+
+El sistema ofrece una alternativa menos invasiva que la identificación biométrica para la
+misma finalidad, pero su riesgo principal no es técnico sino de gobernanza: el deslizamiento de
+finalidad. La analítica comercial del prototipo ya calcula, a partir de las grabaciones, entradas,
+permanencias, regresos y rutas por identificador frente a cada negocio, que es una finalidad
+distinta de la estimación de aglomeraciones y requiere su propia base de legitimación. La
+mitigación que se propone es técnica, documental y contractual: desactivar por defecto la
+memoria de apariencia, fijar una retención automática para las grabaciones y adoptar una
+declaración de finalidades excluidas conforme a la cual el sistema no identifica civilmente a las
+personas, no reconoce rostros ni emociones, no se usa para buscar a una persona concreta, no
+alimenta decisiones automatizadas sobre pasajeros individuales y no se emplea para evaluar al
+personal. Una lista de lo que el sistema no hace es más difícil de erosionar silenciosamente que
+una lista de lo que sí hace, siempre que sea cierta: hoy, la exclusión del seguimiento individual
+de trayectorias no puede incluirse en ella, porque el sistema lo realiza.
+
+De las diez medidas de privacidad desde el diseño que adopta el proyecto (M-01 a M-10), al
+cierre de esta versión se cumplen el procesamiento local (M-01), la no persistencia del
+fotograma de las cámaras en vivo (M-02), el control de acceso por roles con registro de
+auditoría (M-06) y la supervisión humana (M-10); la salida agregada (M-03) no se cumple, y la
+retención con purga automática (M-05) se cumple solo para la memoria de apariencia y no para
+las grabaciones.
+
+\subsubsection{Análisis Social}
+\label{subsec:impacto-social}
+
+El beneficio social es la prevención de incidentes por aglomeración y una asignación de
+recursos basada en evidencia. Frente a él se identifican tres riesgos. Si el subconteo se
+concentra en un grupo, las zonas donde ese grupo se concentra reciben sistemáticamente
+menos personal y menos apertura de mostradores: el daño no es individual sino distributivo.
+El segundo es el sesgo de automatización: si el personal llega a confiar en el tablero más que en
+su propia observación, un fallo en un momento crítico produce un efecto peor que la ausencia
+del sistema, y un operador que aprueba mecánicamente sus alertas reintroduce de hecho la
+decisión automatizada que la supervisión humana pretende evitar. Por eso se recomienda
+tratar la capacitación de los operadores en los modos de fallo del modelo como medida de
+mitigación y no como accesorio de implantación. El tercero es el uso laboral no declarado: el
+sistema sigue a todas las personas que ve, incluido el personal del terminal, y si sus conteos o
+sus trayectorias se cruzan con los turnos se convierte en una herramienta de evaluación de
+desempeño; esa exclusión debe figurar expresamente en la declaración de finalidades.
+
+\subsubsection{Análisis Ambiental}
+\label{subsec:impacto-ambiental}
+
+El equipo no ha medido el consumo energético de la inferencia, de modo que este análisis es
+cualitativo. El prototipo no entrena modelos: reutiliza un detector y un descriptor de
+apariencia preentrenados, lo que evita el costo del entrenamiento. A lo largo de la vida útil, el
+consumo dominante es el de la inferencia continua, y las decisiones que lo reducen (espaciar
+las muestras, procesar en el equipo local sin transmitir video, calcular el vector de apariencia
+solo para vistas confiables y con un tope por muestra, no persistir imágenes y agregar la salida)
+son las mismas que reducen la exposición de datos personales. Se recomienda registrar las
+horas de cómputo desde la primera campaña de adaptación o reentrenamiento, porque ese dato
+no es reconstruible a posteriori, y reutilizar la infraestructura de cámaras existente, que es
+además la opción económicamente decisiva.
