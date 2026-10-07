@@ -4,8 +4,71 @@ import cv2
 import numpy as np
 
 
-def inside(point, polygon):
-    return bool(point is not None and polygon and cv2.pointPolygonTest(np.asarray(polygon, dtype=np.float32), tuple(map(float, point)), False) >= 0)
+def inside(point, polygon, margin=0.):
+    if point is None or not polygon:
+        return False
+    contour = np.asarray(polygon, dtype=np.float32)
+    if margin > 0:
+        return bool(cv2.pointPolygonTest(contour, tuple(map(float, point)), True) >= -margin)
+    return bool(cv2.pointPolygonTest(contour, tuple(map(float, point)), False) >= 0)
+
+
+MARGEN_CONTORNO = .03      # fracción del lado mayor del plano que se tolera fuera del contorno dibujado
+
+
+def plan_outline(plan, snap=1e-3):
+    """Contorno cerrado que dibujan las líneas del plano, en unidades del plano, o None si no hay uno solo y simple.
+
+    Las líneas del plano (`planLines`, coordenadas 0..1) a veces son justo el borde del espacio: una cadena de segmentos que
+    vuelve al primer punto. Solo se reconoce ese caso. Un plano con muchas líneas sueltas (muros, puertas, mobiliario) no
+    delimita un área y no se usa como límite."""
+    lines = plan.get('planLines') or []
+    width, height = plan.get('width'), plan.get('height')
+    if not isinstance(lines, list) or not 3 <= len(lines) <= 200 or not width or not height:
+        return None
+    nodes, adjacent = [], {}
+
+    def node(x, y):
+        for i, (nx, ny) in enumerate(nodes):
+            if abs(nx - x) <= snap and abs(ny - y) <= snap:
+                return i
+        nodes.append((x, y))
+        return len(nodes) - 1
+
+    for line in lines:
+        if not isinstance(line, (list, tuple)) or len(line) != 4 or not all(isinstance(v, (int, float)) and math.isfinite(v) for v in line):
+            return None
+        a, b = node(line[0], line[1]), node(line[2], line[3])
+        if a != b:
+            adjacent.setdefault(a, set()).add(b)
+            adjacent.setdefault(b, set()).add(a)
+    if len(adjacent) < 3 or any(len(v) != 2 for v in adjacent.values()):
+        return None
+    order, previous, current = [], None, next(iter(adjacent))
+    while current not in order:
+        order.append(current)
+        following = [n for n in adjacent[current] if n != previous]
+        if not following:
+            return None
+        previous, current = current, following[0]
+    if len(order) != len(adjacent):
+        return None
+    polygon = [[nodes[i][0] * width, nodes[i][1] * height] for i in order]
+    try:
+        validate_polygon(polygon, width, height, 'Contorno del plano')
+    except ValueError:
+        return None
+    return polygon
+
+
+def outline_scope(plan):
+    """Límite de trabajo implícito: el contorno del plano, si no hay uno dibujado a propósito. {} si no aplica."""
+    if plan.get('workArea') or plan.get('mapAsset'):
+        return {}
+    polygon = plan_outline(plan)
+    if not polygon:
+        return {}
+    return {'workArea': polygon, 'workAreaMargin': MARGEN_CONTORNO * max(plan['width'], plan['height'])}
 
 
 def accepts(camera, config, u, v, ground, image_only=False):
@@ -14,7 +77,7 @@ def accepts(camera, config, u, v, ground, image_only=False):
     # Sin homografía solo se puede evaluar la máscara de la imagen.
     if image_only:
         return True
-    if not config.get('mapAsset') and config.get('workArea') and not inside(ground, config['workArea']):
+    if not config.get('mapAsset') and config.get('workArea') and not inside(ground, config['workArea'], config.get('workAreaMargin', 0.)):
         return False
     return True
 

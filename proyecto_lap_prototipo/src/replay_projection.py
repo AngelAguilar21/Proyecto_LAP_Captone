@@ -2,7 +2,7 @@
 import copy
 from live_core import calibration, project, Occupancy
 from following.flow import FlowField
-from spatial_scope import accepts
+from spatial_scope import accepts, outline_scope
 
 
 def current_projection(meta, samples, config):
@@ -21,6 +21,7 @@ def current_projection(meta, samples, config):
                 continue
             pid = camera.get('planId', 'custom')
             plan = {**config, **(config.get('plans', {}).get(pid, {}) if pid != config.get('planId') else {})}
+            plan.update(outline_scope(plan))
             counters.setdefault(pid, Occupancy(plan))
             fields.setdefault(pid, FlowField(plan))
             camera_counters.setdefault(cid, Occupancy(plan))

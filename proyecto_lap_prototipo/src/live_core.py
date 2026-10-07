@@ -290,28 +290,72 @@ def _fit_calibration_homography(points):
 
     Las cuatro referencias mínimas siempre determinan una homografía exacta,
     pero una referencia adicional mal marcada puede inclinar todo el plano.
-    Con cinco o más puntos usamos RANSAC en el espacio del plano y luego
-    reajustamos con los inliers. El umbral es relativo al tamaño del plano para
-    que funcione igual con coordenadas relativas y con metros.
+
+    Marcar a mano un plano aéreo sobre un video oblicuo deja errores de varios
+    centímetros en cada referencia. Con cinco o más puntos se ajustan primero
+    TODAS por mínimos cuadrados y, si ninguna se sale de la tolerancia, se usan
+    todas. Solo si alguna no concuerda se busca con RANSAC el subconjunto
+    consistente y se reajusta con él. La tolerancia es el 8 % de la extensión de
+    las referencias (relativa al plano, igual con coordenadas relativas o en
+    metros) y no cuenta una referencia absurdamente lejana, que agrandaría la
+    tolerancia y taparía justo el error.
+
+    Con un umbral estricto (1,8 %) RANSAC daba por malas referencias correctas y
+    se quedaba con justo cuatro: un ajuste exacto, sin redundancia, que fuera de
+    esas cuatro proyectaba a las personas a decenas de metros. Si el consenso es
+    menor que la mitad de las referencias no hay subconjunto fiable y se conserva
+    el ajuste con todas (`calibration` avisa de que no concuerdan).
     """
     destino = points[:, 2:]
-    span = max(float(np.ptp(destino, axis=0).max()), .01)
     if len(points) < 5:
         h, mask = cv2.findHomography(points[:, :2], destino, 0)
         return h, np.ones(len(points), dtype=bool), None, "exacta"
-    threshold = max(.02, span * .018)
+    distancia = np.linalg.norm(destino - np.median(destino, axis=0), axis=1)
+    cercanas = distancia <= 4. * max(float(np.median(distancia)), 1e-9)
+    if int(cercanas.sum()) < 4:
+        cercanas = np.ones(len(points), dtype=bool)
+    span = max(float(np.ptp(destino[cercanas], axis=0).max()), .01)
+    tolerancia = max(.02, span * .08)
+    todas, _ = cv2.findHomography(points[:, :2], destino, 0)
+    if todas is not None and np.isfinite(todas).all():
+        proyectado = cv2.perspectiveTransform(points[:, :2].reshape(-1, 1, 2), todas).reshape(-1, 2)
+        if float(np.linalg.norm(proyectado - destino, axis=1).max()) <= tolerancia:
+            return todas, np.ones(len(points), dtype=bool), tolerancia, "minimos cuadrados"
     h, mask = cv2.findHomography(points[:, :2], destino, cv2.RANSAC,
-                                 threshold, maxIters=3000, confidence=.995)
+                                 tolerancia, maxIters=3000, confidence=.995)
     if h is None or mask is None:
-        return h, np.zeros(len(points), dtype=bool), threshold, "ransac"
+        return h, np.zeros(len(points), dtype=bool), tolerancia, "ransac"
     inliers = mask.reshape(-1).astype(bool)
+    if int(inliers.sum()) < max(4, (len(points) + 1) // 2) and todas is not None:
+        return todas, np.ones(len(points), dtype=bool), tolerancia, "ransac"
     if int(inliers.sum()) >= 4 and not np.all(inliers):
         # RANSAC encuentra el conjunto consistente; el reajuste exacto reduce
         # el sesgo introducido por el umbral y hace reproducible la proyección.
-        refined, _ = cv2.findHomography(points[inliers, :2], destino[inliers], 0)
-        if refined is not None:
+        # Con el reajuste, las referencias que solo habían quedado fuera por azar de la muestra vuelven al conjunto.
+        for _ in range(3):
+            refined, _ = cv2.findHomography(points[inliers, :2], destino[inliers], 0)
+            if refined is None or not np.isfinite(refined).all():
+                break
             h = refined
-    return h, inliers, threshold, "ransac"
+            proyectado = cv2.perspectiveTransform(points[:, :2].reshape(-1, 1, 2), h).reshape(-1, 2)
+            nuevos = np.linalg.norm(proyectado - destino, axis=1) <= tolerancia
+            if int(nuevos.sum()) < 4 or np.array_equal(nuevos, inliers):
+                break
+            inliers = nuevos
+        else:
+            refined, _ = cv2.findHomography(points[inliers, :2], destino[inliers], 0)
+            if refined is not None and np.isfinite(refined).all():
+                h = refined
+    return h, inliers, tolerancia, "ransac"
+
+
+def reference_inliers(pairs):
+    """Las referencias que concuerdan con el ajuste (todas si no se descartó ninguna): solo ellas delimitan donde es fiable."""
+    if len(pairs) < 5:
+        return pairs
+    puntos = np.asarray(pairs, dtype=np.float64)
+    _, inliers, _, _ = _fit_calibration_homography(puntos)
+    return [p for p, ok in zip(pairs, inliers) if ok] if int(inliers.sum()) >= 4 else pairs
 
 
 def calibration(pairs):

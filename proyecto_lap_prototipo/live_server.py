@@ -165,6 +165,10 @@ def region_fiable(camera, factor=EXPANSION_REGION_FIABLE):
     pares = camera.get("pairs") or []
     if len(pares) < 4:
         return None
+    try:
+        pares = reference_inliers(pares)
+    except ValueError:
+        pass
     uv = np.asarray([[q[0], q[1]] for q in pares], np.float32)
     casco = cv2.convexHull(uv).reshape(-1, 2)
     if len(casco) < 3 or cv2.contourArea(casco) < 1e-4:
@@ -199,9 +203,10 @@ if __name__ == "__main__" and project_python.is_file() and Path(sys.prefix).reso
 sys.path.insert(0, str(ROOT / "src"))
 import hardware
 from live_core import (ESTATURA_MEDIA, Occupancy, calibration, estimate_height, ground_point, validate_config,
-                       collapsed_pairs, blocking_calibration_issue, pairs_hash, related_cameras)
+                       collapsed_pairs, blocking_calibration_issue, pairs_hash, related_cameras, reference_inliers)
 from live_metrics import SessionMetrics
-from spatial_scope import accepts
+from spatial_scope import accepts, outline_scope
+from following.detector import clip_box
 import projects
 import business_data
 import business_catalog
@@ -964,7 +969,10 @@ class Engine:
             self.runtime_config["cameras"] = copy.deepcopy(selected)
             # Cámaras vecinas: las que el usuario relacionó marcando a la misma persona en ambas (o enlaces manuales).
             selected_ids = {camera['id'] for camera in selected}
-            vecinas = related_cameras(self.runtime_config)
+            # `related_cameras` expone listas para que la configuración sea
+            # serializable. Durante el filtrado de pares necesitamos mutarlas,
+            # por eso se convierten a conjuntos solo dentro de este bloque.
+            vecinas = {cid: set(destinos) for cid, destinos in related_cameras(self.runtime_config).items()}
             bloqueadas_geometria = []
             if mode == "yolo":
                 # Una similitud OSNet no basta si las homografías de dos cámaras
@@ -1402,6 +1410,8 @@ class Engine:
             for camera in cams:
                 plan=level_configs[camera.get('planId','custom')]
                 camera['scope']={key:plan.get(key) for key in ('width','height','workArea','zones','mapAsset')}
+                # Sin límite de trabajo dibujado, el contorno cerrado de las líneas del plano hace de límite: nadie queda fuera de él.
+                camera['scope'].update(outline_scope(plan))
             from bag_signal import BagSignal
             bag_signal = BagSignal(ROOT,cams)
             flow = ZoneFlow(config)
@@ -1480,7 +1490,18 @@ class Engine:
                 def leer(c):
                     cap = c["cap"]
                     if not c["stream"]:
-                        target = max(0, int((t + source_time_offset(c)) * c["fps"]))
+                        target = max(0, int(round((t + source_time_offset(c)) * c["fps"])))
+                        # Saltar el desfase directamente al abrir el archivo evita
+                        # procesar desde el fotograma 0 y garantiza que la primera
+                        # muestra ya corresponda al tiempo común configurado.
+                        if c["frameIndex"] < 0 and target > 0:
+                            try:
+                                if cap.set(cv2.CAP_PROP_POS_FRAMES, target):
+                                    c["frameIndex"] = target - 1
+                            except Exception:
+                                # Algunos códecs no soportan seek; el bucle de
+                                # grabación de abajo conserva el comportamiento seguro.
+                                pass
                         if target < c["frameIndex"]:
                             cap.set(cv2.CAP_PROP_POS_FRAMES, target)
                             c["frameIndex"] = target - 1
@@ -1529,6 +1550,32 @@ class Engine:
                 seguimiento_inicio = time.monotonic()
                 etapas = []
                 for (c, frame, height, width), detections in zip(pending, detection_batches):
+                    # La salida del detector es la frontera de confianza para
+                    # todo el pipeline. Normalizamos las cajas contra el
+                    # frame real antes de calcular pies, homografías, Re-ID o
+                    # dibujar overlays; algunos adaptadores/modelos pueden
+                    # devolver coordenadas ligeramente fuera de la imagen.
+                    limpias = []
+                    for detection in detections:
+                        box = clip_box(getattr(detection, "box", None), width, height)
+                        if box is None:
+                            # Adaptadores ligeros de laboratorio pueden
+                            # entregar solo el punto de los pies. Se conserva
+                            # si está dentro del frame, pero no se inventa una
+                            # caja para Re-ID ni para el overlay.
+                            try:
+                                point = (float(detection.x), float(detection.y))
+                            except (AttributeError, TypeError, ValueError):
+                                continue
+                            if not np.isfinite(point).all() or not (0 <= point[0] < width and 0 <= point[1] < height):
+                                continue
+                            detection.box = None
+                        else:
+                            detection.box = box
+                            detection.x = (box[0] + box[2]) / 2
+                            detection.y = box[3]
+                        limpias.append(detection)
+                    detections = limpias
                     keep = []
                     for i,d in enumerate(detections):
                         ground, fiable = ubicar_en_plano(c, d.x/width, d.y/height, person_height)
@@ -1547,6 +1594,8 @@ class Engine:
                     for detection in detections:
                         detection.appearance = torso_histogram(frame, getattr(detection, "box", None))
                     tracks, _, _ = c["tracker"].actualizar(detections, t)
+                    for track in tracks:
+                        track.ultima_caja = clip_box(getattr(track, "ultima_caja", None), width, height)
                     still = clutter[c["id"]].update(tracks, t, (width, height)) if use_filters else set()
                     if still:
                         tracks = [tr for tr in tracks if tr.id not in still]
@@ -1603,7 +1652,17 @@ class Engine:
                     fuera_de_zona = 0
                     for tr in tracks:
                         px, py = tr.posicion
-                        box = tr.ultima_caja
+                        # Un Kalman puede rebasar un borde durante una
+                        # actualización brusca. No proyectamos ese estado
+                        # porque una homografía fuera del frame es una
+                        # extrapolación sin significado físico.
+                        if not (0 <= px < width and 0 <= py < height):
+                            fuera_de_zona += 1
+                            continue
+                        original_box = getattr(tr, "ultima_caja", None)
+                        box = clip_box(original_box, width, height)
+                        if original_box is not None and box is None:
+                            continue
                         point, fiable = ubicar_en_plano(c, px / width, py / height, person_height)
                         fuera_de_zona += bool(c["projects"] and not fiable)
                         if not accepts(c,c["scope"],px/width,py/height,point,image_only=not fiable):
@@ -1675,14 +1734,17 @@ class Engine:
                     if fuera_de_alcance.get(cid):
                         cv2.putText(frame, f"{len(fuera_de_alcance[cid])} fuera de la zona (gris)", (12, frame.shape[0]-14), cv2.FONT_HERSHEY_SIMPLEX, .6*overlay_scale, (190, 190, 190), max(1, line_width-1))
                     for p in [p for p in people if p["camera"] == cid]:
-                        px, py = map(int, p["pixel"])
+                        px = max(0, min(frame.shape[1] - 1, int(round(p["pixel"][0]))))
+                        py = max(0, min(frame.shape[0] - 1, int(round(p["pixel"][1]))))
                         trail = trails.setdefault((cid, p["id"]), deque(maxlen=25))
                         trail.append((px, py))
                         if len(trail) > 1:
                             cv2.polylines(frame, [np.asarray(trail, dtype=np.int32)], False, (70, 220, 120), line_width)
                         if p["box"]:
-                            x1, y1, x2, y2 = map(int, p["box"])
-                            cv2.rectangle(frame, (x1, y1), (x2, y2), (70, 220, 120), line_width)
+                            box = clip_box(p["box"], frame.shape[1], frame.shape[0])
+                            if box is not None:
+                                x1, y1, x2, y2 = map(int, box)
+                                cv2.rectangle(frame, (x1, y1), (x2, y2), (70, 220, 120), line_width)
                         cv2.circle(frame, (px, py), 5, (70, 220, 120), -1)
                         suffix = " ~" if p["association"] != "local" else ""
                         label = p["id"] + suffix
