@@ -80,6 +80,7 @@ proyecto_lap_prototipo/docs/REVISION_USABILIDAD_MONITOREO.md
 proyecto_lap_prototipo/config/correo.local.json
 proyecto_lap_prototipo/config/projects/
 proyecto_lap_prototipo/config/usuarios.local.json
+proyecto_lap_prototipo/config/storage.local.json
 
 # Lectura local de papers y notas de investigación; no se versiona.
 proyecto_lap_prototipo/paper_reidentification/
@@ -109,3 +110,13 @@ proyecto_lap_prototipo/data/anotacion/
 proyecto_lap_prototipo/models/yolo26s-reid.onnx
 # Memoria de apariencia (vectores): datos de sesiones, nunca al repositorio
 proyecto_lap_prototipo/data/identidad/
+
+# Repositorios externos consultados, solo locales
+/referencias-locales/
+# Candidato descargable; conservar solo el exportador y la referencia oficial.
+proyecto_lap_prototipo/models/osnet_ain_msmt17.*
+proyecto_lap_prototipo/models/*.tmp.onnx
+proyecto_lap_prototipo/models/fastreid_msmt17.*
+/outputs/
+# Resultados y recortes de esta validación: datos locales, no código del proyecto.
+proyecto_lap_prototipo/data/commercial-tests/4feb3f3e/

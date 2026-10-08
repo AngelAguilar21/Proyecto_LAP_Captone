@@ -12,3 +12,10 @@
 @media (max-width:620px){.commerce{gap:18px}.commerce-filters{grid-template-columns:1fr;padding:18px}.commerce-content{padding:20px 18px}.commerce-kpis{grid-template-columns:1fr}.commerce-section-heading,.commerce-bag-row{display:flex;flex-direction:column}.company-banner{grid-template-columns:1fr}.company-banner>div:first-child{grid-column:auto}.commerce-heading h1{font-size:clamp(24px,8vw,34px)}.commerce-actions{width:100%}.commerce-actions button{flex:1 1 150px}.commerce-table table{min-width:560px}}
 
 .reports-page .reports-selector{gap:14px}.reports-page .reports-selector>label{max-width:520px}.reports-page .reports-selector select{width:100%;min-height:42px}.report-error{color:#ffb7bf!important;border-left:3px solid #ff5468;padding:10px 12px;background:#24151a}.report-runtime-error{display:flex;flex-direction:column;gap:12px;padding:28px}.report-runtime-error h2,.report-runtime-error p{margin:0}.report-runtime-error button{align-self:flex-start}
+.aero .commerce .commerce-table td{color:var(--text);border-color:var(--border)}
+.aero .commerce .commerce-table tbody tr:nth-child(even){background:var(--surface-secondary,var(--panel))!important}
+.aero .commerce .commerce-table th,.aero .commerce .commerce-table small{color:var(--muted);border-color:var(--border)}
+:root[data-theme="light"] .aero .commerce .commerce-test{background:#fff5df;color:#735013!important;border-color:#d89b24}
+:root[data-theme="light"] .aero .commerce .commerce-recommendations{background:#eef6fa;border-color:#bdd6e4}
+:root[data-theme="light"] .aero .commerce .commerce-recommendations h2,:root[data-theme="light"] .aero .commerce .commerce-recommendations li{color:#193e56!important}
+:root[data-theme="light"] .aero .commerce .commerce-recommendations p{color:#48677b!important}

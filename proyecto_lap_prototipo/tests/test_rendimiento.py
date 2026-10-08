@@ -19,7 +19,7 @@ class Presets(unittest.TestCase):
     def test_auto_elige_por_numero_de_camaras_en_cpu_y_conserva_preciso_con_gpu(self):
         elegir = live_server.rendimiento_elegido
         self.assertEqual(elegir("auto", 1)[0], "precise")
-        self.assertEqual(elegir("auto", 2)[0], "precise")
+        self.assertEqual(elegir("auto", 2)[0], "balanced")
         self.assertEqual(elegir("auto", 3)[0], "balanced")
         self.assertEqual(elegir("auto", 4)[0], "balanced")
         self.assertEqual(elegir("auto", 7)[0], "fast")

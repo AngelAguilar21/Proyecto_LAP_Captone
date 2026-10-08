@@ -34,8 +34,9 @@ class UserStoreError(ValueError):
 
 def _read(settings_root):
     path = path_for(settings_root)
+    from storage import operational
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = operational.read_document(path) if operational.enabled(path) else json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         if path.is_symlink():
             raise UserStoreError("No se puede leer el almacén de usuarios. Requiere revisión local.") from None
@@ -66,6 +67,10 @@ def _read(settings_root):
 
 
 def _write(settings_root, data):
+    from storage import operational
+    if operational.enabled(path_for(settings_root)):
+        operational.write_document(path_for(settings_root), data)
+        return
     path = path_for(settings_root)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")

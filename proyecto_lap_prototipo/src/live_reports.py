@@ -115,7 +115,7 @@ def business_report_data(config, state):
     series=state.get("series",[])
     peak=max(series,key=lambda s:s["count"]) if series else None
     names={c['id']:c.get('name',c['id']) for c in config['cameras']}
-    crossings=[{**l,"camera":names.get(cid,cid)} for cid,a in state.get('cameraAnalytics',{}).items() for l in a.get('crossings',[])]
+    crossings=[{**l,"camera":names.get(cid,cid)} for cid,a in state.get('cameraAnalytics',{}).items() for l in (a or {}).get('crossings',[])]
     bins={}
     for sample in series:
         hour=int(sample["t"]//3600)

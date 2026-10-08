@@ -436,3 +436,18 @@
 }
 .aero .monitor-empty h2 { font-size: 19px; }
 .aero .monitor-empty p { color: var(--tinta-2); margin: 0; }
+.aero details.replay-history {
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.aero details.replay-history[open] {
+  display: block;
+}
+.aero details.replay-history > summary {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}

@@ -31,10 +31,11 @@ SEPARADOS = 1.33
 class _Grupos:
     """Conjuntos disjuntos de tracklets que nunca juntan dos tracklets que chocan."""
 
-    def __init__(self, uids, choques):
+    def __init__(self, uids, choques, gate=None):
         self.de = {u: u for u in uids}
         self.miembros = {u: {u} for u in uids}
         self.choques = choques
+        self.gate = gate
 
     def unir(self, a, b, aceptar=None):
         """Une los grupos de a y b; False si algún par choca o si aceptar(miembros_a, miembros_b) lo rechaza."""
@@ -42,6 +43,8 @@ class _Grupos:
         if ga == gb:
             return True
         if any((x, y) in self.choques for x in self.miembros[ga] for y in self.miembros[gb]):
+            return False
+        if self.gate is not None and not self.gate(self.miembros[ga], self.miembros[gb]):
             return False
         if aceptar is not None and not aceptar(self.miembros[ga], self.miembros[gb]):
             return False
@@ -68,7 +71,9 @@ class ReagrupadorPlano:
     """Reagrupa tracklets con su posición en el plano y, solo si no la contradice, con el Re-ID."""
 
     def __init__(self, escala=1.6, fps=5.0, min_juntos_s=2.0, min_parecido=0.50, min_muestras=5, min_visible_s=2.0, usar_posicion=True,
-                 min_parecido_global=0.60, min_vistas_global=2, factor_separados=SEPARADOS):
+                 min_parecido_global=0.60, min_vistas_global=2, factor_separados=SEPARADOS, pair_gate=None, group_gate=None):
+        self.pair_gate = pair_gate
+        self.group_gate = group_gate
         self.min_parecido_global, self.min_vistas_global = min_parecido_global, min_vistas_global
         self.escala, self.fps = float(escala), float(fps)
         self.max_mediana, self.cerca, self.separados = MEDIANA_JUNTOS * escala, CERCA * escala, factor_separados * escala
@@ -82,7 +87,8 @@ class ReagrupadorPlano:
         """
         datos = self._recorridos(tracklets, series)
         juntos, choques = self._pares(datos)
-        grupos = _Grupos(sorted(datos), choques)
+        gate = (lambda a, b: self.group_gate([datos[u] for u in a], [datos[u] for u in b])) if self.group_gate else None
+        grupos = _Grupos(sorted(datos), choques, gate)
         for _, _, a, b in sorted(juntos):
             grupos.unir(a, b)
         separados = self._aplicar_reid(datos, grupos, prototipos)
@@ -113,6 +119,9 @@ class ReagrupadorPlano:
         for i, a in enumerate(uids):
             for b in uids[i + 1:]:
                 da, db = datos[a], datos[b]
+                if self.pair_gate is not None and not self.pair_gate(da, db):
+                    choques.update({(a, b), (b, a)})
+                    continue
                 if da["t1"] < db["t0"] - 1e-9 or db["t1"] < da["t0"] - 1e-9:
                     continue
                 if da["camara"] == db["camara"]:

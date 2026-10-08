@@ -15,7 +15,7 @@ from task_control import checkpoint
 
 SUFFIXES = (".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v")
 MARKER = ".completed.json"
-MAX_SIZE = 1024 ** 3
+MAX_SIZE = 2 ** 63 - 1
 _dedup_lock = __import__('threading').Lock()
 
 
@@ -29,11 +29,12 @@ def deduplicate_completed(root, target):
     target = plain_path(target, root)
     directory = target.parent
     with _dedup_lock:
-        completed(target, root)
-        _, sha = file_fingerprint(target, root)
+        _, (target_fp, marker_fp) = completed_fingerprint(target, root)
+        sha = target_fp[1]
         index = plain_path(directory / '_indice.json', root)
         try:
-            table = strict_json(index, root)
+            _, raw = file_fingerprint(index, root, content=True, limit=65536)
+            table = strict_json(raw)
             if not isinstance(table, dict): table = {}
         except (OSError, ValueError):
             table = {}
@@ -41,17 +42,24 @@ def deduplicate_completed(root, target):
         if isinstance(name, str) and name == Path(name).name and name not in ('', '.', '..'):
             try:
                 previous = plain_path(directory / name, root)
-                completed(previous, root)
-                _, previous_sha = file_fingerprint(previous, root)
+                _, (previous_fp, _) = completed_fingerprint(previous, root)
+                previous_sha = previous_fp[1]
                 if previous != target and previous_sha == sha:
+                    if identity(target) != target_fp[0] or identity(metadata_path(target)) != marker_fp[0]:
+                        raise ValueError('Upload changed during deduplication')
                     target.unlink()
                     metadata_path(target).unlink()
                     return previous
             except (OSError, ValueError):
                 pass
         table[sha] = target.name
-        from path_security import atomic_json
-        atomic_json(index, table, root)
+        temporary = plain_path(directory / ('_indice.' + secrets.token_hex(16) + '.tmp'), root)
+        with temporary.open('x', encoding='utf-8') as output:
+            json.dump(table, output, sort_keys=True, allow_nan=False)
+            output.flush()
+            os.fsync(output.fileno())
+        plain_path(index, root)
+        os.replace(temporary, index)
     return target
 
 

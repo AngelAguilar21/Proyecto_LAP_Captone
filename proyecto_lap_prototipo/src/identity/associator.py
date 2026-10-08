@@ -92,6 +92,8 @@ class _GaleriaCompartida:
         self.stats = {"muestras_reid": 0, "verificaciones": 0,
                       "fusiones": 0, "separaciones": 0, "cambios_de_persona": 0, "ambiguos": 0}
         self.enlaces = []
+        self.stats.update(candidatas_grafo_descartadas=0, comparaciones_apariencia=0,
+                          rechazos_apariencia=0, rechazos_fisicos=0, candidatas_tiempo_descartadas=0)
 
     def global_uuid(self, publico):
         """UUID v5 anónimo de un ID público dentro de la sesión."""
@@ -502,19 +504,42 @@ class _FusionIdentidades:
         sucias, self.sucias = self.sucias, set()
         self.vigentes = {g for g in self.vigentes if g in self.globales and self._fin(g) >= self.last_timestamp - self.window}
         listas = [g for g in sorted(self.vigentes) if self._n_vistas(g) >= self.min_query_samples]
+        por_camara = {}
+        for g in listas:
+            for track in self._miembros(g):
+                por_camara.setdefault(track.camera_id, set()).add(g)
         propuestas = []
         for gb in sorted(g for g in sucias if g in self.globales and self._n_vistas(g) >= self.min_query_samples):
             candidatas = []
-            for ga in listas:
+            destinos = {t.camera_id for t in self._miembros(gb)}
+            relacionadas = set(destinos)
+            for destino in destinos:
+                relacionadas.update(self.camera_neighbors.get(destino, ()))
+            candidatas_grafo = set().union(*(por_camara.get(c, set()) for c in relacionadas))
+            self.stats['candidatas_grafo_descartadas'] += len(set(listas) - candidatas_grafo)
+            for ga in sorted(candidatas_grafo):
                 if ga == gb:
                     continue
+                # Descartar imposibilidades temporales antes de multiplicar embeddings.
+                # La compuerta geométrica completa sigue aplicándose después.
+                from .topology import allowed_groups
+                def interval(track):
+                    return {'camara': track.camera_id, 't0': track.inicio_s, 't1': track.fin_s}
+                if not allowed_groups([interval(a) for a in self._miembros(ga)],
+                                      [interval(b) for b in self._miembros(gb)],
+                                      self.transiciones, self.solapes, self.reentry):
+                    self.stats['candidatas_tiempo_descartadas'] += 1
+                    continue
+                self.stats['comparaciones_apariencia'] += 1
                 similitud = self._similitud(ga, gb)
                 if (similitud is None or similitud[0] < similitud[2]
                         or similitud[1] < self.average_threshold + similitud[2] - self.threshold):
+                    self.stats['rechazos_apariencia'] += 1
                     continue
                 if self._compatibles(self._miembros(ga), self._miembros(gb)):
                     candidatas.append((similitud[0], ga, similitud[1]))
                 else:
+                    self.stats['rechazos_fisicos'] += 1
                     self._anotar_rechazo_geometrico(ga, gb)
             if not candidatas:
                 continue
@@ -657,6 +682,13 @@ class AsociadorMulticamara(_GaleriaCompartida, _ObservacionesReID, _GatingFisico
 
     def __init__(self, encoder, config):
         self.config, self.camaras, self.transiciones, self.solapes = cargar_registro(config)
+        self.camera_neighbors = {cid: set() for cid in self.camaras}
+        for source, target in self.transiciones:
+            self.camera_neighbors[source].add(target)
+            self.camera_neighbors[target].add(source)
+        for pair in self.solapes:
+            for cid in pair:
+                self.camera_neighbors[cid].update(pair - {cid})
         ajustes = self.config.get("association", {})
         self.mode = self.config.get("mode", "calibrado")
         self.encoder = encoder

@@ -1,0 +1,4 @@
+# Opcional: solo para exportar el candidato OSNet-AIN, no para ejecutar la app.
+torchreid==0.2.5
+gdown==6.4.1
+onnx==1.23.2

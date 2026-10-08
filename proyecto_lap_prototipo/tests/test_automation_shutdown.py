@@ -21,11 +21,7 @@ from automation import AutomationService
 import automation_settings
 import business_data
 import notifier
-from counting.engine import CountingEngine, defaults
-from counting.source import VideoSource
-from following.adaptive import AsyncDensitySampler
 from following.source import NetworkCapture
-from identity_memory import IdentityMemory
 from resource_control import http_operation, hold_path
 from shutdown_control import ManagedHTTPServer, stop_server, quiescent, defer_close
 from task_control import checkpoint
@@ -292,6 +288,7 @@ class AutomationShutdownTests(unittest.TestCase):
         new.release.assert_called_once()
         self.assertFalse(self.engine.resources.busy())
 
+    @unittest.skip('P2PNet y su muestreador fueron retirados en main')
     def test_async_density_active_inference_remains_owned_after_close_timeout(self):
         entered, release, block = self.gate()
         detector = SimpleNamespace(detectar=lambda frame: (block() or []))
@@ -343,6 +340,7 @@ class AutomationShutdownTests(unittest.TestCase):
                 self.engine.detector_warmup.join(3)
         self.assertTrue(stop_server(self.server, 0))
 
+    @unittest.skip('El motor counting fue retirado en main')
     def test_counting_source_initialization_is_cancelled_and_owned(self):
         entered, release, block = self.gate()
         video = SimpleNamespace(live=True, duration=None, fps=25, started=0, close=Mock())
@@ -367,6 +365,7 @@ class AutomationShutdownTests(unittest.TestCase):
         self.assertEqual(counting.state["status"], "stopped", counting.state.get("error"))
         self.assertTrue(stop_server(self.server, 0))
 
+    @unittest.skip('IdentityMemory fue sustituida por la memoria de apariencia reid_v2')
     def test_main_pipeline_keeps_identity_connection_until_writer_finally(self):
         entered, release, block = self.gate()
         capture = Capture(lambda: (block() or (True, np.zeros((48, 64, 3), dtype=np.uint8))))
@@ -420,6 +419,9 @@ class AutomationShutdownTests(unittest.TestCase):
 
     def test_published_camera_aggregates_are_isolated_from_next_inference(self):
         from following.combined import CombinedAnalysis
+        from tracking import BoTSortPuntos  # Exclude import time from the worker deadline.
+        profile = {'tier':'cpu','device':'cpu','weights':'synthetic.pt','half':False,'imgsz':64,'missingWeights':None,'hint':None,
+                   'osnetProviders':['CPUExecutionProvider'],'osnetInterval':8}
         entered, release, block = self.gate()
         captures = [0]
         analyses = []
@@ -433,18 +435,21 @@ class AutomationShutdownTests(unittest.TestCase):
             analyses.append(instance)
             return instance
         config = default_config()
+        config.update(appearanceMemory=False, identityFinalize=False)
         config["cameras"] = [{"id": "C", "source": "synthetic.mp4", "offset": 0, "pairs": [], "height": 3}]
         self.engine.state.update(session="abcd1234", status="running")
         with patch.object(cv2, "VideoCapture", return_value=Capture(read)), \
+             patch('live_server.hardware.choose',return_value=profile), \
+             patch('following.reid.OSNetEmbedder',return_value=SimpleNamespace(available=True,name='synthetic',dimension=256)), \
              patch.object(self.engine, "load_detector", return_value=SimpleNamespace(detectar=lambda frame: [])), \
              patch("following.combined.CombinedAnalysis", side_effect=combined):
-            self.engine.worker = self.worker(lambda: self.engine.run(config, {"detector": "p2pnet", "combined": True}))
+            self.engine.worker = self.worker(lambda: self.engine.run(config, {"detector": "yolo", "combined": True, "performance":"precise"}))
             try:
                 self.assertTrue(entered.wait(3), self.engine.state.get("error"))
                 snapshot = self.engine.automation_snapshot()
                 # Represents producer mutations before publication of the next tick.
                 analyses[0].snapshots["C"]["occupancy"]["count"] = 999
-                analyses[0].snapshots["C"]["dense"]["count"] = 999
+                analyses[0].snapshots["C"]["crossings"] = {'syntheticMutation':999}
                 self.assertEqual(self.engine.automation_snapshot(), snapshot)
             finally:
                 self.engine.stop_event.set()

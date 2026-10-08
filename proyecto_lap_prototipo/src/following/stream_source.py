@@ -104,6 +104,10 @@ class VideoSource:
         hold_source(source, root)
         self.original_source = source
         self.hls = isinstance(source, str) and is_youtube_url(source)
+        # YouTube serves ~5 s HLS segments. A 5 s open/read limit can expire
+        # while the next segment is being published, especially over Wi-Fi.
+        self.open_timeout_ms = 20000 if self.hls else 5000
+        self.read_timeout_ms = 15000 if self.hls else 5000
         if self.hls:
             source = resolve_stream_source(source)
         self.media_source = source
@@ -115,7 +119,7 @@ class VideoSource:
         elif self.live:
             with low_latency_ffmpeg(self.hls):
                 self.capture = cv2.VideoCapture(source, cv2.CAP_FFMPEG,
-                    [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000, cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000])
+                    [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, self.open_timeout_ms, cv2.CAP_PROP_READ_TIMEOUT_MSEC, self.read_timeout_ms])
             try:
                 # Complementa las banderas de FFmpeg: sin esto OpenCV puede
                 # quedarse con un cuadro más en su propia cola interna.
@@ -164,8 +168,8 @@ class VideoSource:
                 capture = cv2.VideoCapture(
                     source,
                     cv2.CAP_FFMPEG,
-                    [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000,
-                     cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000],
+                    [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, self.open_timeout_ms,
+                     cv2.CAP_PROP_READ_TIMEOUT_MSEC, self.read_timeout_ms],
                 )
         if self.closed.is_set() or not capture.isOpened():
             capture.release()
@@ -217,7 +221,7 @@ class VideoSource:
     def read(self, target=0):
         if self.live:
             with self.condition:
-                self.condition.wait_for(lambda: self.latest is not None or self.failure is not None or self.closed.is_set(), timeout=12)
+                self.condition.wait_for(lambda: self.latest is not None or self.failure is not None or self.closed.is_set(), timeout=35 if self.hls else 12)
                 if self.closed.is_set():
                     return None, target
                 if self.failure:

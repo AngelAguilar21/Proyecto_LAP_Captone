@@ -422,6 +422,7 @@ class ZonePipelineTests(unittest.TestCase):
             config = configuration()
             config["zones"][0]["points"] = [[0, 0], [12, 0], [12, 8], [0, 8]]
             config["zones"][0]["rule"]["dwell"] = 0
+            config.update(appearanceMemory=False,identityFinalize=False,clutterFilter=False)
             config["cameras"] = [{"id": cid, "source": cid + ".synthetic", "planId": "custom",
                 "x": 1, "y": 1, "offset": 0, "links": [], "height": 4,
                 "pairs": [[0, 0, 0, 0], [1, 0, 12, 0], [1, 1, 12, 8], [0, 1, 0, 8]]} for cid in ("C", "D")]
@@ -433,11 +434,19 @@ class ZonePipelineTests(unittest.TestCase):
             frame = np.zeros((240, 320, 3), dtype=np.uint8)
             captures = [Capture([frame.copy()] * 5), Capture([frame.copy()] * 2)]
             detector = SimpleNamespace(detectar=lambda frame: [SimpleNamespace(x=100, y=80, confianza=.9)])
+            track=SimpleNamespace(id=1,posicion=(100,80),score=.9,ultima_caja=None,apariencia=None)
+            tracker=SimpleNamespace(tracks_activos=[track],tracks_perdidos=[],actualizar=lambda *args:([track],[],[]))
+            motor=SimpleNamespace(events=[],min_visible=None,necesita_vista=lambda *args:False,resumen=lambda:{'engine':'synthetic'},
+                update=lambda observations,t,**kw:[{**o,'id':o['camera']+':1','association':'synthetic','history':[],
+                    'confirmed':True,'duplicate':False} for o in observations])
             with patch.object(cv2, "VideoCapture", side_effect=captures), \
+                 patch('tracking.BoTSortPuntos',return_value=tracker), \
+                 patch('identity.crear_motor_identidad',return_value=motor), \
+                 patch('following.reid.OSNetEmbedder',return_value=SimpleNamespace(available=True,name='synthetic',dimension=256)), \
                  patch.object(engine, "load_detector", return_value=detector), \
                  patch.object(engine.stop_event, "wait", return_value=False), \
                  patch.object(notifier, "_send") as smtp:
-                engine.run(copy.deepcopy(config), {"detector": "p2pnet"})
+                engine.run(copy.deepcopy(config), {"detector": "yolo","performance":"precise"})
                 self.assertTrue(engine.notifications.join(5))
             self.assertEqual(engine.state["status"], "ended", engine.state.get("error"))
             samples = [json.loads(s) for s in (root / "data/replays/abcd1234/samples.jsonl").read_text().splitlines()]

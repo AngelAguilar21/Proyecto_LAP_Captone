@@ -31,7 +31,7 @@ class UploadCleanupTests(CleanupFixture, unittest.TestCase):
         self.assertEqual({p.name for p in path.parent.iterdir()}, {path.name, marker.name})
 
     def test_invalid_suffix_and_size_rejected_before_creating_storage(self):
-        for size, suffix in ((0, ".mp4"), (-1, ".mp4"), (True, ".mp4"), (1024**3+1, ".mp4"), (1, ".exe"), (1, ".mp4:ads")):
+        for size, suffix in ((0, ".mp4"), (-1, ".mp4"), (True, ".mp4"), (uploads.MAX_SIZE+1, ".mp4"), (1, ".exe"), (1, ".mp4:ads")):
             with self.subTest(size=size, suffix=suffix), self.assertRaises(ValueError):
                 uploads.receive(self.root, io.BytesIO(b"a"), size, suffix)
         self.assertFalse((self.root / "data").exists())

@@ -1,0 +1,1 @@
+"""Almacenes persistentes del sistema."""

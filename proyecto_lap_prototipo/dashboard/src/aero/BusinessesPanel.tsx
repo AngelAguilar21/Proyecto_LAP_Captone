@@ -30,7 +30,7 @@ export default function BusinessesPanel({session}:{session:Session}) {
   const [mapError,setMapError]=useState('');
   const [focus,setFocus]=useState<Point|undefined>();
   const operator=session.auth.rol==='operador';
-  const plans=config.plans||{[config.planId||'custom']:config};
+  const plans={...config.plans,[config.planId||'custom']:config};
   const shownPlan=plans[plan]||config;
   useEffect(()=>{let alive=true;setPlaces([]);setMapError('');if(shownPlan.mapAsset)void loadMapAsset(shownPlan.mapAsset).then(data=>{if(alive)setPlaces(businessPlaces(data,shownPlan.mapAsset!));}).catch(()=>{if(alive)setMapError('No se pudo cargar la lista de locales del mapa. Puedes usar una ubicación propia.');});return()=>{alive=false;};},[shownPlan.mapAsset]);
   const mapConfig:Config={...config,...shownPlan,planId:plan,cameras:config.cameras,workArea:[]};

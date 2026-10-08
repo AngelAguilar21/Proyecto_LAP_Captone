@@ -1,4 +1,5 @@
 export type Point = [number, number];
+export interface CameraRoute { from: string; to: string; kind: 'overlap' | 'transition'; minSeconds: number; maxSeconds: number; }
 export type SourceMode = 'recordings' | 'live' | 'demo';
 export type View = 'commercial' | 'insights' | 'businesses' | 'replay' | 'overview' | 'setup' | 'map' | 'cameras' | 'lab' | 'dashboard' | 'zones' | 'rules' | 'reports' | 'audit' | 'alerts' | 'projects';
 export interface Camera {
@@ -24,6 +25,10 @@ export interface Plan { width:number; height:number; unit: 'relative'|'meters'; 
 export interface ProjectEntry { id:string; name:string; created:number; updated:number; airport:string; floor:string; cameras:number; plans:number; setupComplete:boolean; }
 export interface ProjectListing { active:string|null; projects:ProjectEntry[]; }
 export interface Config {
+  cameraRoutes?: CameraRoute[];
+  hardware?: 'auto' | 'cpu' | 'gpu';
+  reidModel?: 'osnet.onnx' | 'osnet_ain_msmt17.onnx';
+  reidProvider?: 'auto' | 'cpu' | 'cuda' | 'openvino' | 'directml';
   planId?:string; plans?:Record<string,Plan>; mapAsset?:string;
   workArea?: Point[]; planLines?: number[][]; planView?: 'image'|'lines'; orientation?:'horizontal'|'vertical';
   width: number; height: number; unit: 'relative' | 'meters'; background: string; radius: number;

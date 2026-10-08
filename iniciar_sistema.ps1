@@ -23,5 +23,10 @@ try {
     }
 }
 
+if (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'proyecto_lap_prototipo\config\storage.local.json')) {
+    Write-Host 'Comprobando PostgreSQL/PostGIS. Docker Desktop debe estar abierto.'
+    & $projectPython (Join-Path $PSScriptRoot 'proyecto_lap_prototipo\tools\preparar_base.py')
+    if ($LASTEXITCODE -ne 0) { throw 'No se pudo iniciar la base. Abre Docker Desktop y vuelve a ejecutar iniciar_sistema.cmd.' }
+}
 Write-Host "AeroTrack (seguimiento y reidentificación): http://127.0.0.1:$Port/?view=overview"
 & $projectPython (Join-Path $PSScriptRoot 'proyecto_lap_prototipo\live_server.py') --port $Port

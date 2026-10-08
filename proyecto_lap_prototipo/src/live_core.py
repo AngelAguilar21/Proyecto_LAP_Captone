@@ -87,6 +87,12 @@ def related_cameras(c, minimo=MIN_PAREJAS_RELACION):
     """
     ids = [cam["id"] for cam in c.get("cameras", []) if cam.get("active", True)]
     vecinas = {cid: set() for cid in ids}
+    if c.get('cameraRoutes') is not None:
+        for route in c['cameraRoutes']:
+            a, b = route['from'], route['to']
+            if a in vecinas and b in vecinas:
+                vecinas[a].add(b)
+        return {cid: sorted(v) for cid, v in vecinas.items()}
     conteo = {}
     for item in c.get("personPairs", []) or []:
         a, b = item.get("a", {}).get("camera"), item.get("b", {}).get("camera")
@@ -140,7 +146,7 @@ def validate_config(c):
     for pid, plan in plans.items():
         if not valid_plan_id(pid) or not isinstance(plan,dict):
             raise ValueError("Plano desconocido.")
-        validate_config(copy.deepcopy({**c,**plan,"planId":pid,"plans":{},"cameras":[],"personPairs":[]}))
+        validate_config(copy.deepcopy({**c,**plan,"planId":pid,"plans":{},"cameras":[],"personPairs":[],"cameraRoutes":[]}))
     if not valid_plan_id(c.get("planId","custom")):
         raise ValueError("Nivel desconocido.")
     if c.get("mapAsset") and c["mapAsset"] not in [f"/maps/lap/{n}.json" for n in (1,2,3,4)]:
@@ -294,6 +300,14 @@ def validate_config(c):
     if ajustes is not None and (not isinstance(ajustes, dict) or any(
             not isinstance(k, str) or isinstance(v, str) or (not isinstance(v, bool) and not finite(v, -1000, 100000)) for k, v in ajustes.items())):
         raise ValueError("identityV2 debe ser un objeto de parámetros numéricos del asociador.")
+    from identity.topology import validate_routes
+    validate_routes(c)
+    if c.get('reidModel', 'osnet.onnx') not in ('osnet.onnx', 'osnet_ain_msmt17.onnx'):
+        raise ValueError('Modelo ReID no admitido.')
+    if c.get('hardware', 'auto') not in ('auto', 'cpu', 'gpu'):
+        raise ValueError('Hardware inválido: automático, CPU o GPU.')
+    if c.get('reidProvider', 'auto') not in ('auto', 'cpu', 'cuda', 'openvino', 'directml'):
+        raise ValueError('Proveedor ReID inválido.')
     return c
 
 
@@ -411,16 +425,19 @@ def plan_span(points):
     return float(np.ptp(points[:, 2:], axis=0).max())
 
 
-PLAN_SPAN_WARN, PLAN_SPAN_BLOCK = .03, .02  # fracción del lado mayor del plano
+PLAN_SPAN_WARN = .03  # aviso de escala, nunca prueba de degeneración
 
 
 def blocking_calibration_issue(pairs, plan):
-    """Mensaje si los puntos del plano están tan juntos que toda la escena colapsa en un punto."""
-    points = np.asarray(pairs, dtype=float)
-    size = max(plan) if plan else 0
-    if size > 0 and plan_span(points) < PLAN_SPAN_BLOCK * size:
-        return (f"los puntos de referencia del plano están casi todos en el mismo lugar (separados solo "
-                f"{plan_span(points):.2f} en un plano de {size:g}). Marca cada referencia en su ubicación real del plano, bien separadas.")
+    """Bloquea degeneración geométrica, no una cámara que cubre poco del aeropuerto.
+
+    La extensión global del plano no determina la validez de una homografía local.
+    La escala física necesita referencias verificadas; no puede deducirse del tamaño del mapa.
+    """
+    try:
+        calibration(pairs)
+    except ValueError as exc:
+        return str(exc)
     return None
 
 
@@ -435,8 +452,8 @@ def projection_issues(h, points, zone=None, grid=14, plan=None):
     issues = []
     size = max(plan) if plan else 0
     if size > 0 and plan_span(points) < PLAN_SPAN_WARN * size:
-        issues.append(f"Los puntos del plano están casi todos en el mismo lugar (separados solo {plan_span(points):.2f} en un plano de {size:g}): "
-                      "marca cada referencia en su ubicación real del plano, bien separadas entre sí.")
+        issues.append(f"Calibración de un área local: extensión {plan_span(points):.2f} en un plano de {size:g}. "
+                      "Comprueba la escala y las correspondencias del suelo; cubrir poco del plano no invalida la calibración.")
     coverage = float(cv2.contourArea(cv2.convexHull(points[:, :2].astype(np.float32))))
     if coverage < MIN_REFERENCE_COVERAGE:
         issues.append(f"Las referencias cubren solo el {coverage * 100:.0f}% del video: repártelas por todo el suelo donde caminan las personas.")

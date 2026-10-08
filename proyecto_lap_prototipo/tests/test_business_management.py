@@ -23,6 +23,12 @@ class BusinessManagementTests(unittest.TestCase):
         self.connection.close()
         self.tmp.cleanup()
 
+    def test_active_floor_is_valid_with_only_secondary_plans_saved(self):
+        active = self.config['plans'].pop('p3')
+        self.config.update(active)
+        db.guardar_negocio(self.connection, self.business, self.config)
+        self.assertEqual(db.listar_negocios(self.connection)[0]['ubicacion']['planId'], 'p3')
+
     def test_edit_persists_and_replaces_doors(self):
         db.guardar_negocio(self.connection, self.business, self.config)
         self.business.update(nombre='Duty Free nuevo', puertas=self.business['puertas'][1:])
