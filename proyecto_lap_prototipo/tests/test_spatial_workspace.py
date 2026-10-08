@@ -13,8 +13,8 @@ import numpy as np
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from live_server import Engine, default_config
-from live_core import IdentityStore, validate_config, Occupancy
-from spatial_scope import accepts, coverage_contains
+from live_core import validate_config, Occupancy
+from spatial_scope import accepts
 from plan_import import plan_lines_from_bytes
 
 
@@ -27,16 +27,9 @@ class SpatialWorkspaceTests(unittest.TestCase):
         self.assertFalse(accepts(c,cfg,.25,.5,(8,2)))
         self.assertFalse(accepts(c,cfg,.25,.5,None))
 
-    def test_rotated_coverage_and_free_shape(self):
-        c={'x':0,'y':0,'heading':90,'range':4,'coverageShape':'rectangle','coverageWidth':2}
-        self.assertTrue(coverage_contains(c,(.8,3)))
-        self.assertFalse(coverage_contains(c,(3,.8)))
-        c.update(coverageShape='cone',fov=60)
-        self.assertTrue(coverage_contains(c,(0,3)))
-        self.assertFalse(coverage_contains(c,(3,0)))
-        c.update(coverageShape='free',coveragePolygon=[[0,0],[1,0],[0,1]])
-        self.assertTrue(coverage_contains(c,(.2,.2)))
-        self.assertFalse(coverage_contains(c,(.9,.9)))
+    def test_el_alcance_de_proyectos_antiguos_ya_no_descarta_personas(self):
+        c={'restrictCoverage':True,'coverageShape':'free','coveragePolygon':[[0,0],[1,0],[0,1]]}
+        self.assertTrue(accepts(c,{},.5,.5,(9,9)))
 
     def test_invalid_work_area_and_vectors_rejected(self):
         cfg=default_config()
@@ -55,16 +48,6 @@ class SpatialWorkspaceTests(unittest.TestCase):
         self.assertGreater(len(result['planLines']),3)
         self.assertTrue(all(0<=v<=1 for line in result['planLines'] for v in line))
 
-    def test_diverging_people_release_old_shared_identity(self):
-        cfg=default_config();cfg['clocksVerified']=True
-        store=IdentityStore(cfg)
-        obs=lambda cam,x:{'camera':cam,'local':1,'point':(x,1),'color':None}
-        rows=store.update([obs('A',1),obs('B',1.05)],0)
-        self.assertEqual(rows[0]['id'],rows[1]['id'])
-        rows=store.update([obs('A',1),obs('B',8)],.2)
-        self.assertNotEqual(rows[0]['id'],rows[1]['id'])
-        self.assertEqual(Occupancy(cfg).update(rows,.2)['mappedCount'],2)
-
     def test_unified_start_rejects_missing_camera_masks(self):
         with tempfile.TemporaryDirectory() as d:
             engine=Engine(Path(d)/'config.json')
@@ -72,7 +55,7 @@ class SpatialWorkspaceTests(unittest.TestCase):
             for c in cfg['cameras']:c['pairs']=[[0,0,0,0],[1,0,12,0],[1,1,12,8],[0,1,0,8]]
             engine.configure(cfg)
             with self.assertRaisesRegex(ValueError,'Delimita'):
-                engine.start({'detector':'p2pnet','requireUnified':True})
+                engine.start({'detector':'yolo','requireUnified':True})
 
     def test_live_pipeline_filters_before_creating_ids_and_stops_together(self):
         # Synthetic detector outputs deliberately include a reflection outside the mask.
@@ -91,7 +74,7 @@ class SpatialWorkspaceTests(unittest.TestCase):
             rows=[];last=0
             fake_detector=SimpleNamespace(detectar=lambda frame:[SimpleNamespace(x=50,y=100,confianza=.9),SimpleNamespace(x=250,y=100,confianza=.9)])
             with patch.object(engine,'load_detector',return_value=fake_detector):
-                engine.start({'detector':'p2pnet','requireUnified':True})
+                engine.start({'detector':'yolo','requireUnified':True})
                 try:
                     deadline=time.monotonic()+20
                     while time.monotonic()<deadline:

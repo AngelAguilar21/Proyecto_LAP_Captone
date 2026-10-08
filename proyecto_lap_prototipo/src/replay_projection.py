@@ -2,7 +2,7 @@
 import copy
 from live_core import calibration, project, Occupancy
 from following.flow import FlowField
-from spatial_scope import accepts
+from spatial_scope import accepts, outline_scope
 from zone_episodes import plan_observed
 
 
@@ -36,13 +36,14 @@ def current_projection(meta, samples, config):
                 raise ValueError('No hay configuración histórica verificable para esta cámara.')
             pid = camera.get('planId', 'custom')
             plan = {**config, **(config.get('plans', {}).get(pid, {}) if pid != config.get('planId') else {}), 'planId': pid}
+            plan.update(outline_scope(plan))
             counters.setdefault(pid, Occupancy(plan, episode_namespace='projection:'+meta.get('session', 'legacy')))
             fields.setdefault(pid, FlowField(plan))
             camera_counters.setdefault(cid, Occupancy(plan, scope='camera-map:'+cid,
                                                       episode_namespace='projection:'+meta.get('session', 'legacy')))
             if observation.get('observed', True):
                 observed.add(cid)
-            changed = any(camera.get(k) != original.get(cid, {}).get(k) for k in ('pairs', 'planId', 'detectionZone', 'source'))
+            changed = any(k in original.get(cid, {}) and camera.get(k) != original[cid][k] for k in ('pairs', 'planId', 'detectionZone', 'source'))
             for person in observation.get('people', []):
                 pixel = person.get('pixel')
                 person['point'] = project(matrices[cid], *pixel) if matrices[cid] is not None and pixel else None

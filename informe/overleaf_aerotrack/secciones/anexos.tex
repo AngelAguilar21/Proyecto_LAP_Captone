@@ -1,0 +1,1205 @@
+\section{Anexos}
+\label{sec:anexos}
+
+% Los anexos se numeran con letras: A, B y C, y sus apartados como A.1, B.1...
+\renewcommand{\thesubsection}{\Alph{subsection}}
+\renewcommand{\thesubsubsection}{\thesubsection.\arabic{subsubsection}}
+\setcounter{subsection}{0}
+
+\subsection{Modelo de cartel informativo de videovigilancia}
+\label{anx:cartel}
+
+\subsubsection{Propósito y estatus de este modelo}
+
+La Sección~\ref{subsec:restricciones-legales} estableció que el tratamiento de datos
+personales mediante videovigilancia exige informar previamente a los
+titulares mediante carteles visibles. Este anexo propone un modelo
+concreto para el sistema del proyecto.
+
+Se trata de una \textbf{propuesta de
+trabajo}, no de un formato aprobado. Está construido sobre los elementos
+informativos que la Directiva 01-2020-JUS/DGTAIPD exige, pero su
+redacción final debe ser revisada por el área legal de LAP antes de su
+colocación física.
+
+Esa revisión tiene un contenido preciso: contrastar los campos del modelo
+uno por uno contra el texto de la Directiva y contra el D.S.
+016-2024-JUS, para confirmar que no falta ningún elemento informativo
+exigido ni sobra alguno que la norma no requiera. Este informe propone el
+conjunto de campos, no acredita que sea el exigible.
+
+\subsubsection{Elementos que el modelo incorpora}
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}L{4.2cm}Y@{}}
+\toprule
+\textbf{Elemento} & \textbf{Razón de su inclusión} \\
+\midrule
+Identidad del responsable &
+El titular debe saber ante quién ejercer sus derechos. \\
+\addlinespace
+Finalidad del tratamiento &
+Núcleo del deber de información y límite frente al deslizamiento de
+finalidad (Sección~\ref{subsec:impacto-etico}). \\
+\addlinespace
+Base de legitimación &
+Permite al titular entender por qué no se le pidió consentimiento. \\
+\addlinespace
+Plazo de conservación &
+Exigencia del principio de conservación limitada. \\
+\addlinespace
+Destinatarios &
+Incluye la eventual entrega a autoridades conforme a las normas de
+seguridad ciudadana (Sección~\ref{subsec:restricciones-legales}). \\
+\addlinespace
+Canal para ejercer derechos &
+Sin un canal indicado, el derecho es nominal. \\
+\addlinespace
+Declaración de lo que el sistema \emph{no} hace &
+No es un elemento exigido por la norma. Se incorpora por decisión del equipo: es la traducción visible del compromiso contra el
+deslizamiento de finalidad y el elemento que distingue este cartel de
+uno genérico de CCTV. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsubsection{Modelo propuesto}
+
+En el modelo que sigue, los textos en \emph{cursiva} señalan los campos
+que este informe no puede completar porque corresponden a datos que solo
+LAP posee: su identificación registral, la base de legitimación que
+decida invocar, sus canales de atención y el plazo de conservación que
+fije. El resto del contenido es propuesta de este informe.
+
+\vspace{0.5em}
+\noindent
+\fbox{%
+\begin{minipage}{\dimexpr\linewidth-2\fboxsep-2\fboxrule\relax}
+\setstretch{1}
+\vspace{0.6em}
+\begin{center}
+{\Large\bfseries ZONA VIDEOVIGILADA}\\[0.25em]
+{\large\bfseries SISTEMA DE ESTIMACIÓN DE AFORO}\\[0.2em]
+{\small\itshape Este sistema no realiza reconocimiento facial}
+\end{center}
+\noindent\rule{\linewidth}{0.8pt}
+\vspace{0.2em}
+
+\small
+\setlength{\extrarowheight}{3pt}
+\begin{tabularx}{\linewidth}{@{}L{3.1cm}Y@{}}
+\textbf{Responsable} &
+Lima Airport Partners S.R.L. (\emph{razón social registral completa,
+RUC y domicilio fiscal, a completar por LAP}). \\
+
+\textbf{Finalidad} &
+Estimar el número de personas presentes por zona, con el fin de prevenir
+aglomeraciones y gestionar el flujo de pasajeros en el terminal. \\
+
+\textbf{Base legal} &
+\emph{Base de legitimación que LAP invoque, con su fundamento normativo
+exacto, a completar por su área legal.} \\
+
+\textbf{Conservación} &
+Las imágenes de las cámaras no se almacenan. El sistema conserva conteos
+por zona y registros de posición asociados a identificadores anónimos durante
+\emph{plazo a definir con LAP, medida M-05}; si se mantuviera activa la memoria
+de apariencia, conservaría además descriptores numéricos de la apariencia de
+las personas durante \emph{plazo a completar}. \\
+
+\textbf{Destinatarios} &
+Personal autorizado de LAP. Las imágenes del sistema de seguridad podrán
+entregarse a las autoridades competentes cuando lo requieran conforme a
+ley. \\
+
+\textbf{Sus derechos} &
+Puede ejercer sus derechos de acceso, rectificación, cancelación y
+oposición escribiendo al canal de atención de LAP o acudiendo a su
+oficina de atención al usuario (\emph{dirección de correo y ubicación
+de la oficina, a completar por LAP}). \\
+
+\textbf{Más información} &
+\emph{Dirección web de la política de privacidad de LAP, a completar.} \\
+\end{tabularx}
+
+\vspace{0.4em}
+\noindent\rule{\linewidth}{0.8pt}
+\vspace{0.2em}
+
+{\footnotesize\bfseries Este sistema no realiza reconocimiento facial, no
+permite conocer el nombre ni el documento de las personas y no adopta
+decisiones automatizadas sobre los pasajeros. Para no contar dos veces a una
+misma persona, sigue de forma anónima su recorrido entre cámaras.}
+
+\vspace{0.6em}
+\end{minipage}%
+}
+\vspace{0.8em}
+
+\subsubsection{Criterios de colocación}
+
+\begin{enumerate}[leftmargin=1.6em,itemsep=0.35em]
+  \item \textbf{Anterioridad.} El cartel debe ser visible \emph{antes} de
+        que la persona ingrese a la zona videovigilada, no dentro de
+        ella. Informar a quien ya fue captado no cumple la finalidad de
+        la norma.
+  \item \textbf{Cobertura de todos los accesos.} Cada acceso a una zona
+        cubierta requiere señalización. Un acceso sin cartel es un punto
+        de incumplimiento con independencia de cuántos carteles haya en
+        el resto del terminal.
+  \item \textbf{Legibilidad.} Tamaño y contraste suficientes para ser
+        leídos a la distancia de aproximación real, considerando que el
+        pasajero circula con equipaje y no se detiene.
+  \item \textbf{Idiomas.} Español e inglés como mínimo, dada la condición
+        de terminal internacional. Si conviene añadir algún idioma más es
+        algo que depende de la composición real del tráfico del
+        aeropuerto, dato que debe pedirse a LAP y que este informe no
+        supone.
+  \item \textbf{Accesibilidad.} Altura y ubicación que permitan la
+        lectura desde una silla de ruedas. El criterio se enuncia aquí en
+        términos funcionales y no normativos: la normativa peruana de
+        accesibilidad aplicable a señalización en establecimientos de uso
+        público no se ha contrastado, de modo que las medidas concretas
+        deben tomarse de ella y no de este anexo.
+  \item \textbf{Registro de la colocación.} Documentar fotográficamente
+        cada cartel instalado, con fecha y ubicación. Ante una
+        fiscalización, el cumplimiento del deber de información debe
+        poder acreditarse, y la fotografía fechada es la evidencia más
+        simple de producir.
+\end{enumerate}
+
+\subsubsection{Observación final sobre este anexo}
+
+Este cartel es el punto donde el análisis normativo de este informe se
+vuelve visible para el pasajero. Todo lo demás (la arquitectura, las
+medidas de privacidad desde el diseño, la auditoría) ocurre en
+documentos que el titular de los datos nunca verá. Una versión anterior
+de este modelo encabezaba el cartel con la frase \enquote{este sistema no
+identifica personas}. Se retiró porque, con el prototipo vigente, que
+individualiza a las personas y las reidentifica por su apariencia, sería
+inexacta. Las declaraciones que el modelo conserva solo son defendibles si se
+corrigen los hallazgos de RNF-01 y de la medida M-03 descritos en la
+Sección~\ref{subsec:privacidad}.
+
+Colocar un cartel que declare más de lo que el
+sistema cumple es peor que no colocarlo: convierte una deficiencia
+técnica en una declaración inexacta hacia el titular. La redacción final
+del cartel debe fijarse \emph{después} de que la arquitectura esté
+congelada, y debe revisarse si la arquitectura cambia.
+
+\clearpage
+
+\subsection{Marco normativo: desarrollo completo}
+\label{anx:marco}
+
+Este anexo recoge el desarrollo completo del marco normativo que el
+apartado 3.3.3 presenta de forma resumida: el articulado citado
+literalmente, el razonamiento que lleva de cada obligación a un
+requisito verificable sobre el sistema y el contraste con el prototipo
+del equipo. Sus nueve apartados siguen el orden del análisis; los
+requisitos de privacidad que se derivan de él se recogen además en la Sección~\ref{sec:requerimientos}. Como allí, las zonas en que la norma admite más de una
+lectura razonable se presentan como riesgos a validar y no como
+conclusiones, y la calificación jurídica definitiva corresponde al área
+legal de Lima Airport Partners y, en su caso, a la Autoridad Nacional de
+Protección de Datos Personales.
+
+\subsubsection{Marco normativo aplicable}
+
+En el nivel constitucional, el artículo 2 de la Constitución de 1993
+reconoce en su inciso 6 el derecho «a que los servicios informáticos,
+computarizados o no, públicos o privados, no suministren informaciones
+que afecten la intimidad personal y familiar», y en su inciso 7 el
+derecho «al honor y a la buena reputación, a la intimidad personal y
+familiar así como a la voz y a la imagen propias». De ambos se desprende
+el criterio que atraviesa este anexo: captar la imagen de una persona en
+un espacio abierto al público no es intrínsecamente ilícito, pero
+constituye una injerencia en un derecho fundamental y debe superar un
+examen de proporcionalidad.
+
+La norma central es la Ley 29733, Ley de Protección de Datos Personales,
+cuyo artículo 1 declara que su objeto es garantizar el derecho
+fundamental previsto en el artículo 2 numeral 6 de la Constitución. Su
+reglamento vigente fue aprobado por el Decreto Supremo 016-2024-JUS,
+expedido el 29 de noviembre de 2024 y publicado al día siguiente, el 30
+de noviembre de 2024, en la Separata Especial de \emph{El Peruano}. Su
+Disposición Complementaria Derogatoria Única derogó el D.S.
+003-2013-JUS. Su entrada en vigor se habría producido el 30 de marzo de
+2025, dato que se enuncia con reserva: de los cuatro que se acaban de
+citar es el único que no se ha contrastado todavía contra la fuente
+oficial, y es precisamente el que fija el régimen transitorio, de modo
+que debe confirmarse antes de apoyarse en él para fechar el paso de un
+reglamento a otro. La consecuencia práctica es que los procedimientos,
+cláusulas informativas y registros que LAP tenga construidos bajo el
+reglamento anterior no son automáticamente conformes con el nuevo y
+deben revisarse. \verificar{únicamente la fecha de entrada en vigor, el
+30 de marzo de 2025, que es el dato que fija el régimen transitorio. La
+expedición, la publicación y la disposición derogatoria sí se
+contrastaron contra la separata de \emph{El Peruano} del 30 de noviembre
+de 2024.}
+
+El régimen se especifica para videovigilancia en la Directiva de
+Tratamiento de Datos Personales mediante Sistemas de Videovigilancia,
+identificada como Directiva 01-2020-JUS/DGTAIPD y aprobada por
+Resolución Directoral 02-2020-JUS/DGTAIPD, publicada el 16 de enero de
+2020. Sigue vigente y resulta aplicable, y esto ya no se afirma por
+indicio sino por el texto de la norma: la Disposición Complementaria
+Derogatoria Única del D.S. 016-2024-JUS, contrastada contra la separata
+de \emph{El Peruano} del 30 de noviembre de 2024, deroga únicamente el
+D.S. 003-2013-JUS, de modo que no hay derogación de la Directiva, ni
+total ni parcial. La entrada en vigor del nuevo reglamento no la
+desplazó, y otras entidades del Estado continúan invocándola como base
+legal de sus propios sistemas con posterioridad a él.
+
+A ese cuerpo se superpone un segundo régimen, de finalidad distinta, en
+materia de seguridad ciudadana: el Decreto Legislativo 1218, que regula
+el uso de las cámaras de videovigilancia, y la Ley 30120, Ley de Apoyo a
+la Seguridad Ciudadana con Cámaras de Videovigilancia Públicas y
+Privadas, ambos reglamentados por el Decreto Supremo 007-2020-IN, de 24
+de abril de 2020. La denominación oficial completa y la fecha de
+publicación del D.L. 1218 y de la Ley 30120 no se han contrastado
+todavía contra su texto publicado, a diferencia del D.S. 007-2020-IN,
+que sí se contrastó; ambas normas se citan, por tanto, por su
+denominación usual, y esos dos datos deben confirmarse antes de
+reproducirse en un documento dirigido al cliente. Este último importa
+más de lo que el equipo había supuesto, porque su artículo 3 delimita el
+ámbito de aplicación incluyendo a quienes son propietarios o
+administradores de «establecimientos comerciales abiertos al público con
+un aforo de cincuenta (50) personas o más». Un terminal aeroportuario
+supera ese umbral con holgura, de modo que la aplicabilidad de este
+régimen al Aeropuerto Internacional Jorge Chávez deja de ser hipótesis
+remota y pasa a ser el supuesto que habría que descartar expresamente si
+se pretendiera no aplicarlo. \verificar{denominación oficial completa y
+fecha de publicación del D.L. 1218 y de la Ley 30120. El D.S.
+007-2020-IN sí se contrastó contra el texto publicado en \emph{El
+Peruano}.}
+
+Queda así identificada la zona gris principal. Un terminal concesionado
+a un operador privado no encaja limpiamente ni en la categoría de área
+de dominio público ni en la de recinto privado cerrado: es un espacio de
+titularidad y gestión privada, abierto al público, con funciones de
+interés público y sujeto a regulación sectorial aeronáutica. De esa
+calificación depende qué régimen resulta exigible y con qué intensidad.
+Resolverla requeriría analizar el contrato de concesión y la normativa
+aeronáutica, lo que excede el alcance del Capstone; es el primer punto a
+elevar al área legal del cliente.
+
+\subsubsection{Naturaleza de los datos tratados}
+
+Buena parte de la discusión de cumplimiento depende de una distinción
+que conviene fijar con precisión, porque el sistema no trata un solo
+tipo de dato sino cinco, con regímenes distintos.
+
+El primero es el fotograma. Contiene rostros identificables y constituye
+sin discusión un dato personal en el sentido del artículo 2 numeral 4 de
+la Ley 29733, que los define como «toda información sobre una persona
+natural que la identifica o la hace identificable a través de medios que
+pueden ser razonablemente utilizados». El criterio legal es el de
+identificabilidad por medios razonables, no el de identificación
+efectiva: que nadie mire la imagen no la convierte en dato no personal.
+
+El segundo es el punto con coordenadas, sea el que producen los métodos
+basados en puntos (Song et al., 2021; Lin et al., 2025) o el punto de los pies
+que el prototipo obtiene de cada caja de detección: desligado del fotograma
+del que se extrajo, no identifica por sí solo a una persona ni la hace
+identificable por medios razonables.
+
+El tercero es el dato espacio-temporal, que aparece en cuanto ese punto
+se asocia a una marca de tiempo y a una zona del terminal. Aislado sigue
+sin identificar a nadie; encadenado con otros del mismo individuo,
+reconstruye una trayectoria, y una trayectoria dentro de un terminal
+(dónde se dirigió alguien, cuánto permaneció, con quién coincidió) tiene
+un poder identificante muy superior al de cualquiera de sus puntos por
+separado. La diferencia entre el segundo tipo de dato y el tercero no es
+algorítmica sino de política de persistencia: depende de si las salidas
+se guardan y se asocian entre cuadros, no de qué red las produjo.
+
+El cuarto es el vector de apariencia. Es una representación numérica de la
+apariencia del cuerpo de una persona (ropa, silueta, textura), calculada por
+una red de reidentificación para volver a reconocerla en otra imagen. No
+contiene la imagen ni permite reconstruirla, y no identifica a nadie por su
+nombre; pero su función es precisamente individualizar, y conservado junto a
+un identificador permite reagrupar las apariciones de una misma persona en
+cámaras, sesiones y días distintos. El prototipo vigente lo calcula para cada
+persona que sigue, y su calificación se examina en B.9.
+
+El quinto es el dato biométrico. El artículo 2 numeral 5 define los
+datos sensibles como los «datos personales constituidos por los datos
+biométricos que por sí mismos pueden identificar al titular; datos
+referidos al origen racial y étnico; ingresos económicos, opiniones o
+convicciones políticas, religiosas, filosóficas o morales; afiliación
+sindical; e información relacionada a la salud o a la vida sexual». La
+fórmula es restrictiva y conviene leerla literalmente: no todo rasgo
+corporal medido es dato sensible, sino el que por sí mismo permite
+identificar al titular. Una plantilla facial cumple esa condición; un
+mapa de densidad y un conjunto de coordenadas de cabezas, no. El vector de
+apariencia corporal queda en una zona intermedia que no puede resolverse por
+simple lectura del texto legal.
+
+De esta taxonomía se sigue un matiz que suele pasarse por alto: que la
+salida del modelo no sea biométrica no significa que la entrada no lo
+sea. El fotograma del que se derivan las coordenadas contiene rostros en
+calidad suficiente para reconocimiento facial. Si se almacena, se
+transmite fuera del perímetro o se conserva para reentrenamiento, el
+análisis de riesgo cambia aunque el modelo desplegado nunca ejecute
+reconocimiento facial.
+
+Debe registrarse aquí una discrepancia terminológica detectada en la
+documentación del propio proyecto, que no es menor porque la ley trata
+ambos supuestos como figuras jurídicas distintas. Su presentación
+preliminar describe como «personas anonimizadas» el resultado de un
+procesamiento que asigna a cada persona un identificador persistente con
+el que se reconstruyen trayectorias. El artículo 2 numeral 12 define la
+anonimización como el «tratamiento de datos personales que impide la
+identificación o que no hace identificable al titular de estos», y añade
+que «el procedimiento es irreversible»; el numeral 13 define la
+disociación en términos casi idénticos pero cierra con la nota opuesta:
+«el procedimiento es reversible». Un identificador persistente que
+permite reagrupar las apariciones de un mismo individuo no impide la
+identificación de forma irreversible: es, en la terminología de la ley,
+una disociación, la figura que el régimen europeo denomina
+seudonimización. La distinción tiene consecuencias directas, porque el
+dato disociado sigue siendo dato personal sujeto al régimen general,
+mientras que el anonimizado sale de él.
+
+La discrepancia no se limita a esa presentación. Una versión anterior
+del prototipo describía lo que almacenaba como «solo posiciones, zonas,
+timestamps y el id temporal no reversible». Ese módulo ya no existe, pero el
+prototipo vigente conserva el mismo tipo de dato en otros soportes: las
+grabaciones de cada sesión enlazan un identificador con las posiciones de cada
+persona, y la memoria de apariencia enlaza un número de persona con su vector
+de apariencia, las cámaras que la vieron y las horas de su primera y última
+aparición. Ambos permiten reagrupar las apariciones de una misma persona y
+reconstruir su recorrido: el procedimiento es reversible, y por tanto
+disociación en el sentido del numeral 13 y no anonimización en el del numeral
+12. Este informe no corrige la terminología del equipo por su cuenta; deja
+registrada la discrepancia y la eleva como punto abierto.
+
+\subsubsection{Base de legitimación y finalidad declarada}
+
+El artículo 5 enuncia el principio de consentimiento, y el artículo 13.5
+precisa que este «debe ser previo, informado, expreso e inequívoco». Ese
+estándar es materialmente inalcanzable en un terminal: el pasajero no
+elige ser observado, no puede negociar las condiciones y, en la
+práctica, tampoco puede optar por un terminal sin cámaras. Un
+consentimiento que no puede negarse sin renunciar al servicio no es
+libre, de modo que apoyar el sistema en esa base sería construir la
+legitimidad sobre una ficción.
+
+La ley prevé la salida. Su artículo 14 enumera los supuestos en que no
+se requiere consentimiento, y la Directiva 01-2020-JUS/DGTAIPD, en su
+numeral 6.3, reconoce como bases del tratamiento por videovigilancia el
+consentimiento, la autorización por ley o la concurrencia de alguno de
+esos supuestos. El que la práctica invoca con más frecuencia es el
+numeral 9, referido al tratamiento «necesario para salvaguardar
+intereses legítimos del titular de datos personales por parte del
+titular de datos personales o por el encargado de datos personales».
+Conviene advertir que esta redacción no coincide con la del interés
+legítimo del responsable propia del régimen europeo (el texto alude a
+los intereses legítimos del titular de los datos), y que de esa
+diferencia depende que el supuesto ampare o no una finalidad de gestión
+operativa como la del proyecto. Qué base invoca LAP, y con qué
+fundamento normativo, es información que solo el cliente puede aportar,
+y sin ella el cartel del Anexo A no puede completarse.
+
+Sobre la finalidad, en cambio, la norma no deja margen. El artículo 6
+establece que los datos «deben ser recopilados para una finalidad
+determinada, explícita y lícita» y que su tratamiento «no debe
+extenderse a otra finalidad que no haya sido la establecida de manera
+inequívoca como tal al momento de su recopilación», salvo actividades de
+valor histórico, estadístico o científico cuando medie disociación o
+anonimización. El artículo 28 numeral 4 lo repite como obligación: «no
+utilizar los datos personales objeto de tratamiento para finalidades
+distintas de aquellas que motivaron su recopilación, salvo que medie
+procedimiento de anonimización o disociación».
+
+De aquí se sigue una segunda discrepancia, que ha dejado de ser
+hipotética. El prototipo vigente incluye una analítica comercial que, a partir
+de las grabaciones de sesión, calcula por identificador las entradas,
+permanencias, regresos y rutas de las personas frente a cada negocio del piso,
+y las relaciona con las ventas por hora; el interés que la motiva fue
+manifestado por el cliente. Medir permanencia en zona
+comercial no es una variante de estimar aglomeraciones: es una finalidad
+distinta. La primera busca saber cuántas personas hay en un punto en un
+momento dado, para dimensionar la respuesta operativa; la segunda,
+cuánto tiempo permanece una persona frente a una oferta comercial, lo
+que constituye un análisis de comportamiento con valor económico propio.
+Conforme a los artículos 6 y 28 numeral 4, requeriría su propia
+declaración al momento de la recopilación, su propia base de
+legitimación y su propio deber de información, y no podría ampararse en
+la finalidad de seguridad ni en la de gestión de aglomeraciones. Este
+informe deja la cuestión planteada sin resolverla, pero advierte que
+presentar ambas finalidades como una sola sería precisamente el
+deslizamiento que el artículo 6 prohíbe.
+
+\subsubsection{Principio de proporcionalidad y granularidad de salida}
+
+El principio está consagrado en el artículo 7 de la Ley 29733, conforme
+al cual «todo tratamiento de datos personales debe ser adecuado,
+relevante y no excesivo a la finalidad para la que estos hubiesen sido
+recopilados», y se reitera para videovigilancia en el numeral 6.4 de la
+Directiva: «el tratamiento de los datos personales debe ser adecuado,
+pertinente y no excesivo en relación con el ámbito y las finalidades
+determinadas, legítimas y explícitas». Es el argumento más sólido a
+favor del enfoque del proyecto y el eje de su defensa ante el cliente.
+
+La estimación automática de densidad es idónea, porque detecta
+aglomeraciones que la observación humana de decenas de monitores no
+advierte a tiempo. En cuanto a la necesidad, que es el subprincipio
+decisivo, si la finalidad declarada es estimar aglomeraciones, el medio
+menos invasivo que la alcanza es un sistema que produce conteos
+agregados y no identifica personas; uno con reconocimiento facial
+lograría lo mismo siendo más invasivo, y por eso no superaría el examen.
+La proporcionalidad en sentido estricto exige ponderar el beneficio
+esperado (prevención de incidentes y mejora del flujo) contra la
+injerencia en la imagen de miles de personas al día, y conviene señalar
+aquí la debilidad del razonamiento en lugar de disimularla: esa
+ponderación requiere evidencia sobre la magnitud real del problema en el
+terminal (incidentes registrados, tiempos de cola, quejas) que solo LAP
+puede aportar. Mientras no la aporte, el examen se sostiene sobre una
+premisa no acreditada y así debe presentarse al cliente.
+
+De este principio depende la decisión de granularidad de salida, la de
+mayor consecuencia normativa del proyecto, y las tres opciones no son
+equivalentes ante el artículo 7. El mapa de densidad de CSRNet
+(Li et al., 2018) produce una superficie agregada de la que el conteo
+se obtiene por integración, sin posiciones individuales: es la opción
+que menos datos trata para la finalidad declarada. La agregación por
+zona añade una capa de reducción sobre cualquier método y produce el
+mismo resultado operativo. La localización individual por puntos
+(Song et al., 2021; Lin et al., 2025) entrega la posición de cada persona,
+que es más información de la que la finalidad requiere, y su licitud
+depende entonces de que esas coordenadas no se persistan ni se
+encadenen, es decir, de una garantía de política y no de arquitectura.
+El criterio resultante es que, a igualdad de utilidad operativa, la
+opción menos granular es la que supera el examen de necesidad, y
+cualquier granularidad adicional debe justificarse por una utilidad que
+la agregación no alcance. La elección del equipo consta ya en el prototipo y
+va en la dirección opuesta a la que el criterio recomienda: localización
+individual por caja, seguimiento con identificador y reidentificación por
+apariencia. Para superar el examen de necesidad, esa granularidad debe
+justificarse por una utilidad que la agregación no alcance (no contar dos
+veces a quien aparece en dos cámaras es una razón plausible) y acotarse en el
+tiempo a lo que esa utilidad requiere, que es la duración de la sesión y no
+días. Mientras la memoria de apariencia retenga vectores entre sesiones y las
+grabaciones conserven posiciones por persona sin plazo, la granularidad
+excede lo que la finalidad de estimar aglomeraciones exige.
+
+\subsubsection{Privacidad desde el diseño y por defecto}
+
+La privacidad desde el diseño no es en el régimen peruano una buena
+práctica opcional, pero conviene enunciar con precisión de dónde se
+desprende. El D.S. 016-2024-JUS no la nombra como principio autónomo: lo
+que su Título Preliminar recoge, en el Artículo IX, son el principio de
+transparencia (numeral 1) y el de responsabilidad proactiva (numeral 2),
+conforme al cual el responsable no solo debe cumplir sino estar en
+condiciones de acreditar que cumple, adoptando las medidas necesarias
+antes de iniciar el tratamiento y no una vez iniciado. De ese segundo
+principio se sigue la doble exigencia que este informe aplica y que la
+literatura designa como privacidad por diseño (las garantías se
+incorporan desde la concepción del tratamiento y no se añaden después) y
+por defecto (la configuración más protectora debe venir activada de
+fábrica, sin que nadie tenga que solicitarla). Importa señalar además
+que el Artículo IX \textbf{no fija criterios ni contenidos mínimos de
+acreditación}: enuncia el principio y deja al responsable la elección de
+los medios con que lo demuestra. Las medidas que se proponen a
+continuación no pueden, por tanto, contrastarse contra una lista
+reglamentaria, porque no existe; se formulan como propuesta de este
+informe y su suficiencia es, en último término, apreciación del área
+legal de LAP.
+
+La diferencia entre una y otra lectura no es retórica: si se tratara de
+una recomendación, las medidas siguientes serían propuestas descartables
+por conveniencia técnica; al ser exigencia normativa son requisitos, y
+lo que queda abierto es cómo cumplir, no si cumplir. La dimensión por
+defecto tiene además una consecuencia concreta: donde una opción admita
+un ajuste más protector y otro menos protector (resolución de captura,
+frecuencia de muestreo, granularidad de la salida, plazo de retención),
+el valor de fábrica debe ser el más protector, y cualquier configuración
+menos restrictiva debe ser una desviación deliberada, documentada y
+justificada.
+
+El principio solo es verificable si se traduce en medidas concretas. El
+proyecto incorpora diez como requisitos del sistema: procesamiento en el
+borde, de modo que el fotograma no salga del perímetro (M-01); no
+persistencia del fotograma, que se procesa en memoria y se descarta
+(M-02); salida agregada por zona, sin coordenadas individuales
+persistidas (M-03); difuminado irreversible de rostros si algún
+fotograma debe conservarse (M-04); plazo de retención definido con purga
+automática (M-05); control de acceso por roles con registro de auditoría
+(M-06); cifrado en tránsito y en reposo (M-07); carteles informativos
+conforme al Anexo A (M-08); documentación del linaje de datos (M-09); y
+supervisión humana, de modo que el sistema alerte y no ejecute acciones
+automáticas sobre personas (M-10).
+
+M-02 es la de mayor impacto sobre el perfil de riesgo, porque sin imagen
+almacenada desaparece la mayor parte del riesgo de brecha, y también la
+que más restringe al equipo técnico, ya que sin fotogramas conservados
+no hay material propio para reentrenar ni para diagnosticar fallos. La
+salida intermedia consiste en conservar un subconjunto reducido con
+difuminado irreversible y plazo corto bajo procedimiento documentado.
+Cuál de las dos versiones se propone al cliente queda abierto: la
+estricta es más defendible jurídicamente, la atenuada es la única que
+permite mejorar el modelo con datos del propio terminal, que es lo que
+exige la brecha de dominio documentada por Lin et al. (2025).
+
+Estas diez medidas son requisitos, no una descripción del sistema
+actual. Al cerrar esta versión, \textbf{M-03 no se cumple en el prototipo},
+que conserva en las grabaciones de sesión coordenadas individuales asociadas a
+un identificador por persona, y la dimensión por defecto del principio
+tampoco se respeta en la memoria de apariencia, que viene activada sin que
+nadie lo solicite; el contraste se desarrolla en B.9. M-01, M-02 (para las
+cámaras en vivo), M-06 y M-10 sí se respetan, y la
+Tabla~\ref{tab:medidas} recoge el estado de las diez. Conviene mantener la
+distinción entre lo exigido y lo implementado, porque una lista de medidas
+que se presente al cliente como estado alcanzado, cuando es estado deseado,
+es exactamente el tipo de afirmación que este informe evita.
+
+\subsubsection{Plazos de retención y supresión}
+
+El fundamento está en el principio de calidad del artículo 8, que ordena
+que los datos «deben conservarse de forma tal que se garantice su
+seguridad y solo por el tiempo necesario para cumplir con la finalidad
+del tratamiento». La obligación correlativa figura en el artículo 28
+numeral 7: «suprimir los datos personales objeto de tratamiento cuando
+hayan dejado de ser necesarios o pertinentes a la finalidad para la cual
+hubiesen sido recopilados o hubiese vencido el plazo para su
+tratamiento, salvo que medie procedimiento de anonimización o
+disociación».
+
+Para videovigilancia, la Directiva 01-2020-JUS/DGTAIPD concreta ese
+criterio abierto en un plazo: sus numerales 6.13 y 7.18 fijan la
+conservación de las imágenes en un rango de treinta a sesenta días como
+máximo.
+
+Aparece aquí una tensión normativa que el proyecto debe resolver por
+diseño y que hasta ahora solo se había anticipado en abstracto. El
+artículo 17.2 del D.S. 007-2020-IN obliga a los sujetos comprendidos en
+su ámbito a «almacenar las imágenes, videos o audios grabados por un
+plazo mínimo de cuarenta y cinco (45) días calendario, salvo disposición
+distinta en normas sectoriales», y su artículo 17.1 impone entregar esa
+información a la Policía Nacional del Perú o al Ministerio Público «en
+un plazo máximo de veinticuatro (24) horas» cuando se presuma la
+comisión de un delito o falta. El régimen de protección de datos empuja
+hacia conservar lo mínimo y fija un techo de sesenta días; el de
+seguridad ciudadana fija un piso de cuarenta y cinco. Ambos son
+compatibles solo dentro de una ventana estrecha, y lo son únicamente
+porque recaen sobre finalidades distintas.
+
+La consecuencia de diseño es la que este análisis ya venía recomendando
+y que ahora queda respaldada con plazos concretos: tratar el sistema de
+estimación de aglomeraciones como un subsistema separado del CCTV de
+seguridad, con su propia finalidad, su propia base de legitimación y su
+propio plazo de retención. Mezclarlos haría que el subsistema de conteo
+heredara la obligación de conservación de cuarenta y cinco días propia
+del video de seguridad, lo que perjudicaría el argumento de minimización
+sin beneficio operativo alguno, dado que los conteos agregados no sirven
+a la finalidad de seguridad ciudadana. Bajo M-02 y M-03, además, el
+subsistema de conteo no almacena imágenes, de modo que la obligación del
+artículo 17.2 recaería sobre el CCTV preexistente de LAP y no sobre lo
+que el proyecto añade. Esa separación, sin embargo, no resuelve la retención de los datos
+derivados, que el subsistema sí conserva. La Tabla~\ref{tab:retencion} recoge
+qué guarda el prototipo vigente, dónde y durante cuánto tiempo.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Datos por persona que conserva el prototipo, con su ubicación, retención y alcance.}
+\label{tab:retencion}
+\begin{tabular}{@{}L{3.3cm}L{3.1cm}L{4.1cm}L{3.4cm}@{}}
+\toprule
+\textbf{Dato} & \textbf{Dónde vive} & \textbf{Retención} & \textbf{Alcance} \\
+\midrule
+Fotograma de cámara en vivo & Memoria del proceso & Se descarta tras analizarlo & Ninguno \\
+Video cargado para pruebas & Disco del equipo & Sin plazo; borrado manual & Sesiones de prueba \\
+Vector de apariencia de la sesión & Memoria del proceso & Mientras dura la sesión & Entre cámaras de la sesión \\
+Memoria de apariencia (activa por defecto) & Base de datos local del proyecto & 24 horas desde la última aparición (configurable de 1 a 168); purga automática & Entre cámaras, sesiones y días \\
+Grabación de la sesión (identificador, caja, posición y trayectoria reciente por persona) & Disco del equipo & Sin plazo automático; borrado manual & Sesión \\
+Métricas comerciales por identificador & Base de datos local del proyecto & Sin plazo automático & Sesión \\
+Incidentes de aglomeración & Base de datos local del proyecto & Sin plazo automático & Proyecto \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Dos rasgos de esa tabla importan para el artículo 8. El primero es que el plazo
+de la memoria de apariencia corre desde la última vez que se vio a la persona,
+no desde la primera: quien reaparece antes de que venza renueva su permanencia,
+de modo que una persona que acude a diario al terminal, como un trabajador,
+puede permanecer en la memoria indefinidamente. El segundo es que las
+grabaciones de sesión, que son las que conservan trayectorias individuales,
+no tienen plazo automático. El horizonte que la finalidad de estimar
+aglomeraciones necesita es la sesión: para no contar dos veces a quien pasa de
+una cámara a otra basta con que el vector viva mientras dura el monitoreo. De
+ahí las dos correcciones que este informe propone y que dependen solo del
+equipo: desactivar por defecto la memoria de apariencia, de modo que el vector
+viva solo en memoria durante la sesión, y fijar una retención automática para
+las grabaciones, cuyo plazo concreto debe acordarse con LAP según sus
+necesidades de reporte.
+
+\subsubsection{Derechos de los titulares e información al público}
+
+El Título III de la Ley 29733 reconoce un catálogo de derechos que el
+sistema debe permitir ejercer. El artículo 18 establece el derecho de
+información, conforme al cual el titular debe ser informado «en forma
+detallada, sencilla, expresa, inequívoca y de manera previa a su
+recopilación» sobre la finalidad del tratamiento, los destinatarios, la
+existencia del banco de datos y la identidad y domicilio de su titular,
+las transferencias previstas, el tiempo durante el cual se conservarán
+sus datos y la posibilidad de ejercer los derechos que la ley le
+concede. El artículo 19 reconoce el derecho de acceso; el 20, los de
+actualización, inclusión, rectificación y supresión; el 21, el de
+impedir el suministro; el 22, el de oposición; el 24, el de tutela ante
+la Autoridad Nacional o mediante hábeas data; y el 25, el de ser
+indemnizado.
+
+Merece mención aparte el artículo 23, que consagra el derecho al
+tratamiento objetivo: el derecho del titular «a no verse sometido a una
+decisión con efectos jurídicos sobre él o que le afecte de manera
+significativa, sustentada únicamente en un tratamiento de datos
+personales destinado a evaluar determinados aspectos de su personalidad
+o conducta». Es el fundamento normativo directo de M-10: mientras el
+sistema se limite a emitir alertas agregadas que un operador humano
+interpreta, no produce decisiones automatizadas sobre personas
+individuales y el artículo no se activa; si sus salidas alimentaran una
+medida automática sobre un pasajero concreto, sí lo haría.
+
+En videovigilancia, el deber de información se cumple de forma
+característica mediante señalética. El numeral 6.11 de la Directiva fija
+el contenido mínimo del cartel (identidad y domicilio del responsable,
+forma de ejercer los derechos y lugar donde obtener la información del
+artículo 18) y establece una dimensión mínima de 297 × 210 milímetros;
+el Anexo A propone un modelo construido sobre esos elementos. Dado que
+el consentimiento no es la base habilitante, la legitimidad del sistema
+descansa enteramente en que supere el examen de proporcionalidad y en
+que este deber se cumpla de manera efectiva: el cartel es, junto con la
+proporcionalidad, uno de los dos pilares de la licitud del tratamiento,
+y no un trámite.
+
+Varios de sus campos no pueden completarse con información que el equipo
+posea: la razón social registral y el domicilio del responsable, la base
+de legitimación invocada, el canal de atención de derechos y el plazo de
+conservación son datos que solo LAP puede proporcionar. Un cartel con
+esos campos en blanco no cumple el deber de información, de modo que su
+obtención condiciona la medida M-08.
+
+La reidentificación añade una dificultad práctica a los derechos de acceso y de
+supresión. Para localizar los registros de una persona concreta en la memoria
+de apariencia habría que calcular el vector de esa persona a partir de una
+imagen suya, es decir, tratar más datos para atender la solicitud. El prototipo
+solo ofrece el borrado completo de la memoria de identidad de un proyecto, y lo
+ofrece como servicio interno del servidor, sin un botón en la consola, de modo
+que el personal que opere el sistema no puede ejecutarlo sin asistencia
+técnica. Se recomienda incorporar ese botón y documentar el procedimiento de
+atención de solicitudes, y tener presente que la forma más simple de no tener
+que localizar a nadie en la memoria es no conservarla más allá de la sesión.
+
+\subsubsection{Encargados de tratamiento y flujos hacia terceros}
+
+El artículo 2 numeral 6 define al encargado del banco de datos
+personales como quien «realiza el tratamiento de los datos personales
+por encargo del titular del banco de datos personales». Cualquier
+proveedor que trate datos por cuenta de LAP (etiquetado, plataformas de
+MLOps, almacenamiento de objetos, infraestructura de inferencia) ocupa
+esa posición y queda sujeto al artículo 30, conforme al cual los datos
+tratados por cuenta de terceros «no pueden aplicarse o utilizarse con un
+fin distinto al que figura en el contrato o convenio celebrado ni ser
+transferidos a otras personas, ni aun para su conservación», y deben
+suprimirse una vez ejecutada la prestación salvo autorización expresa.
+
+Cuando el destinatario se sitúa fuera del país entra en juego el flujo
+transfronterizo, definido en el artículo 2 numeral 8 y regulado en el
+artículo 15, que solo lo permite «si el país destinatario mantiene
+niveles de protección adecuados conforme a la presente Ley» y, en su
+defecto, obliga al emisor a garantizar que el tratamiento se efectúe
+conforme a la ley peruana. El artículo 11 recoge el principio
+correlativo de nivel de protección adecuado. El D.S. 016-2024-JUS
+contempla además un alcance extraterritorial del régimen peruano, fijado
+en el Artículo VI de su Título Preliminar. De sus criterios de conexión,
+dos son los que este proyecto debe examinar: el numeral 3.1, que atrae
+al régimen peruano el tratamiento vinculado a la oferta de bienes o
+servicios a titulares situados en territorio peruano, y el numeral 3.2,
+que hace lo propio con el análisis del comportamiento de esos titulares
+y la elaboración de perfiles. Ninguno de los dos puede descartarse de
+antemano si alguna etapa del procesamiento llegara a ejecutarse fuera
+del país; cuál de ellos resulta aplicable a un encargado contratado por
+LAP es calificación que corresponde a su área legal.
+
+De aquí se derivan tres consecuencias sobre decisiones de diseño que
+probablemente ya se están tomando. Si el entrenamiento o la inferencia
+se ejecutan en nube alojada fuera del Perú, existe un flujo
+transfronterizo que debe analizarse. El uso de un modelo preentrenado
+descargado del exterior no constituye por sí mismo transferencia de
+datos personales, porque no se exportan datos; enviar fotogramas del
+terminal a una interfaz externa para inferencia sí lo constituiría. Y el
+servidor externo de evaluación de NWPU-Crowd, al que se remiten
+predicciones porque el conjunto no libera las etiquetas de prueba,
+implica un envío a un tercero fuera del Perú: en fase académica el
+riesgo es acotado, porque se envían predicciones sobre imágenes de un
+conjunto público, pero remitir por esa vía cualquier artefacto derivado
+de material del terminal constituiría una transferencia internacional
+con todas sus consecuencias.
+
+La decisión entre inferencia \emph{on-premise} e inferencia en nube
+externa es, a juicio de este informe, la de mayor impacto legal del
+proyecto, porque determina si existe o no transferencia internacional.
+El prototipo procesa todo en el equipo local, incluidos el detector y el
+descriptor de apariencia, y no envía fotogramas ni vectores a terceros; la
+decisión para el despliegue final no consta todavía por escrito, y la
+posibilidad de desplegar en una nube externa, que el propio informe plantea
+como extensión, obliga a resolverla antes.
+
+\subsubsection{Auditoría: ¿el sistema trata datos biométricos?}
+
+Este apartado contrasta las decisiones técnicas del equipo contra los requisitos
+anteriores. La pregunta que decide el régimen aplicable no es si hay cámaras,
+sino si en algún punto del procesamiento se extrae de la imagen una
+característica que permita identificar a una persona o individualizarla, en el
+sentido del artículo 2 numeral 5, y qué se conserva de ella. A diferencia de
+versiones anteriores de este análisis, la arquitectura ya no está abierta: el
+prototipo vigente detecta personas con YOLO, las sigue dentro de cada cámara y
+las asocia entre cámaras con un descriptor de apariencia OSNet (Zhou et al.,
+2019). La auditoría se formula, por tanto, sobre lo implementado.
+
+\textbf{Alternativas revisadas.} Bajo CSRNet (Li et al., 2018) ninguna etapa
+construye una plantilla biométrica y la salida, un mapa de densidad, es
+agregada por construcción, de modo que no admite reidentificación posterior.
+Bajo P2PNet o P2R (Song et al., 2021; Lin et al., 2025) tampoco se construyen
+plantillas faciales, pero la conformidad queda condicionada a que las
+coordenadas no se persistan ni se encadenen. Ambos enfoques eran los más
+protectores; el equipo no adoptó ninguno, por las razones técnicas expuestas
+en la Sección~\ref{sec:marco-teorico}.
+
+\textbf{Qué calcula el prototipo.} Para cada persona que sigue, y solo con sus
+vistas confiables (confianza suficiente, altura mínima, lejos del borde de la
+imagen y sin oclusión), el sistema recorta la caja de cuerpo entero, cabeza
+incluida, la escala a un tamaño fijo, rellena con gris las partes que tapa otra
+persona y calcula un vector OSNet de 512 dimensiones. Lo recalcula al crear el
+seguimiento, aproximadamente una vez por segundo después y en cada muestra
+mientras la persona no tiene un identificador confirmado, con un máximo de
+dieciséis recortes por muestra. Los vectores de cada tramo continuo de
+seguimiento se promedian en un prototipo. El seguimiento por cámara usa,
+además, una firma de color de la ropa del torso, que vive solo en memoria
+mientras la persona está activa. El modelo no es de reconocimiento facial, pero
+el recorte del que parte contiene la cabeza y, cuando es visible, el rostro.
+
+\textbf{Dónde vive y durante cuánto tiempo.} Durante la sesión, los vectores y
+los prototipos residen en la memoria del proceso. Con la memoria de apariencia
+activa, que es la configuración por defecto, el sistema guarda además en una
+base de datos local por proyecto, para cada persona, la suma de sus vectores,
+hasta dieciséis prototipos de tramo con la cámara que los produjo, la lista de
+cámaras que la vieron, el número de apariciones y las horas de su primera y
+última aparición. La retención es de 24 horas por defecto, configurable entre
+1 y 168, y corre desde la última aparición; la purga se ejecuta al abrir la base
+y cada diez minutos. El borrado completo e inmediato existe como servicio
+interno del servidor, sin un botón en la consola. Las grabaciones de sesión no
+contienen vectores.
+
+\textbf{Alcance de la reidentificación.} Entre cámaras de una misma sesión, el
+sistema une identidades solo si el operador declaró las cámaras relacionadas y
+sus relojes sincronizados, y exige coherencia de tiempo y, con calibración, de
+posición en el plano. Con la memoria de apariencia activa, en cambio, cada
+identidad nueva se compara con todas las personas guardadas en el plazo de
+retención, sin depender de esas declaraciones: si coincide sin ambigüedad,
+recupera su identificador anterior, sea en otra cámara, en otra sesión o en
+otro día, y si reaparece tras más de treinta segundos se marca como
+reidentificada. El sistema reconoce así a la misma persona de un día para otro
+mientras vista la misma ropa.
+
+\textbf{Calificación.} Un vector construido para volver a reconocer a un
+individuo en otra cámara es, por su función, una característica extraída del
+cuerpo de la persona cuyo propósito es individualizarla. Si se considerara que
+por sí mismo permite identificar al titular, quedaría comprendido en el
+artículo 2 numeral 5 y el tratamiento recaería sobre datos sensibles, con el
+régimen reforzado que ello implica. Si no, seguiría siendo dato personal sujeto
+al régimen general, en su forma disociada, y el sistema estaría
+reconstruyendo trayectorias individuales, el tercer tipo de dato descrito en
+B.2, en su forma de mayor poder identificante. En ninguna de las dos lecturas
+el resultado es neutro, y la calificación definitiva corresponde al área legal
+de LAP. Lo que sí puede afirmarse sin esperar esa calificación es la
+conformidad con el requisito que el propio proyecto se fijó: RNF-01 prohíbe
+\enquote{derivar del video ningún rasgo que permita identificación biométrica o
+reidentificación individual persistente}, y la memoria de apariencia activa por
+defecto realiza exactamente una reidentificación individual persistente.
+\textbf{RNF-01 es no conforme.} Esta conclusión corrige expresamente la de
+versiones anteriores de este informe, que, sobre un prototipo que solo usaba
+un histograma de color como desempate y no lo conservaba, afirmaban que la
+preocupación por la reidentificación mediante vectores de apariencia no se
+confirmaba.
+
+\textbf{Corrección identificada.} El defecto es de configuración y lo puede
+cerrar el propio equipo: desactivar por defecto la memoria de apariencia, de
+modo que el vector viva solo en memoria durante la sesión y se descarte al
+cerrarla. La asociación entre cámaras dentro de la sesión, que es la que evita
+contar dos veces a una misma persona, se conserva; lo que desaparece es el
+reconocimiento entre sesiones y días, que la finalidad de estimar
+aglomeraciones no requiere. Conviene completar la corrección con un botón en la
+consola para el borrado inmediato de la memoria de identidad, mientras exista
+la opción de activarla. Al cerrar esta versión, la corrección queda como
+acción pendiente del equipo.
+
+\textbf{Sobre lo que se persiste.} Aparte de la memoria de apariencia, el
+prototipo escribe en el disco del equipo una grabación de cada sesión que
+guarda, por cada muestra y por cada persona, su identificador, su caja, su
+posición en el plano y los últimos puntos de su trayectoria. Al cerrar la sesión
+los identificadores se renumeran de 1 a N dentro de ella, lo que limita el
+enlace entre sesiones de las grabaciones, pero no elimina las trayectorias
+individuales que contienen. Esas grabaciones no tienen plazo de retención
+automático y se borran a mano desde la consola, y de ellas se derivan las
+métricas comerciales por identificador. Es exactamente el tercer tipo de dato
+descrito en B.2, escrito en disco y no procesado en memoria: \textbf{la medida
+M-03, que exige salida agregada por zona sin coordenadas individuales
+persistidas, no se cumple}. La medida M-02 sí se respeta para las cámaras en
+vivo, cuyos fotogramas no se almacenan, aunque los videos cargados para
+pruebas se conservan en el equipo.
+
+\textbf{Hallazgos.} Del contraste resultan cinco hallazgos no conformes de
+naturaleza distinta. El primero es la ausencia de la Evaluación de Impacto en
+Protección de Datos, exigible antes de iniciar tratamientos de alto riesgo,
+supuesto en el que la videovigilancia masiva figura expresamente; es una
+obligación incumplida, pero fácil de subsanar, porque su material sustantivo
+está redactado en la Sección~\ref{subsec:analisis-teas} y en el
+Anexo~\ref{anx:impacto}. El segundo es el incumplimiento de RNF-01 por la
+memoria de apariencia activa por defecto. El tercero es el incumplimiento de
+M-03 por la persistencia de posiciones individuales en las grabaciones, que el
+equipo puede corregir agregando por zona antes de escribir o fijando una
+retención automática corta. Los dos últimos son defectos de implementación,
+subsanables por el propio equipo sin depender de terceros. El cuarto es la
+ausencia de validación de exactitud en el dominio de destino, pues no existe
+validación en el terminal y la brecha de dominio documentada por Lin et al.
+(2025) impide extrapolar las cifras publicadas. El quinto es la ausencia de
+evaluación de sesgo demográfico, que ninguno de los trabajos revisados reporta
+de forma desagregada. Estos dos no son defectos de implementación sino
+ausencias de evidencia, y ambos requieren acceso a material del terminal.
+Quedan además pendientes la política de retención de las grabaciones, la
+localización del procesamiento en el despliegue final y la trazabilidad de
+licencias de los conjuntos de datos.
+
+\clearpage
+
+\subsection{Análisis de impacto: desarrollo completo}
+\label{anx:impacto}
+
+Este anexo recoge el desarrollo completo del análisis de impacto que la
+Sección 3.4 presenta de forma resumida.
+
+\subsubsection{Metodología del análisis de impacto}
+
+Este anexo evalúa el impacto del sistema propuesto sobre los derechos de
+las personas observadas y sobre el entorno en que se despliega. Su
+estructura no es arbitraria: reproduce deliberadamente la de una
+Evaluación de Impacto en Protección de Datos, esto es, identificar el
+tratamiento, valorar su necesidad y proporcionalidad, identificar los
+riesgos para los derechos de los titulares y proponer medidas de
+mitigación.
+
+Esa correspondencia no es una analogía metodológica. Como se expone en
+el apartado B.9 del Anexo B, el D.S. 016-2024-JUS exige una evaluación
+de impacto antes de iniciar tratamientos de alto riesgo, y la
+videovigilancia masiva figura expresamente entre los supuestos que la
+activan. El sistema parte de la captación masiva y continua de imágenes
+de personas en las zonas comunes de un terminal aeroportuario, de modo
+que el supuesto se activa con independencia de lo que el modelo haga después
+con las imágenes. En este sistema, además, el modelo individualiza y
+reidentifica a las personas, lo que refuerza la exigencia en lugar de
+atenuarla. Este anexo es, por tanto, el
+insumo sustantivo de un documento que el proyecto está obligado a
+producir, y no un ejercicio analítico de acompañamiento.
+
+Conviene anticipar una tentación previsible y descartarla expresamente:
+argumentar que, como no hay reconocimiento facial, el sistema no alcanza
+el umbral de alto riesgo y la evaluación no sería exigible. Este informe recomienda no construir el argumento en
+esa dirección, por dos razones. La primera es que el supuesto que se
+activa es el de captación masiva, y esa captación existe con
+independencia de lo que el modelo haga después. La segunda es que la
+evaluación de impacto es precisamente el documento en el que las
+decisiones de diseño de este informe (minimización, no persistencia,
+salida agregada, procesamiento local) se registran como medidas de
+mitigación y quedan acreditadas ante la autoridad. Renunciar a ella
+sería renunciar al lugar donde el trabajo de cumplimiento se vuelve
+exigible y demostrable.
+
+Un criterio gobierna la redacción de todo lo que sigue: se prefiere
+declarar un impacto como no cuantificado antes que estimarlo sin base.
+Varias magnitudes que naturalmente irían aquí (número de pasajeros
+afectados, costo evitado, consumo energético, tasa de error por grupo
+demográfico) dependen de información operativa que solo LAP posee o de
+mediciones que el equipo aún no ha realizado. Donde ocurre, se indica
+expresamente en lugar de rellenarse con una cifra plausible.
+
+\subsubsection{Sesgos del sistema}
+
+El sistema puede fallar de manera desigual, y conviene distinguir tres
+fuentes de desigualdad que operan por mecanismos distintos y admiten
+mitigaciones distintas. En los tres casos se indica qué reconocen los
+propios autores de la literatura revisada, porque la solidez del
+análisis depende de no atribuirles limitaciones que no declararon ni de
+silenciar las que sí.
+
+\textbf{Brecha de dominio.} Es la limitación mejor documentada y la más
+grave para esta fase del proyecto. Los autores de P2R
+(Lin et al., 2025) reconocen expresamente que el desempeño de los
+métodos de conteo se degrada de forma marcada cuando el entorno de
+despliegue difiere del de entrenamiento, y que sin una etapa de
+adaptación de dominio las cifras publicadas no se trasladan. Documentan
+además un modo de fallo concreto del paradigma punto a punto: el
+vecindario de cada píxel de primer plano queda sobre-activado y se lee
+como instancia distinta, lo que produce sobreestimación severa del
+conteo. La consecuencia para el proyecto es directa y condiciona la lectura de
+toda cifra de desempeño: esta primera entrega se desarrolla sobre conjuntos
+públicos y grabaciones propias, con un detector y un descriptor de apariencia
+preentrenados en otras escenas y sin acceso todavía a material del
+Aeropuerto Jorge Chávez, de modo que ninguna cifra que se reporte debe leerse
+como predicción de exactitud para el terminal. Es, en el mejor de
+los casos, una cota de referencia sobre datos públicos, sujeta a
+validación en sitio antes de comunicarse a LAP como expectativa de
+desempeño.
+
+\textbf{Sesgo demográfico.} Aquí la situación es distinta y debe
+enunciarse con precisión: no es que los autores reconozcan un sesgo
+demográfico, sino que ninguno de los trabajos revisados reporta
+desempeño desagregado por características demográficas de las personas
+contadas. No se trata de una omisión de este informe sino de una
+ausencia en la literatura consultada, y tiene consecuencias concretas en
+un aeropuerto internacional, donde la población observada es
+considerablemente más heterogénea que la de los conjuntos de
+entrenamiento disponibles. Los factores que razonablemente podrían
+inducir desempeño desigual son identificables aunque no estén
+cuantificados. La estatura es el primero: un detector de personas puede subcontar
+sistemáticamente a niños, sobre todo en escenas densas donde quedan ocluidos
+por adultos. La vestimenta
+y los cubrimientos de cabeza (sombreros, gorras, capuchas, prendas
+religiosas) alteran la apariencia de la región de la cabeza, que es
+precisamente la señal que explotan los métodos de conteo por cabezas. El equipaje voluminoso
+y las sillas de ruedas presentan siluetas distintas de las típicas en
+los conjuntos de origen. Y la composición demográfica de esos conjuntos,
+procedentes mayoritariamente de escenas de otras regiones del mundo, no
+ofrece garantía alguna de neutralidad respecto de la población
+retratada: la brecha documentada por Lin et al. (2025) es geográfica y
+de escena, y no hay evidencia de que sea neutral respecto de quién
+aparece en la imagen.
+
+La reidentificación añade un sesgo propio. El vector de apariencia describe
+sobre todo la ropa, de modo que las personas con vestimenta parecida, oscura o
+uniforme se confunden con más facilidad: el personal del terminal, los
+tripulantes o los grupos que viajan con prendas iguales tienen más
+probabilidad de que el sistema fusione a dos de ellos en un solo identificador,
+o de que los divida cuando cambian de prenda. Un error así no solo altera el
+conteo: atribuye a una persona el recorrido de otra.
+
+\textbf{Sesgo de anotación.} Es el menos visible de los tres y el que
+los autores sí documentan de forma explícita. Los responsables de P2PNet
+(Song et al., 2021) señalan que su métrica de localización más
+exigente, el nAP con umbral 0,05, cae de forma notable por efecto de las
+desviaciones de etiquetado, es decir, por la imprecisión con que los
+anotadores humanos sitúan el punto sobre la cabeza. El sesgo no procede
+aquí del modelo sino de la verdad de referencia contra la que se lo
+entrena y se lo mide. En la misma línea, los autores de CSRNet
+(Li et al., 2018) construyen su mapa de referencia difuminando cada
+anotación con un núcleo gaussiano geométricamente adaptativo, lo que
+incorpora un supuesto sobre la relación entre distancia a la cámara y
+tamaño aparente de la cabeza; cuando ese supuesto no se cumple
+(perspectivas oblicuas, techos altos, cámaras de gran angular, todas
+ellas habituales en un terminal), la referencia misma queda sesgada. Los
+propios autores reconocen además que sobre UCSD, un conjunto de escenas
+relativamente dispersas, superan a la mayoría de métodos previos excepto
+a MCNN en MAE, y que la baja resolución de esos cuadros les obligó a
+reescalar por interpolación bilineal. Esto último importa operativamente
+más de lo que parece: el régimen de baja densidad no es el terreno donde
+el método brilla, y buena parte del día un terminal aéreo opera
+precisamente en baja densidad. Aunque el prototipo no usa estos modelos, su
+detector hereda el mismo tipo de sesgo de las anotaciones del conjunto general
+con que se preentrenó.
+
+Conviene ser preciso sobre la gravedad de estos sesgos, para no
+exagerarla ni minimizarla. El sistema no toma decisiones sobre personas
+individuales: no deniega embarques ni señala sospechosos, de modo que un
+error de conteo no perjudica directamente a la persona mal contada. Un error
+de reidentificación sería distinto si las trayectorias se usaran para algo más
+que contar, y esa es otra razón para no conservarlas más allá de lo
+necesario. Sin
+embargo, si el subconteo se concentra en un grupo, las zonas del
+terminal donde ese grupo se concentra reciben sistemáticamente menos
+recursos: menos personal y menos apertura de mostradores. El daño no es
+individual sino distributivo, y es real aunque sea indirecto. De ahí se
+sigue una recomendación concreta: que la campaña de validación en sitio
+incluya una evaluación de desempeño desagregada, al menos por franja de
+estatura y por presencia de equipaje voluminoso. La recomendación es
+condicional en sentido estricto, porque sin acceso a material del
+terminal no es realizable, y esa dependencia refuerza la solicitud de
+acceso planteada en el apartado B.9 del Anexo B.
+
+\subsubsection{Sesgo de automatización y factor humano}
+
+Un riesgo distinto de los anteriores, y menos discutido, es la
+sustitución progresiva del criterio humano por el del sistema. Si el
+personal de operaciones llega a confiar en el tablero más que en su
+propia observación, un fallo del sistema en un momento crítico produce
+un efecto peor que su ausencia, porque la atención humana ya se retiró.
+El fenómeno no depende de que el modelo funcione mal: depende de que
+funcione bien durante el tiempo suficiente para que nadie lo cuestione.
+
+Este riesgo tiene un anclaje normativo directo. Como se expone en el
+apartado B.7 del Anexo B, el artículo 23 de la Ley 29733 reconoce el
+derecho al tratamiento objetivo, esto es, a no verse sometido a una
+decisión con efectos jurídicos o significativos sustentada únicamente en
+un tratamiento automatizado. La medida M-10, conforme a la cual el
+sistema emite alertas y no ejecuta acciones automáticas sobre personas,
+responde a esa exigencia y mantiene al sistema fuera del supuesto del
+artículo 23. Pero M-10 es insuficiente por sí sola, porque describe la
+arquitectura y no la práctica: un operador que aprueba mecánicamente
+cuanto el tablero propone reintroduce de hecho la decisión automatizada
+que la medida pretendía evitar, aunque formalmente medie una acción
+humana.
+
+De ahí que la capacitación del personal deba tratarse como medida de
+mitigación y no como accesorio de implantación. Los operadores necesitan
+conocer las limitaciones del modelo, y en particular tres de las
+documentadas en este anexo: que el desempeño sobre datos públicos y grabaciones propias no predice
+el desempeño en el terminal mientras no exista validación en sitio; que la
+reidentificación puede fusionar a dos personas con ropa parecida o dividir a
+una que cambia de prenda, y que una asociación marcada como incierta no debe
+leerse como confirmada; y que en las horas punta las oclusiones reducen las
+vistas útiles y, con ellas, la fiabilidad de los identificadores. Un operador que conoce estos tres puntos
+interpreta una alerta anómala como lo que probablemente es; uno que no
+los conoce, la ejecuta.
+
+Existe además un impacto sobre el comportamiento de las personas
+observadas que conviene dejar planteado con la cautela que corresponde.
+Se sostiene habitualmente que saberse observado modifica la conducta;
+este informe no puede afirmarlo como hecho acreditado, porque las
+referencias validadas del proyecto son los artículos técnicos de
+antecedentes y no se ha incorporado literatura sobre efectos
+conductuales de la videovigilancia. Formulado en condicional: si ese
+efecto existe en la magnitud que la discusión pública le atribuye, en un
+aeropuerto, donde la vigilancia ya está normalizada, el efecto marginal
+de añadir un sistema de conteo sería previsiblemente pequeño, aunque no
+nulo, y la normalización misma formaría parte del fenómeno. Sostener el
+punto con firmeza exigiría respaldo bibliográfico que este informe
+todavía no tiene.
+
+\subsubsection{Lectura ambiental del costo de cómputo}
+
+El entrenamiento de modelos de visión es intensivo en cómputo y, por tanto, en
+energía. El equipo no ha medido el consumo energético de la inferencia, de modo
+que lo que sigue es cualitativo y estructural; se indica en cada caso qué
+medición permitiría convertirlo en cuantitativo.
+
+La primera decisión con efecto ambiental es que el prototipo no entrena
+modelos: reutiliza un detector y un descriptor de apariencia preentrenados
+(Jocher y Qiu, 2024; Zhou et al., 2019), lo que evita por completo el costo del
+entrenamiento en esta fase. Ese ahorro tiene una contrapartida que conviene
+no ocultar: la brecha de dominio documentada obliga a contemplar una
+adaptación con material del terminal, y esa campaña sí consumirá cómputo. La
+literatura revisada muestra que la elección de la función de pérdida no es
+ambientalmente neutra: P2R prescinde del emparejamiento húngaro y calcula su
+pérdida cerca de sesenta y ocho veces más rápido que el emparejamiento punto a
+punto sobre una misma imagen (Lin et al., 2025), aunque esa cifra mide una
+operación por iteración y no el consumo total del ciclo.
+
+A escala de la vida útil del sistema, el consumo de la inferencia continua es el
+dominante, porque se ejecuta permanentemente sobre múltiples flujos de video.
+Varias decisiones del prototipo convergen en reducirlo. La frecuencia de
+muestreo es la primera: el sistema analiza una muestra cada 0,2, 0,4 o 0,6
+segundos según el número de cámaras, en lugar de cada cuadro. La segunda es la
+elección de la variante del detector según el hardware, que evita usar un
+modelo mayor del que el equipo puede sostener. La tercera es que el vector de
+apariencia solo se calcula para vistas confiables y con un tope por muestra. La
+cuarta es el procesamiento en el equipo local (M-01), que evita transmitir video
+de forma continua hacia la nube.
+
+Este es el resultado analítico más útil del apartado y conviene presentarlo
+como tal ante el cliente: las decisiones que reducen la exposición de datos
+personales (muestrear menos, procesar localmente, no persistir imágenes,
+calcular menos vectores y conservarlos menos tiempo, agregar la salida) son
+exactamente las mismas que reducen el consumo de cómputo, de transmisión y de
+almacenamiento.
+
+Quedan dos puntos abiertos. El primero es que convertir este apartado en
+cuantitativo depende de medir el consumo de la inferencia por cámara y, si llega
+a haber adaptación al dominio, de registrar las horas de cómputo desde el primer
+entrenamiento, un dato que no es reconstruible a posteriori. El segundo es la
+huella de hardware: si el proyecto requiere cámaras o servidores nuevos, su
+fabricación y su disposición final integran el balance, y reutilizar la
+infraestructura de cámaras existente es, además de la opción económicamente
+decisiva, la ambientalmente preferible. Se recomienda, por último, verificar si
+LAP cuenta con una política institucional de sostenibilidad, porque, de existir,
+el análisis debería alinearse con sus categorías de medición en lugar de
+proponer un marco paralelo.
+
+\subsubsection{Riesgos residuales y decisiones pendientes}
+
+Integrando lo anterior, el perfil de riesgo del sistema admite una síntesis en
+cuatro dimensiones. En la ética, el impacto positivo es ofrecer una alternativa
+menos invasiva que la identificación biométrica para la misma finalidad, y el
+riesgo principal ya no es un deslizamiento futuro hacia el seguimiento, sino
+una capacidad implementada: el sistema sigue a cada persona, la reidentifica
+por su apariencia y, con la configuración por defecto, la reconoce entre
+sesiones y días. En la social, el beneficio es la prevención de incidentes por
+aglomeración y la asignación de recursos basada en evidencia, y los riesgos son
+la distribución desigual de beneficio y carga, el uso laboral no declarado y el
+exceso de confianza en el sistema. En la económica, el beneficio es la
+eficiencia operativa y el valor de los incidentes evitados, y el riesgo
+dominante es el costo de reconstruir el sistema si se detecta una no
+conformidad después del despliegue, lo que hace de la privacidad desde el
+diseño la opción económicamente racional además de la obligatoria. En la
+ambiental, el beneficio es no entrenar modelos en esta fase, y el riesgo es el
+consumo acumulado de la inferencia continua a lo largo de la vida útil.
+
+Tres conclusiones transversales se desprenden del análisis. La primera es que
+las decisiones de minimización operan simultáneamente en las cuatro
+dimensiones: no persistir imágenes, no conservar vectores más allá de la
+sesión, agregar la salida y muestrear a baja frecuencia reducen a la vez el
+riesgo ético, la exposición social, el costo de almacenamiento y la huella
+ambiental. La segunda es que el riesgo dominante es de gobernanza y de
+configuración: el deslizamiento de finalidad y el uso no declarado no se
+previenen con mejor ingeniería, sino con valores por defecto protectores,
+documentación, compromisos contractuales y auditoría. La tercera es que varios
+impactos permanecen sin cuantificar por falta de información del cliente y de
+mediciones propias, y se ha optado por declararlo antes que por estimar sin
+base.
+
+El riesgo de deslizamiento de finalidad merece un desarrollo propio, porque no
+proviene de un defecto técnico sino del éxito del sistema. La reidentificación
+ya está incorporada, y la analítica comercial ya mide entradas, permanencias,
+regresos y rutas por identificador frente a cada negocio. Lo que queda a un
+paso de configuración es todavía más invasivo: buscar a una persona concreta en
+las grabaciones o incorporar reconocimiento facial. La barrera que impide ese
+paso es documental, contractual y de configuración. La mitigación que este
+informe propone tiene tres partes: desactivar por defecto la memoria de
+apariencia y fijar una retención automática para las grabaciones; documentar
+la finalidad de forma restrictiva, con una base de legitimación propia para la
+analítica comercial si se mantiene; y adoptar una declaración de finalidades
+excluidas conforme a la cual el sistema no identifica civilmente a las
+personas, no reconoce rostros ni emociones, no se usa para buscar a una
+persona concreta, no alimenta decisiones automatizadas sobre pasajeros
+individuales y no se emplea para evaluar al personal. Su valor depende de que
+sea cierta y explícita: la exclusión del seguimiento individual de trayectorias,
+que versiones anteriores de este informe proponían, no puede incluirse hoy,
+porque el sistema lo realiza.
+
+Los riesgos residuales que este informe no cierra son de tres clases, y
+conviene no presentarlos como si fueran del mismo tipo. Los primeros son
+ausencias de evidencia subsanables dentro del proyecto si se obtiene acceso a
+material del terminal: la validación de exactitud en el dominio de destino y la
+evaluación de sesgo demográfico. Los segundos son decisiones abiertas: la
+retención de las grabaciones, la localización del procesamiento en el
+despliegue final y la medición del consumo de la inferencia. Los terceros son
+discrepancias entre documentos del propio proyecto, que este informe deja
+registradas. Son tres. El uso del término «personas anonimizadas» para
+describir lo que la Ley 29733 califica como disociación, tratado en el apartado
+B.2 del Anexo B. La medición de permanencia en zona comercial como finalidad
+distinta de la estimación de aglomeraciones, que exigiría base de legitimación
+propia y que el prototipo ya realiza, tratada en el apartado B.3. Y la
+conclusión de versiones anteriores de este informe según la cual la
+preocupación por la reidentificación mediante vectores de apariencia no se
+confirmaba: con el prototipo vigente \textbf{sí se confirma}, según se detalla
+en el apartado B.9.
+
+A esas discrepancias se añaden dos incumplimientos verificables que el equipo
+puede cerrar por sí solo, de inmediato y sin depender de LAP ni de acceso a
+datos del terminal, y que por eso deberían encabezar la lista de acciones:
+\textbf{RNF-01 no se cumple}, porque la memoria de apariencia activa por defecto
+reidentifica a las personas entre sesiones y días, y \textbf{la medida M-03 no se
+cumple}, porque las grabaciones de sesión conservan posiciones individuales
+enlazadas a un identificador, sin retención automática. Mientras no se
+corrijan, ninguno de los dos cumplimientos puede afirmarse ante el cliente.

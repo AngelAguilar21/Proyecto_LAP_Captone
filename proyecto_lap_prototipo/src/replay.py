@@ -6,6 +6,37 @@ from urllib.parse import parse_qs
 from contextlib import nullcontext
 from resource_control import CURRENT, hold_path
 
+
+def _personas_unicas_confirmadas(sample):
+ """Cuenta personas globales una sola vez en una muestra multicámara.
+
+ Las muestras antiguas pueden no traer ``confirmed``. En ese caso se conserva
+ la compatibilidad contando IDs que no sean provisionales (``T...``). Los
+ duplicados visuales y las predicciones no entran al conteo.
+ """
+ ids = set()
+ sin_id = 0
+ for camara in sample.get("cameras", []):
+  for persona in camara.get("people", []):
+   if persona.get("predicted") or persona.get("duplicate"):
+    continue
+   identidad = str(persona.get("id") or "").strip()
+   confirmada = persona.get("confirmed")
+   if confirmada is None:
+    # Formato anterior: las observaciones no traían ID ni ``confirmed``.
+    # Conservamos su conteo individual para no romper reportes históricos.
+    if not identidad:
+     sin_id += 1
+     continue
+    confirmada = not identidad.startswith("T")
+   if not confirmada:
+    continue
+   if identidad:
+    ids.add(identidad)
+   else:
+    sin_id += 1
+ return len(ids) + sin_id
+
 class ReplayWriter:
  def __init__(self,root,sid,module,cameras,config,project_id=None):
   self.directory=root/'data'/'replays'/sid
@@ -152,6 +183,12 @@ def get(handler,url,root):
    path=(root/source).resolve()
    hold_path(path)
    if not path.is_file():raise ValueError('El video original fue movido o eliminado. Restáuralo para reproducirlo.')
+   import video_web
+   lista=video_web.copia_web(path)
+   if lista is None:
+    video_web.preparar(path)
+    return handler.send_data(503,{'error':'Preparando el video para el navegador (AVI y MKV no se reproducen directamente). Vuelve a intentarlo en un minuto.'})
+   path=lista
    size=path.stat().st_size;start=0;end=size-1;status=200
    header=handler.headers.get('Range')
    if header:
@@ -204,7 +241,10 @@ def report_snapshot(root, sid, project_id, *, strict=False):
     raise ValueError('Los tiempos de la evidencia no coinciden con la sesión.')
    last_t=sample['t']
    last=sample
-   count=sum(len(c.get('people',[])) for c in sample.get('cameras',[]))
+   # Una persona puede aparecer simultáneamente en dos cámaras. El reporte
+   # global debe usar la identidad final una sola vez; los detalles por cámara
+   # siguen disponibles en ``cameraAnalytics``.
+   count=_personas_unicas_confirmadas(sample)
    series.append({'t':sample['t'],'count':count})
    if len(series)>3600:series=series[::2]
  integrity='unknown'
@@ -220,6 +260,13 @@ def report_snapshot(root, sid, project_id, *, strict=False):
  meta={**meta,'evidenceIntegrity':integrity}
  pid=meta.get('config',{}).get('planId','custom')
  analytics=meta.get('reportAnalytics') or meta.get('levelAnalytics',{}).get(pid) or last.get('levels',{}).get(pid) or last.get('analytics') or {'clusters':[],'zones':[],'heat':[],'mappedCount':0}
- state={'session':sid,'status':meta['status'],'mode':'demo' if meta['module']=='demo' else 'p2pnet','t':meta['end'],'planId':pid,'people':[],'cameras':[], 'analytics':analytics,'cameraAnalytics':meta.get('cameraAnalytics') or {c['id']:c.get('analysis') or {} for c in last.get('cameras',[])},'totals':meta.get('totals',{}),'series':series,'testRun':bool(meta.get('config',{}).get('testRun'))}
+ identity=meta.get('identity') or {}
+ totals=dict(meta.get('totals',{}))
+ if identity.get('finalizada') and identity.get('personas') is not None:
+  # La reagrupación al cerrar es la fuente de verdad para el total global.
+  # Los totales capturados durante el vivo pueden haber contado un tracklet
+  # antes de que se uniera con la misma persona en otra cámara.
+  totals['identities']=int(identity['personas'])
+ state={'session':sid,'status':meta['status'],'mode':'demo' if meta['module']=='demo' else 'yolo','t':meta['end'],'planId':pid,'people':[],'cameras':[], 'analytics':analytics,'cameraAnalytics':meta.get('cameraAnalytics') or {c['id']:c.get('analysis',{}) for c in last.get('cameras',[])},'totals':totals,'series':series,'testRun':bool(meta.get('config',{}).get('testRun')),'identity':identity}
  config={**meta['config'],'cameras':meta['cameras']}
  return config,state,meta

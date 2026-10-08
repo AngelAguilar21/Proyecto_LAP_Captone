@@ -79,7 +79,7 @@ con `ByteTrackPuntos`, más P2PNet adaptativo para densidad. El backend también
 admite P2PNet directo, que es un contrato distinto. La señal opcional de objetos
 añade su propia inferencia YOLO. Véase [GUIA_SEGUIMIENTO.md](GUIA_SEGUIMIENTO.md).
 
-Sesión guardada **6aa427dd**, dos videos originales CAM-1/CAM-2, P2PNet real, análisis de cruces y ocupación, sin error. Disponible en **Videos y resultados**. Resumen local en `data/commercial-tests/videos_actuales.json`. La reproducción de prueba dura aproximadamente 32 segundos de fuente analizada; no se validó manualmente la precisión de sus conteos ni la reidentificación.
+Sesión guardada **6aa427dd**, dos videos originales CAM-1/CAM-2, análisis de cruces y ocupación, sin error (hecha cuando el sistema aún incluía P2PNet, retirado el 2026-10-05). Disponible en **Videos y resultados**. Resumen local en `data/commercial-tests/videos_actuales.json`. La reproducción de prueba dura aproximadamente 32 segundos de fuente analizada; no se validó manualmente la precisión de sus conteos ni la reidentificación.
 
 Proyecciones sintéticas adicionales guardadas para El Bodegón, origen **Datos de prueba**, fecha **2026-09-27**:
 

@@ -101,3 +101,11 @@ proyecto_lap_prototipo/data/salida_reid/
 # Videos de ejemplo para la prueba reproducible (7 MB y 5 MB)
 !proyecto_lap_prototipo/data/camera_A.mp4
 !proyecto_lap_prototipo/data/camera_B.mp4
+
+# Etiquetado a mano de identidades (recortes de personas): solo local, se borra al terminar
+proyecto_lap_prototipo/data/anotacion/
+
+# Encoder Re-ID de AeroVision (AGPL-3.0): solo local, no se versiona sin decidir la licencia
+proyecto_lap_prototipo/models/yolo26s-reid.onnx
+# Memoria de apariencia (vectores): datos de sesiones, nunca al repositorio
+proyecto_lap_prototipo/data/identidad/

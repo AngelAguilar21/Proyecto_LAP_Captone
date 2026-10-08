@@ -5,6 +5,7 @@ a heuristic, not a calibrated probability. No biometric models are used here.
 """
 from spatial_scope import validate_polygon
 import copy
+import json
 import math
 from collections import deque
 from zone_episodes import ZoneEpisodes, ensure_zone_ids
@@ -41,11 +42,76 @@ def validate_calibration_pairs(pairs, plan=None, *, require_complete=False):
         points=np.asarray(pairs,dtype=np.float32)
         if cv2.contourArea(cv2.convexHull(points[:,:2].copy()))<.005:
             raise ValueError("Referencias casi alineadas: distribuye los nodos por todo el suelo visible.")
+def pairs_hash(pairs):
+    """Huella de las referencias del suelo de una cámara: la alineación entre cámaras solo vale con las mismas referencias."""
+    import hashlib
+    return hashlib.sha1(json.dumps([[round(float(v), 6) for v in p] for p in pairs]).encode()).hexdigest()[:16]
+
+
+def validate_person_pairs(c):
+    """Valida las parejas de personas marcadas en dos cámaras.
+
+    Las parejas nuevas pueden guardar ``ta`` y ``tb``: el instante de la misma
+    persona en cada fuente. ``t`` se conserva por compatibilidad con proyectos
+    anteriores y representa ambos instantes cuando los videos ya estaban
+    sincronizados. ``pa`` y ``pb`` son esos mismos instantes medidos en el archivo
+    de video (sin el desfase de lectura), así que siguen valiendo si el desfase cambia.
+    """
+    ids = {cam["id"] for cam in c.get("cameras", []) if isinstance(cam, dict) and "id" in cam}
+    pairs = c.get("personPairs", [])
+    if not isinstance(pairs, list) or len(pairs) > 500:
+        raise ValueError("Parejas de personas inválidas (máximo 500).")
+    for item in pairs:
+        if not isinstance(item, dict) or not isinstance(item.get("id"), str) or not 0 < len(item["id"]) <= 64:
+            raise ValueError("Pareja de personas inválida.")
+        tiempos = (item.get("ta", item.get("t")), item.get("tb", item.get("t")))
+        if any(not finite(v, 0, 1e6) for v in tiempos) or any(key in item and not finite(item[key], 0, 1e6) for key in ("pa", "pb")):
+            raise ValueError("Cada pareja necesita tiempos válidos para ambas cámaras.")
+        sides = [item.get("a"), item.get("b")]
+        if any(not isinstance(side, dict) or side.get("camera") not in ids or not isinstance(side.get("point"), list) or len(side["point"]) != 2
+               or any(not finite(v, 0, 1) for v in side["point"])
+               or (side.get("bbox") is not None and (not isinstance(side["bbox"], list) or len(side["bbox"]) != 4
+                   or any(not finite(v, 0, 1) for v in side["bbox"]) or side["bbox"][0] >= side["bbox"][2] or side["bbox"][1] >= side["bbox"][3])) for side in sides) or sides[0]["camera"] == sides[1]["camera"]:
+            raise ValueError("Cada pareja necesita dos cámaras distintas del proyecto y puntos dentro de la imagen.")
+
+
+MIN_PAREJAS_RELACION = 4
+
+
+def related_cameras(c, minimo=MIN_PAREJAS_RELACION):
+    """Cámaras vecinas para la identidad entre cámaras: {id: [ids]}.
+
+    Dos cámaras quedan relacionadas cuando el usuario marcó a la misma persona en ambas al menos `minimo` veces (las mismas
+    parejas que miden su desfase de tiempo), o cuando el proyecto trae `links` manuales. No se deduce nada de la posición
+    de las cámaras en el plano: la relación siempre sale de una acción del usuario.
+    """
+    ids = [cam["id"] for cam in c.get("cameras", []) if cam.get("active", True)]
+    vecinas = {cid: set() for cid in ids}
+    conteo = {}
+    for item in c.get("personPairs", []) or []:
+        a, b = item.get("a", {}).get("camera"), item.get("b", {}).get("camera")
+        if a in vecinas and b in vecinas and a != b:
+            clave = tuple(sorted((a, b)))
+            conteo[clave] = conteo.get(clave, 0) + 1
+    for (a, b), n in conteo.items():
+        if n >= minimo:
+            vecinas[a].add(b)
+            vecinas[b].add(a)
+    for cam in c.get("cameras", []):
+        for destino in cam.get("links", []) or []:
+            if cam["id"] in vecinas and destino in vecinas and destino != cam["id"]:
+                vecinas[cam["id"]].add(destino)
+                vecinas[destino].add(cam["id"])
+    return {cid: sorted(v) for cid, v in vecinas.items()}
 
 
 def validate_config(c):
     if not isinstance(c, dict):
         raise ValueError("La configuración debe ser un objeto.")
+    # Módulos retirados: alineación estimada, zonas de conexión automáticas, relaciones numeradas y motores de identidad
+    # alternativos. Se limpian al validar para que proyectos antiguos abran y se guarden de nuevo sin ellos.
+    for field in ("alignment", "connections", "cameraRelations", "identityEngine", "identityAlign", "reidModel"):
+        c.pop(field, None)
     for name in ("width", "height"):
         if not finite(c.get(name), 1, 10000):
             raise ValueError(f"{name}: valor entre 1 y 10000.")
@@ -74,7 +140,7 @@ def validate_config(c):
     for pid, plan in plans.items():
         if not valid_plan_id(pid) or not isinstance(plan,dict):
             raise ValueError("Plano desconocido.")
-        validate_config(copy.deepcopy({**c,**plan,"planId":pid,"plans":{},"cameras":[]}))
+        validate_config(copy.deepcopy({**c,**plan,"planId":pid,"plans":{},"cameras":[],"personPairs":[]}))
     if not valid_plan_id(c.get("planId","custom")):
         raise ValueError("Nivel desconocido.")
     if c.get("mapAsset") and c["mapAsset"] not in [f"/maps/lap/{n}.json" for n in (1,2,3,4)]:
@@ -88,8 +154,15 @@ def validate_config(c):
         # Campos de módulos retirados (YOLO/equipaje y segunda inferencia densa).
         # Se limpian al validar para que configuraciones antiguas migren sin
         # romperse y se guarden de nuevo con el alcance comercial actual.
-        for field in ("denseCounting", "denseInterval", "luggageWatch", "luggageDwell", "luggageInterval"):
+        for field in ("denseCounting", "denseInterval", "luggageWatch", "luggageDwell", "luggageInterval",
+                      "calibrationResolution", "calibrationReview", "restrictCoverage", "coverageShape", "coverageWidth",
+                      "coveragePolygon", "heading", "fov", "range", "tilt"):
             cam.pop(field, None)
+        # Una cámara calibrada con personas vuelve a sus puntos del suelo medidos, si se guardaron al reemplazarlos.
+        # Si no hay puntos medidos guardados, se conservan los puntos actuales: nunca se borran puntos marcados.
+        people = cam.pop("peopleCalibration", None)
+        if isinstance(people, dict) and isinstance(people.get("replaced"), list) and people["replaced"]:
+            cam["pairs"] = people["replaced"]
         cid = cam.get("id", "")
         if not isinstance(cid, str) or not cid or len(cid) > 40 or not all(x.isalnum() or x in "_-" for x in cid) or cid in ids:
             raise ValueError("Cada cámara necesita un ID único, sin espacios ni símbolos especiales.")
@@ -99,6 +172,8 @@ def validate_config(c):
             raise ValueError(f"Fuente inválida: {cid}.")
         if not finite(cam.get("offset", 0), 0, 86400):
             raise ValueError("Offset debe ser no negativo (segundos que se omiten al inicio).")
+        if not finite(cam.get("syncOffset", 0), -86400, 86400):
+            raise ValueError("syncOffset debe ser un desfase temporal firmado entre cámaras.")
         pid=cam.get("planId","custom")
         if not valid_plan_id(pid) or (pid!=c.get("planId","custom") and pid not in plans):
             raise ValueError(f"Plano de cámara desconocido en {cid}.")
@@ -108,28 +183,21 @@ def validate_config(c):
                 raise ValueError(f"Posición {key} inválida en {cid}.")
         if not isinstance(cam.get("links", []), list):
             raise ValueError("links debe ser una lista de cámaras de destino.")
-        for field, low, high in [("heading",0,360),("fov",5,170),("range",.01,10000),("height",0,10000),("tilt",0,90)]:
-            if field in cam and not finite(cam[field], low, high):
-                raise ValueError(f"{cid}: {field} fuera de rango.")
+        if "height" in cam and not finite(cam["height"], 0, 10000):
+            raise ValueError(f"{cid}: height fuera de rango.")
         for field in ("name", "location"):
             if field in cam and (not isinstance(cam[field], str) or len(cam[field]) > 160):
                 raise ValueError(f"{cid}: {field} inválido.")
-        for field in ("active", "restrictCoverage", "illustrative"):
+        for field in ("active", "illustrative"):
             if field in cam and not isinstance(cam[field],bool):
                 raise ValueError(f"{field}: debe ser booleano.")
-        if cam.get("coveragePolygon"):
-            validate_polygon(cam["coveragePolygon"],cam_plan["width"],cam_plan["height"],"Cobertura")
-        if cam.get("coverageShape", "cone") not in ("cone","rectangle","free"):
-            raise ValueError("Forma de cobertura inválida.")
-        if "coverageWidth" in cam and not finite(cam["coverageWidth"],.01,10000):
-            raise ValueError("Ancho de cobertura inválido.")
         pairs = cam.get("pairs", [])
         validate_calibration_pairs(pairs, cam_plan)
         for field, lo, hi in [('crowdThreshold',1,1000),('crowdDwell',0,3600)]:
             if field in cam and not finite(cam[field],lo,hi):
                 raise ValueError(f'{cid}: {field} fuera de rango.')
         if cam.get('analysisZones'):
-            from counting.analytics import validate as validate_counting
+            from following.zone_counts import validate as validate_counting
             validate_counting({'source':'config-camera','confidence':.5,'interval':1,'maxSide':768,'zones':cam['analysisZones']})
         count_lines = cam.get('countLines',[])
         if not isinstance(count_lines,list) or len(count_lines)>20:
@@ -214,7 +282,92 @@ def validate_config(c):
     if c.get("sourceMode", "recordings") not in ("recordings", "live", "demo"):
         raise ValueError("Modo de fuente inválido.")
     ensure_zone_ids(c)
+    validate_person_pairs(c)
+    for clave in ("appearanceMemory", "identityFinalize", "identityGroupCrops"):
+        if not isinstance(c.get(clave, True), bool):
+            raise ValueError(f"{clave} debe ser verdadero o falso.")
+    if c.get("reidThreads") is not None and (not finite(c["reidThreads"], 1, 64) or int(c["reidThreads"]) != c["reidThreads"]):
+        raise ValueError("reidThreads debe ser un entero entre 1 y 64.")
+    if c.get("identityRetentionHours") is not None and not finite(c["identityRetentionHours"], 1, 168):
+        raise ValueError("La retención de la memoria de apariencia va de 1 a 168 horas.")
+    ajustes = c.get("identityV2")
+    if ajustes is not None and (not isinstance(ajustes, dict) or any(
+            not isinstance(k, str) or isinstance(v, str) or (not isinstance(v, bool) and not finite(v, -1000, 100000)) for k, v in ajustes.items())):
+        raise ValueError("identityV2 debe ser un objeto de parámetros numéricos del asociador.")
     return c
+
+
+def _fit_calibration_homography(points):
+    """Ajusta H y devuelve (H, mascara_de_inliers, umbral, metodo).
+
+    Las cuatro referencias mínimas siempre determinan una homografía exacta,
+    pero una referencia adicional mal marcada puede inclinar todo el plano.
+
+    Marcar a mano un plano aéreo sobre un video oblicuo deja errores de varios
+    centímetros en cada referencia. Con cinco o más puntos se ajustan primero
+    TODAS por mínimos cuadrados y, si ninguna se sale de la tolerancia, se usan
+    todas. Solo si alguna no concuerda se busca con RANSAC el subconjunto
+    consistente y se reajusta con él. La tolerancia es el 8 % de la extensión de
+    las referencias (relativa al plano, igual con coordenadas relativas o en
+    metros) y no cuenta una referencia absurdamente lejana, que agrandaría la
+    tolerancia y taparía justo el error.
+
+    Con un umbral estricto (1,8 %) RANSAC daba por malas referencias correctas y
+    se quedaba con justo cuatro: un ajuste exacto, sin redundancia, que fuera de
+    esas cuatro proyectaba a las personas a decenas de metros. Si el consenso es
+    menor que la mitad de las referencias no hay subconjunto fiable y se conserva
+    el ajuste con todas (`calibration` avisa de que no concuerdan).
+    """
+    destino = points[:, 2:]
+    if len(points) < 5:
+        h, mask = cv2.findHomography(points[:, :2], destino, 0)
+        return h, np.ones(len(points), dtype=bool), None, "exacta"
+    distancia = np.linalg.norm(destino - np.median(destino, axis=0), axis=1)
+    cercanas = distancia <= 4. * max(float(np.median(distancia)), 1e-9)
+    if int(cercanas.sum()) < 4:
+        cercanas = np.ones(len(points), dtype=bool)
+    span = max(float(np.ptp(destino[cercanas], axis=0).max()), .01)
+    tolerancia = max(.02, span * .08)
+    todas, _ = cv2.findHomography(points[:, :2], destino, 0)
+    if todas is not None and np.isfinite(todas).all():
+        proyectado = cv2.perspectiveTransform(points[:, :2].reshape(-1, 1, 2), todas).reshape(-1, 2)
+        if float(np.linalg.norm(proyectado - destino, axis=1).max()) <= tolerancia:
+            return todas, np.ones(len(points), dtype=bool), tolerancia, "minimos cuadrados"
+    h, mask = cv2.findHomography(points[:, :2], destino, cv2.RANSAC,
+                                 tolerancia, maxIters=3000, confidence=.995)
+    if h is None or mask is None:
+        return h, np.zeros(len(points), dtype=bool), tolerancia, "ransac"
+    inliers = mask.reshape(-1).astype(bool)
+    if int(inliers.sum()) < max(4, (len(points) + 1) // 2) and todas is not None:
+        return todas, np.ones(len(points), dtype=bool), tolerancia, "ransac"
+    if int(inliers.sum()) >= 4 and not np.all(inliers):
+        # RANSAC encuentra el conjunto consistente; el reajuste exacto reduce
+        # el sesgo introducido por el umbral y hace reproducible la proyección.
+        # Con el reajuste, las referencias que solo habían quedado fuera por azar de la muestra vuelven al conjunto.
+        for _ in range(3):
+            refined, _ = cv2.findHomography(points[inliers, :2], destino[inliers], 0)
+            if refined is None or not np.isfinite(refined).all():
+                break
+            h = refined
+            proyectado = cv2.perspectiveTransform(points[:, :2].reshape(-1, 1, 2), h).reshape(-1, 2)
+            nuevos = np.linalg.norm(proyectado - destino, axis=1) <= tolerancia
+            if int(nuevos.sum()) < 4 or np.array_equal(nuevos, inliers):
+                break
+            inliers = nuevos
+        else:
+            refined, _ = cv2.findHomography(points[inliers, :2], destino[inliers], 0)
+            if refined is not None and np.isfinite(refined).all():
+                h = refined
+    return h, inliers, tolerancia, "ransac"
+
+
+def reference_inliers(pairs):
+    """Las referencias que concuerdan con el ajuste (todas si no se descartó ninguna): solo ellas delimitan donde es fiable."""
+    if len(pairs) < 5:
+        return pairs
+    puntos = np.asarray(pairs, dtype=np.float64)
+    _, inliers, _, _ = _fit_calibration_homography(puntos)
+    return [p for p, ok in zip(pairs, inliers) if ok] if int(inliers.sum()) >= 4 else pairs
 
 
 def calibration(pairs):
@@ -230,25 +383,96 @@ def calibration(pairs):
         area = cv2.contourArea(cv2.convexHull(coords.astype(np.float32)))
         if area / (span * span) < .001:
             raise ValueError("Referencias casi alineadas: distribuye los puntos por el suelo visible.")
-    h, _ = cv2.findHomography(points[:, :2], points[:, 2:], 0)
+    h, inliers, _, _ = _fit_calibration_homography(points)
     if h is None or not np.isfinite(h).all() or np.linalg.matrix_rank(h) < 3:
         raise ValueError("Calibración degenerada: distribuye los puntos por el suelo visible.")
     projected = cv2.perspectiveTransform(points[:, :2].reshape(-1, 1, 2), h).reshape(-1, 2)
     span = max(float(np.ptp(points[:, 2:], axis=0).max()), .01)
-    if float(np.linalg.norm(projected - points[:, 2:], axis=1).max()) > span * .08:
+    errors = np.linalg.norm(projected - points[:, 2:], axis=1)
+    # Los outliers detectados por RANSAC se informan en diagnostics; no deben
+    # invalidar una calibración que tiene suficientes referencias consistentes.
+    inlier_errors = errors[inliers] if len(inliers) == len(errors) and inliers.any() else errors
+    if float(np.max(inlier_errors)) > span * .08:
         raise ValueError("Correspondencias inconsistentes; revisa los puntos de calibración.")
     # A horizon through the reference polygon makes interior projections unstable.
-    denominators = np.c_[points[:, :2], np.ones(len(points))] @ h[2]
+    horizon_points = points[inliers] if len(inliers) == len(points) and int(inliers.sum()) >= 4 else points
+    denominators = np.c_[horizon_points[:, :2], np.ones(len(horizon_points))] @ h[2]
     if np.min(denominators) <= 0 <= np.max(denominators):
         raise ValueError("La proyección se cruza dentro del área calibrada. Revisa el orden de las correspondencias.")
     return h
 
 
-def calibration_diagnostics(pairs):
+MIN_REFERENCE_COVERAGE = .06   # fracción del video que deben cubrir las referencias
+MAX_SCALE_RATIO = 30.          # tolerancia entre la zona más y menos comprimida por la perspectiva
+
+
+def plan_span(points):
+    """Mayor extensión (en unidades del plano) que cubren los puntos de referencia del plano."""
+    return float(np.ptp(points[:, 2:], axis=0).max())
+
+
+PLAN_SPAN_WARN, PLAN_SPAN_BLOCK = .03, .02  # fracción del lado mayor del plano
+
+
+def blocking_calibration_issue(pairs, plan):
+    """Mensaje si los puntos del plano están tan juntos que toda la escena colapsa en un punto."""
+    points = np.asarray(pairs, dtype=float)
+    size = max(plan) if plan else 0
+    if size > 0 and plan_span(points) < PLAN_SPAN_BLOCK * size:
+        return (f"los puntos de referencia del plano están casi todos en el mismo lugar (separados solo "
+                f"{plan_span(points):.2f} en un plano de {size:g}). Marca cada referencia en su ubicación real del plano, bien separadas.")
+    return None
+
+
+def projection_issues(h, points, zone=None, grid=14, plan=None):
+    """Problemas que hacen que una calibración exacta proyecte mal a las personas.
+
+    Con cuatro referencias el ajuste es perfecto (error casi cero) aunque la
+    proyección sea inservible fuera de ellas. Se revisa sobre la zona donde se
+    detectará gente: horizonte dentro de la zona, perspectiva que comprime
+    zonas enteras en un punto y referencias que cubren muy poco del video.
+    """
+    issues = []
+    size = max(plan) if plan else 0
+    if size > 0 and plan_span(points) < PLAN_SPAN_WARN * size:
+        issues.append(f"Los puntos del plano están casi todos en el mismo lugar (separados solo {plan_span(points):.2f} en un plano de {size:g}): "
+                      "marca cada referencia en su ubicación real del plano, bien separadas entre sí.")
+    coverage = float(cv2.contourArea(cv2.convexHull(points[:, :2].astype(np.float32))))
+    if coverage < MIN_REFERENCE_COVERAGE:
+        issues.append(f"Las referencias cubren solo el {coverage * 100:.0f}% del video: repártelas por todo el suelo donde caminan las personas.")
+    polygon = np.asarray(zone if zone else [[0, 0], [1, 0], [1, 1], [0, 1]], dtype=np.float32).reshape(-1, 1, 2)
+    us, vs = np.meshgrid(np.linspace(0, 1, grid), np.linspace(0, 1, grid))
+    cells = [(u, v) for u, v in zip(us.ravel(), vs.ravel()) if cv2.pointPolygonTest(polygon, (float(u), float(v)), False) >= 0]
+    if len(cells) < 6:
+        return issues
+    uv = np.asarray(cells, dtype=np.float64)
+    denominators = np.c_[uv, np.ones(len(uv))] @ h[2]
+    if np.min(denominators) <= 0 <= np.max(denominators):
+        issues.append("La zona de detección incluye el horizonte de la calibración (zonas muy lejanas): delimita solo el suelo cercano y bien calibrado.")
+        return issues
+    plan = cv2.perspectiveTransform(uv.reshape(-1, 1, 2), h).reshape(-1, 2)
+    step = 1. / (grid - 1)
+    key = {(round(u / step), round(v / step)): i for i, (u, v) in enumerate(uv)}
+    scales = []
+    for (iu, iv), i in key.items():
+        for du, dv in ((1, 0), (0, 1)):
+            j = key.get((iu + du, iv + dv))
+            if j is not None:
+                scales.append(float(np.linalg.norm(plan[i] - plan[j])) / step)
+    scales = np.asarray([x for x in scales if np.isfinite(x)])
+    if len(scales) and np.percentile(scales, 5) > 0 and np.percentile(scales, 95) / np.percentile(scales, 5) > MAX_SCALE_RATIO:
+        issues.append("La perspectiva comprime partes del video casi en un punto del plano: personas distintas caerían en el mismo sitio. Añade referencias en esa zona o acota la zona de detección.")
+    elif len(scales) and np.percentile(scales, 95) < 1e-3:
+        issues.append("Toda la zona de detección se proyecta casi a un solo punto del plano: revisa que cada referencia del video corresponda a su punto del plano.")
+    return issues
+
+
+def calibration_diagnostics(pairs, zone=None, plan=None):
+    points = np.asarray(pairs, dtype=float)
     h = calibration(pairs)
     if h is None:
         raise ValueError("Se necesitan al menos cuatro referencias.")
-    points = np.asarray(pairs, dtype=float)
+    _, inliers, robust_threshold, fit_method = _fit_calibration_homography(points)
     predicted = cv2.perspectiveTransform(points[:, :2].reshape(-1, 1, 2), h).reshape(-1, 2)
     errors = np.linalg.norm(predicted - points[:, 2:], axis=1)
     spread = float(cv2.contourArea(cv2.convexHull(points[:, :2].astype(np.float32))))
@@ -262,11 +486,42 @@ def calibration_diagnostics(pairs):
                     checks.append(float(np.linalg.norm(result - points[index, 2:])))
             except ValueError:
                 pass
+    issues = projection_issues(h, points, zone, plan=plan)
+    outliers = [int(i) + 1 for i, ok in enumerate(inliers) if not ok]
+    if outliers:
+        issues.insert(0, "Las referencias " + ", ".join(map(str, outliers)) +
+                      " no concuerdan con el resto y se excluyeron del ajuste; vuelve a marcarlas si representan el suelo.")
+    caveat = ("Añade referencias adicionales para comprobar puntos no usados en cada ajuste." if not checks else
+              "Comprobación dejando fuera una referencia cada vez; no sustituye una medición física independiente.")
+    boundary = cv2.perspectiveTransform(
+        np.asarray([[[0., 0.]], [[1., 0.]], [[1., 1.]], [[0., 1.]]], dtype=np.float64), h
+    ).reshape(-1, 2)
     return {"rmse": float(np.sqrt(np.mean(errors**2))), "spread": spread,
             "maxError": float(errors.max()), "pointErrors": errors.tolist(),
             "validationError": max(checks) if checks else None, "validationPoints": len(checks),
-            "warning": "Añade referencias adicionales para comprobar puntos no usados en cada ajuste." if not checks else
-                       "Comprobación dejando fuera una referencia cada vez; no sustituye una medición física independiente."}
+            "fitMethod": fit_method, "inlierCount": int(inliers.sum()),
+            "outlierIndices": outliers, "robustThreshold": robust_threshold,
+            "predictedPoints": predicted.tolist(), "projectedBoundary": boundary.tolist(),
+            "issues": issues, "warning": " ".join(issues) if issues else caveat}
+
+
+def box_overlap(a, b):
+    ix = max(0., min(a[2], b[2]) - max(a[0], b[0]))
+    iy = max(0., min(a[3], b[3]) - max(a[1], b[1]))
+    inter = ix * iy
+    union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
+    return inter / union if union > 0 else 0.
+
+
+def collapsed_pairs(people, radius=.15, max_overlap=.1):
+    """Pares de personas distintas (recuadros separados) de una cámara que caen en el mismo punto del plano."""
+    rows = [p for p in people if p.get("point") is not None and p.get("box") is not None]
+    count = 0
+    for i, a in enumerate(rows):
+        for b in rows[i + 1:]:
+            if math.dist(a["point"], b["point"]) < radius and box_overlap(a["box"], b["box"]) <= max_overlap:
+                count += 1
+    return count
 
 
 def project(h, u, v):
@@ -280,68 +535,13 @@ def project(h, u, v):
 ESTATURA_MEDIA = 1.7  # metros; supuesto explícito, configurable con personHeight
 
 
-def head_to_ground(h, u, v, camera_x, camera_y, camera_height, person_height=ESTATURA_MEDIA):
-    """Lleva un punto de cabeza al punto del suelo donde está la persona.
-
-    P2PNet marca la cabeza, no los pies. Pasar la cabeza por la homografía del
-    suelo la deja demasiado lejos de la cámara, porque el rayo que la ve sigue
-    hasta cortar el piso más allá de la persona. Ese corte es G. Como los pies
-    están justo debajo de la cabeza, quedan sobre el segmento que une la base de
-    la cámara con G, a una fracción exacta del camino:
-
-        pies = base + (G - base) * (1 - estatura / altura_de_camara)
-
-    No es una aproximación: sale de intersectar el mismo rayo con z=0 y con
-    z=estatura. Solo depende de que la altura de la cámara supere la estatura
-    supuesta; si no la supera, el rayo nunca vuelve al suelo por delante y la
-    conversión no existe, así que devolvemos None en vez de inventar un punto.
-
-    La fracción es un cociente de alturas reales, así que no cambia si el plano
-    está en metros o en unidades relativas.
-    """
-    if not finite(camera_height, 0, 10000) or camera_height <= person_height:
-        return None
-    g = project(h, u, v)
-    if g is None:
-        return None
-    keep = 1. - person_height / camera_height
-    return (camera_x + (g[0] - camera_x) * keep, camera_y + (g[1] - camera_y) * keep)
-
-
-def body_box(h_inv, head_px, head_py, ground, width, height, ratio=.4):
-    """Recuadro aproximado del cuerpo a partir de un punto de cabeza.
-
-    P2PNet no entrega recuadros, y sin uno no se puede mirar la ropa para
-    distinguir a dos personas vistas por cámaras distintas. Invirtiendo la
-    homografía se sabe en qué píxel caen los pies que ya ubicamos en el suelo, y
-    la distancia cabeza-pies da la altura de la persona en la imagen sin suponer
-    ninguna escala fija. El ancho sí es un supuesto (ratio), tolerable porque el
-    recorte solo se usa para muestrear color, no para medir ni para mostrar.
-    """
-    if h_inv is None or ground is None:
-        return None
-    foot = project(h_inv, ground[0], ground[1])
-    if foot is None:
-        return None
-    foot_py = foot[1] * height
-    tall = foot_py - head_py
-    if not (4 < tall < height * 2):   # los pies han de caer debajo de la cabeza
-        return None
-    half = tall * ratio / 2
-    return [head_px - half, head_py, head_px + half, foot_py]
-
-
 def ground_point(camera, u, v, person_height=ESTATURA_MEDIA):
-    """Punto en el plano de una detección, según lo que marque el detector.
+    """Punto del plano bajo los pies de una detección: el centro inferior de la caja pasado por la homografía del suelo.
 
-    P2PNet entrega la cabeza y hay que corregirla antes de usar la homografía
-    del suelo. El modo directo se conserva solo para datos geométricos de prueba.
+    `person_height` se conserva en la firma por compatibilidad; los pies ya están en el suelo y no necesitan corrección.
     """
     if camera.get("h") is None:
         return None
-    if camera.get("headPoints"):
-        return head_to_ground(camera["h"], u, v, camera["x"], camera["y"],
-                              camera.get("height"), person_height)
     return project(camera["h"], u, v)
 
 
@@ -357,7 +557,7 @@ def estimate_height(camera, box, width, height):
     estimación ruidosa: solo se calcula si el recuadro no toca el borde de la
     imagen y el resultado cae en un rango humano; si no, devuelve None.
     """
-    if box is None or camera.get("h") is None or camera.get("headPoints"):
+    if box is None or camera.get("h") is None:
         return None
     cam_height = float(camera.get("height") or 0)
     x1, y1, x2, y2 = box
@@ -374,336 +574,6 @@ def estimate_height(camera, box, width, height):
         return None
     estimate = cam_height * (1 - d_foot / d_head)
     return round(estimate, 3) if .8 <= estimate <= 2.4 else None
-
-
-def height_penalty(person, observation, tolerance=.12, span=.3, weight=.25):
-    """Penaliza una diferencia de estatura, sin descartar: la medida es ruidosa."""
-    a, b = person.get("height"), observation.get("height")
-    if a is None or b is None:
-        return 0.
-    return min(max(abs(a - b) - tolerance, 0.) / span, 1.) * weight
-
-
-def color_distance(a, b):
-    if a is None or b is None:
-        return .5
-    return float(cv2.compareHist(a, b, cv2.HISTCMP_BHATTACHARYYA))
-
-
-def identity_appearance_distance(person, current):
-    """Compara contra una galería de vistas, no solo contra el último frame.
-
-    Una persona de espaldas o con otra orientación puede cambiar mucho su
-    histograma. Conservar varias muestras evita que la última pose reemplace
-    una firma útil obtenida en otra cámara o instante.
-    """
-    if current is None:
-        return .5
-    gallery = person.get("appearanceGallery") or []
-    if not gallery and person.get("color") is not None:
-        gallery = [person["color"]]
-    return min((color_distance(item, current) for item in gallery), default=.5)
-
-
-# Pesos iniciales de la puntuación de asociación; deben calibrarse con video real
-# (se pueden sobrescribir con config["reidWeights"]).
-REID_WEIGHTS = {"appearance": .40, "spatial": .30, "motion": .15, "time": .10, "size": .05}
-REID_MAX_EMBEDDING_DISTANCE = .45   # distancia coseno máxima aceptable con OSNet
-REID_MAX_CROSS_VIEW_DISTANCE = .65   # entre cámaras (otro ángulo) el embedding varía mucho: veto solo si es muy distinto
-REID_OVERLAP_VETO_DISTANCE = .85     # en solape solo una apariencia radicalmente distinta descarta la coincidencia
-REID_ACCEPT_SCORE = .40             # por debajo, la evidencia es débil: no se reutiliza el ID
-REID_AMBIGUITY_MARGIN = .04         # diferencia mínima de puntuación entre el 1.º y el 2.º candidato
-EMBEDDING_GALLERY_SIZE = 12
-EMBEDDING_NEW_VIEW = .12            # distancia mínima para guardar una vista nueva
-
-
-def embedding_distance(a, b):
-    """Distancia coseno entre vectores L2-normalizados, acotada a [0, 1]."""
-    return float(min(max(1. - float(np.dot(a, b)), 0.), 1.))
-
-
-def appearance_distance(person, observation):
-    """Distancia de apariencia contra la mejor vista de la galería.
-
-    Usa OSNet cuando ambos lados tienen embedding; si no, la firma de color.
-    Devuelve (distancia, usa_embedding).
-    """
-    embedding = observation.get("embedding")
-    gallery = person.get("embeddingGallery")
-    if embedding is not None and gallery:
-        return min(embedding_distance(item, embedding) for item in gallery), True
-    return identity_appearance_distance(person, observation.get("color")), False
-
-
-def height_agreement(person, observation, tolerance=.12, span=.3):
-    """1 si las estaturas coinciden, 0 si difieren mucho, None si falta el dato."""
-    a, b = person.get("height"), observation.get("height")
-    if a is None or b is None:
-        return None
-    return 1. - min(max(abs(a - b) - tolerance, 0.) / span, 1.)
-
-
-def association_score(cfg, appearance, distance_ratio, alignment, time_ratio, size):
-    """Puntuación de asociación en [0, 1]; mayor es más probable la misma persona.
-
-    appearance: distancia de apariencia; distance_ratio: distancia/umbral;
-    alignment: coseno entre desplazamiento y velocidad (None si se desconoce);
-    time_ratio: tiempo transcurrido/ventana; size: coincidencia de estatura.
-    """
-    weights = {**REID_WEIGHTS, **(cfg.get("reidWeights") or {})}
-    parts = {
-        "appearance": 1. - min(max(appearance, 0.), 1.),
-        "spatial": max(0., 1. - distance_ratio),
-        "motion": .5 if alignment is None else (max(-1., min(1., alignment)) + 1.) / 2.,
-        "time": 1. - min(max(time_ratio, 0.), 1.),
-        "size": .5 if size is None else size,
-    }
-    total = sum(weights.values()) or 1.
-    return sum(weights[key] * parts[key] for key in parts) / total
-
-
-def update_appearance(previous, current, weight=.25):
-    """Suaviza la firma visual para que un reflejo o un frame no cambie el ID."""
-    if current is None:
-        return previous
-    if previous is None or previous.shape != current.shape:
-        return current
-    blended = previous * (1 - weight) + current * weight
-    return cv2.normalize(blended, blended, alpha=1, norm_type=cv2.NORM_L1)
-
-
-class IdentityStore:
-    """One assignment per global ID per camera per tick, with ambiguity rejection.
-
-    Overlap compares simultaneous ground positions. Non-overlap uses declared
-    directed camera links, elapsed time, velocity, and a clothing-color gate.
-    Both are explicitly labelled 'estimated' camera associations.
-    """
-    def __init__(self, config):
-        self.config = config
-        self.people = {}
-        self.local = {}
-        self.serial = 0
-        self.events = deque(maxlen=150)
-        self.overlap_evidence = {}
-
-    def reconcile_overlap(self, observations, t):
-        """Reconcilia IDs ya creados solo con coincidencia mutua y evidencia sostenida."""
-        if not self.config['clocksVerified']:
-            return
-        known = [o for o in observations if o.get('point') is not None and (o['camera'],o['local']) in self.local]
-        nearest = {}
-        for i,a in enumerate(known):
-            cam = next(c for c in self.config['cameras'] if c['id']==a['camera'])
-            scores=[]
-            for j,b in enumerate(known):
-                if a['camera']==b['camera'] or b['camera'] not in cam.get('links',[]):continue
-                other=next(c for c in self.config['cameras'] if c['id']==b['camera'])
-                if cam.get('planId','custom')!=other.get('planId','custom'):continue
-                if self.local[a['camera'],a['local']]==self.local[b['camera'],b['local']]:continue
-                # Dos homografías reales rara vez coinciden al centímetro. La
-                # cercanía mutua y sostenida permite absorber ese error sin
-                # fusionar una multitud completa por proximidad.
-                gate=self.config['matchDistance']*1.6
-                distance=math.dist(a['point'],b['point'])/gate
-                if a.get('embedding') is not None and b.get('embedding') is not None:
-                    # Entre cámaras el ángulo cambia el embedding: en solape la posición
-                    # manda y la apariencia solo desempata o veta una diferencia enorme.
-                    appearance=embedding_distance(a['embedding'],b['embedding'])
-                    if appearance>REID_OVERLAP_VETO_DISTANCE:continue
-                    if distance<=1:scores.append((distance+appearance*.25,j))
-                    continue
-                appearance=color_distance(a.get('color'),b.get('color'))
-                if distance<=1 and (appearance<.6 or distance<=.3):scores.append((distance+appearance*.25,j))
-            scores.sort()
-            if scores and (len(scores)==1 or scores[1][0]-scores[0][0]>.12):nearest[i]=scores[0][1]
-        evidence={}
-        for i,j in nearest.items():
-            if j<=i or nearest.get(j)!=i:continue
-            a,b=known[i],known[j]
-            ids=tuple(sorted([self.local[a['camera'],a['local']],self.local[b['camera'],b['local']]]))
-            if ids[0]==ids[1] or any(gid not in self.people for gid in ids):continue
-            old=self.overlap_evidence.get(ids,{'t':-100,'n':0})
-            evidence[ids]={'t':t,'n':old['n']+1 if t-old['t']<=1.5 else 1}
-            if evidence[ids]['n']<3:continue
-            cameras=[{o['camera'] for o in known if self.local[o['camera'],o['local']]==gid} for gid in ids]
-            if cameras[0]&cameras[1]:continue
-            keep,drop=ids
-            self.local={key:keep if value==drop else value for key,value in self.local.items()}
-            self.people[keep]['association']='estimated'
-            self.people.pop(drop,None)
-            self.events.appendleft({'type':'handoff','id':keep,'from':a['camera'],'to':b['camera'],'t':t,'reason':'coincidencia mutua sostenida'})
-        self.overlap_evidence=evidence
-
-    def update(self, observations, t):
-        cfg = self.config
-        self.reconcile_overlap(observations,t)
-        claimed = set()
-        grouped = {}
-        for o in observations:
-            gid = self.local.get((o["camera"],o["local"]))
-            if gid is not None and o.get("point") is not None:
-                grouped.setdefault(gid,[]).append(o)
-        for group in grouped.values():
-            anchor=group[0]
-            for o in group[1:]:
-                if o["camera"]!=anchor["camera"] and math.dist(o["point"],anchor["point"])>cfg["matchDistance"]*1.75:
-                    self.local.pop((o["camera"],o["local"]),None)
-        observed_keys = {(o["camera"], o["local"]) for o in observations}
-        mapped = {self.local[k] for k in observed_keys if k in self.local}
-        output = []
-        # Existing tracks first: this makes handoffs independent of camera ordering.
-        ordered = sorted(observations, key=lambda o: (o["camera"], o["local"]) not in self.local)
-        for o in ordered:
-            key = (o["camera"], o["local"])
-            gid = self.local.get(key)
-            if gid is not None and (gid, o["camera"]) in claimed:
-                gid = None
-            association = "local"
-            reid_score = None
-            weak_evidence = False
-            # Recupera una identidad cuando ByteTrack pierde una detección y
-            # crea otro ID local en la misma cámara. Esto ocurre por oclusiones,
-            # saltos de confianza o cambios bruscos de escala; no debe generar
-            # una nueva persona global si la posición y la apariencia siguen
-            # siendo compatibles.
-            if gid is None and o.get("point") is not None:
-                candidates = []
-                for pid, p in self.people.items():
-                    if (pid, o["camera"]) in claimed or p["point"] is None:
-                        continue
-                    dt = t - p["t"]
-                    if dt < 0 or dt > cfg["handoffSeconds"]:
-                        continue
-                    same_camera = p["camera"] == o["camera"]
-                    if same_camera:
-                        # En una misma cámara no dependemos de clocksVerified ni
-                        # de enlaces entre cámaras. La posición se compara con
-                        # la predicción de movimiento y se usa un margen algo
-                        # mayor para absorber una detección perdida.
-                        target = (p["point"][0] + p["velocity"][0] * dt,
-                                  p["point"][1] + p["velocity"][1] * dt)
-                        gate = cfg["matchDistance"] * (2.2 + min(dt, 2) * .35)
-                        dist = math.dist(o["point"], target)
-                        appearance, by_embedding = appearance_distance(p, o)
-                        if dist <= gate and by_embedding and appearance > REID_MAX_EMBEDDING_DISTANCE:
-                            weak_evidence = True
-                            continue
-                        if dist <= gate and (by_embedding or appearance <= .78 or dist <= gate * .35):
-                            shift = (o["point"][0] - p["point"][0], o["point"][1] - p["point"][1])
-                            shift_len, speed = math.hypot(*shift), math.hypot(*p["velocity"])
-                            alignment = (sum(shift[i] * p["velocity"][i] for i in (0, 1)) / (shift_len * speed)
-                                         if shift_len > .01 and speed > .05 else None)
-                            score = association_score(cfg, appearance, dist / gate, alignment,
-                                                      dt / max(float(cfg["handoffSeconds"]), .1), height_agreement(p, o))
-                            candidates.append((1. - score, pid, True, score))
-                        continue
-                    # Entre cámaras distintas solo se asocia identidad si el
-                    # operador declaró verificada la sincronización de relojes
-                    # (RF-04). Sin esa declaración cada cámara conserva su ID.
-                    if not cfg["clocksVerified"]:
-                        continue
-                    old_cam = next(c for c in cfg["cameras"] if c["id"] == p["camera"])
-                    new_cam=next(c for c in cfg["cameras"] if c["id"]==o["camera"])
-                    if new_cam.get("planId","custom")!=old_cam.get("planId","custom"):continue
-                    if o["camera"] not in old_cam.get("links", []):
-                        continue
-                    # A track still observed elsewhere can only match as an overlap.
-                    overlap = pid in mapped or dt <= .5
-                    if overlap:
-                        target = p["point"]
-                        gate = cfg["matchDistance"] * 1.6
-                    else:
-                        target = (p["point"][0] + p["velocity"][0] * dt, p["point"][1] + p["velocity"][1] * dt)
-                        speed = math.hypot(*p["velocity"])
-                        # El margen crece con el tiempo oculto y con la velocidad
-                        # estimada por Kalman. Así una persona puede atravesar el
-                        # espacio sin cobertura sin recibir un ID nuevo.
-                        gate = cfg["matchDistance"] * (2.0 + min(dt, 5) * .55) + speed * dt * .35
-                    dist = math.dist(o["point"], target)
-                    appearance, by_embedding = appearance_distance(p, o)
-                    alignment = None
-                    displacement = (o["point"][0] - p["point"][0], o["point"][1] - p["point"][1])
-                    displacement_length = math.hypot(*displacement)
-                    velocity_length = math.hypot(*p["velocity"])
-                    if not overlap and displacement_length > .01 and velocity_length > .05:
-                        alignment = sum(displacement[i] * p["velocity"][i] for i in (0, 1)) / (displacement_length * velocity_length)
-                        if alignment < -.35 and appearance > .45:
-                            continue
-                    # Con solape la posición simultánea es la evidencia fuerte; sin solape
-                    # (traspaso con tiempo oculto) la apariencia pesa más, con tolerancia al ángulo.
-                    veto = REID_OVERLAP_VETO_DISTANCE if overlap else REID_MAX_CROSS_VIEW_DISTANCE
-                    if dist <= gate and by_embedding and appearance > veto:
-                        weak_evidence = True
-                        continue
-                    if dist <= gate and (by_embedding or appearance <= .82 or (overlap and dist <= gate*.3)):
-                        score = association_score(cfg, appearance, dist / gate, alignment,
-                                                  dt / max(float(cfg["handoffSeconds"]), .1), height_agreement(p, o))
-                        candidates.append((1. - score, pid, False, score))
-                candidates.sort()
-                accept = float(cfg.get("reidAcceptScore", REID_ACCEPT_SCORE))
-                margin = float(cfg.get("reidAmbiguityMargin", REID_AMBIGUITY_MARGIN))
-                unambiguous = candidates and (len(candidates) == 1 or candidates[1][0] - candidates[0][0] > margin)
-                if unambiguous and 1. - candidates[0][0] >= accept:
-                    gid = candidates[0][1]
-                    reid_score = candidates[0][3]
-                    # "reidentified": recupera un track perdido en la misma cámara.
-                    association = "reidentified" if candidates[0][2] else "estimated"
-                    self.events.appendleft({"type": "reidentification" if candidates[0][2] else "handoff", "id": gid, "from": self.people[gid]["camera"], "to": o["camera"], "t": t, "score": round(reid_score, 3)})
-                elif candidates or weak_evidence:
-                    # Ambigua o con evidencia débil: no se fuerza la coincidencia.
-                    association = "uncertain"
-            if gid is None:
-                self.serial += 1
-                gid = f"P{self.serial:05d}"
-                self.people[gid] = {"history": deque(maxlen=180), "velocity": (0., 0.), "t": t, "point": None, "association": association, "appearanceGallery": deque(maxlen=12)}
-            self.local[key] = gid
-            claimed.add((gid, o["camera"]))
-            p = self.people[gid]
-            if o["point"] is not None and p["point"] is not None and t > p["t"]:
-                dt = t - p["t"]
-                p["velocity"] = tuple(.5 * p["velocity"][i] + .5 * (o["point"][i] - p["point"][i]) / dt for i in (0, 1))
-            if association != "local":
-                p["association"] = association
-                p["reidScore"] = reid_score
-            embedding = o.get("embedding")
-            if embedding is not None:
-                views = p.setdefault("embeddingGallery", deque(maxlen=EMBEDDING_GALLERY_SIZE))
-                if not views or min(embedding_distance(item, embedding) for item in views) > EMBEDDING_NEW_VIEW:
-                    views.append(embedding)
-            appearance = update_appearance(p.get("color"), o.get("color"))
-            gallery = p.setdefault("appearanceGallery", deque(maxlen=12))
-            current_color = o.get("color")
-            if current_color is not None and not gallery:
-                gallery.append(current_color)
-            elif current_color is not None and min((color_distance(item, current_color) for item in gallery), default=1.) > .08:
-                gallery.append(current_color)
-            p.update(camera=o["camera"], point=o["point"], t=t, color=appearance)
-            if o.get("height") is not None:
-                heights = p.setdefault("heights", deque(maxlen=15))
-                heights.append(o["height"])
-                p["height"] = float(sorted(heights)[len(heights) // 2])
-            if o["point"] is not None:
-                if not p["history"] or p["history"][-1][2] != t:
-                    p["history"].append([*o["point"], t])
-            neighbors = next(c for c in cfg["cameras"] if c["id"]==o["camera"]).get("links",[])
-            next_camera = None
-            if o["point"] is not None and math.hypot(*p["velocity"]) > .05 and neighbors:
-                future = (o["point"][0]+p["velocity"][0]*2,o["point"][1]+p["velocity"][1]*2)
-                next_camera = min((c for c in cfg["cameras"] if c["id"] in neighbors),key=lambda c:math.dist(future,(c["x"],c["y"])))["id"]
-            output.append({**{k: v for k, v in o.items() if k not in ("color", "embedding")}, "id": gid, "association": p["association"], "reidScore": p.get("reidScore"), "history": list(p["history"]), "predicted": False, "velocity": list(p["velocity"]), "nextCamera": next_camera, "height": p.get("height")})
-        # Bound retention to the declared handoff window; no indefinite identities.
-        expired = {pid for pid, p in self.people.items() if t - p["t"] > cfg["handoffSeconds"]}
-        for pid in expired:
-            del self.people[pid]
-        # Local IDs no longer seen must expire even when another camera keeps
-        # the same global identity alive indefinitely.
-        last_seen = getattr(self, "last_seen", {})
-        for key in observed_keys:
-            last_seen[key] = t
-        self.local = {k: v for k, v in self.local.items() if v not in expired and t - last_seen.get(k, t) <= cfg["handoffSeconds"]}
-        self.last_seen = {k: last_seen[k] for k in self.local}
-        return output
 
 
 class Occupancy:

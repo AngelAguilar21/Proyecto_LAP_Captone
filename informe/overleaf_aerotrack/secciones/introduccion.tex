@@ -1,0 +1,96 @@
+\section{Introducción}
+\label{sec:introduccion}
+
+\subsection{Contextualización del Problema}
+\label{subsec:contextualizacion}
+
+El Aeropuerto Internacional Jorge Chávez, operado por Lima Airport Partners (LAP), no
+distribuye a sus pasajeros de manera uniforme a lo largo del día. En determinadas franjas
+horarias y en puntos concretos del terminal (filtros de seguridad, control migratorio,
+mostradores de \emph{check-in}, salas de embarque) se forman concentraciones de personas
+notablemente superiores a las del resto del recinto en ese mismo momento. La aglomeración,
+por sí sola, no es el problema: lo es cuando la cantidad de personas reunidas en un punto
+excede, de forma sostenida, la capacidad de atención dispuesta para ese punto, y aparecen
+colas que se alargan, tiempos de espera que comprometen la conexión de un vuelo, o
+condiciones de incomodidad en un espacio cerrado. LAP cuenta ya con infraestructura de
+videovigilancia de circuito cerrado en el terminal; este proyecto explora si esa misma
+infraestructura puede aprovecharse, mediante visión computacional, para producir una
+estimación automatizada de esa concentración y de los recorridos entre cámaras, sin
+reconocimiento facial. Conviene adelantar desde aquí lo que el resto del informe desarrolla: para
+seguir a una persona de una cámara a otra el sistema la individualiza con un identificador
+anónimo y la reconoce por la apariencia de su cuerpo, y esa decisión de diseño es la que fija su
+régimen jurídico (Secciones~\ref{subsec:restricciones} y~\ref{subsec:analisis-teas}).
+
+El equipo no cuenta, al momento de escribir este informe, con evidencia documentada por LAP (incidentes de
+aglomeración registrados, tiempos de espera medidos, quejas de pasajeros contabilizadas) que
+cuantifique el problema en el propio terminal.\verificar{incidentes por aglomeración
+documentados, tiempos de cola observados y quejas recibidas. Solicitado a LAP como punto C-07.} El proyecto parte, por tanto, de una necesidad
+operativa plausible y compartida por la literatura de conteo de multitudes en espacios de alto
+tránsito, y no de una cifra propia de incidentes del Aeropuerto Jorge Chávez.
+
+\subsection{Importancia e Impacto}
+\label{subsec:importancia-impacto}
+
+Conocer cuándo y dónde se concentran las personas es información operativa de valor
+directo para un operador aeroportuario: permite anticipar la apertura de mostradores
+adicionales, redirigir el flujo de pasajeros hacia un filtro descargado, o dimensionar al personal
+de atención con mayor precisión que una revisión manual y periódica, que cubre un punto a la
+vez y no deja una serie homogénea sobre la que puedan compararse dos días, dos zonas o dos
+franjas horarias. El impacto del proyecto tiene, además, una dimensión que excede lo
+operativo: un sistema que observa continuamente a personas en un espacio de uso público
+concesionado activa, por diseño, un examen de proporcionalidad bajo la Ley 29733, y el
+análisis de impacto de este informe documenta un riesgo distributivo real: si el sistema
+subcuenta sistemáticamente a un grupo de personas, las zonas donde ese grupo se concentra
+reciben menos recursos de forma sistemática, un daño indirecto pero real que no depende de
+identificar a ninguna persona en particular.
+
+\subsection{Motivación desde la Ingeniería}
+\label{subsec:motivacion-ingenieria}
+
+Desde la perspectiva de Ingeniería de Sistemas, el proyecto es un caso de estudio útil por
+una razón poco común: la restricción dominante no es de cómputo ni de datos, sino normativa.
+La mayoría de los trabajos de conteo de multitudes revisados en el marco teórico optimizan
+exactitud bajo el supuesto implícito de que capturar más información por persona siempre
+mejora el sistema; este proyecto invierte esa prioridad, porque el principio de proporcionalidad
+de la Ley 29733 (art. 7) exige que el tratamiento sea adecuado, relevante y no excesivo respecto
+de su finalidad. Diseñar bajo esa restricción obliga a hacer explícitas decisiones que en otros
+contextos quedarían implícitas: qué se persiste, por cuánto tiempo, y qué mecanismo de
+desempate se usa cuando dos lecturas del sistema son ambiguas. La segunda motivación es de
+integración bajo restricciones reales de hardware: el prototipo se ejecuta en CPU, sin GPU
+dedicada, en computadoras portátiles universitarias, combinando piezas de procedencia distinta
+(un detector de personas preentrenado, un seguimiento adaptado, un descriptor de apariencia
+preentrenado, una homografía calibrada a mano, una base de datos local y una consola web) en
+un único flujo coherente. El costo de esa restricción es concreto: en un procesador de gama
+media sin GPU, analizar varias cámaras con una muestra cada 0,2 segundos va entre cinco y
+veinticinco veces más lento que el video, por lo que el sistema ofrece modos de rendimiento que
+espacian las muestras según el número de cámaras.\verificar{rango de 5 a 25 veces más lento que
+el video: estimación del equipo sobre un procesador i5 sin GPU, no una medición formal con
+protocolo documentado.}
+
+\subsection{Objetivo General}
+\label{subsec:objetivo-general}
+
+Desarrollar y evaluar un sistema de visión computacional capaz de estimar la
+concentración y tracking de personas en distintas zonas del Aeropuerto Internacional Jorge
+Chávez a partir de imágenes de cámaras fijas, sin recurrir a reconocimiento facial ni a la
+extracción de rasgos biométricos identificables.
+
+\subsection{Objetivos Específicos}
+\label{subsec:objetivos-especificos}
+
+\begin{enumerate}
+  \item Revisar el estado del arte en detección, localización y conteo de personas en escenas
+  congestionadas, e identificar qué enfoque técnico resulta más adecuado para un entorno
+  aeroportuario y para las restricciones de privacidad del proyecto.
+  \item Determinar el marco de cumplimiento normativo aplicable al tratamiento de imágenes
+  de un espacio de uso público bajo gestión concesionada, incluyendo el análisis de
+  impacto y los requisitos de privacidad desde el diseño.
+  \item Diseñar e implementar el componente de detección, seguimiento y asociación de identidad
+  entre cámaras, y documentar la granularidad de salida resultante frente al principio de
+  proporcionalidad.
+  \item Extender el prototipo con analítica de flujo peatonal (cruces de acceso, ocupación por
+  zona, dashboard ejecutivo) sobre una cartografía real del terminal, evaluando su
+  desempeño con pruebas automatizadas.
+  \item Evaluar el desempeño del sistema mediante métricas cuantitativas y cualitativas,
+  indicando en cada caso sobre qué conjunto de datos fue medido cada resultado.
+\end{enumerate}

@@ -7,6 +7,13 @@ import { ConfigSaveQueue, saveWithFeedback } from './sessionSave';
 
 type AuthState = { configurado: boolean; usuario: string | null; rol: string | null; usuarios: { usuario: string; rol: string }[]; cargado: boolean };
 
+function errorDeConexion(error: unknown) {
+  if (error instanceof TypeError && /fetch|network|failed/i.test(error.message)) {
+    return new Error('No se pudo conectar con AeroTrack. Abre http://127.0.0.1:8765 y verifica que el servidor local siga levantado.');
+  }
+  return error;
+}
+
 export function useSession() {
   const [config, setConfig] = useState<Config | null>(null);
   const [state, setState] = useState<SessionState>(EMPTY_STATE);
@@ -76,7 +83,12 @@ export function useSession() {
   useEffect(()=>{const warn=(e:BeforeUnloadEvent)=>{if(dirty){e.preventDefault();e.returnValue='';}};window.addEventListener('beforeunload',warn);return()=>window.removeEventListener('beforeunload',warn);},[dirty]);
 
   const post = useCallback(async (path: string, body: unknown, binary = false) => {
-    const response = await fetch(`/api/${path}`, { method: 'POST', headers: { 'Content-Type': binary ? 'application/octet-stream' : 'application/json', 'X-LAP-Token': token.current, 'X-LAP-Session': sessionToken.current }, body: binary ? body as Blob : JSON.stringify(body), signal: AbortSignal.timeout(binary ? 180000 : 15000) });
+    let response: Response;
+    try {
+      response = await fetch(`/api/${path}`, { method: 'POST', headers: { 'Content-Type': binary ? 'application/octet-stream' : 'application/json', 'X-LAP-Token': token.current, 'X-LAP-Session': sessionToken.current }, body: binary ? body as Blob : JSON.stringify(body), signal: AbortSignal.timeout(binary ? 6 * 3600 * 1000 : 15000) });
+    } catch (error) {
+      throw errorDeConexion(error);
+    }
     const data = await response.json();
     if (!response.ok) throw new ApiError(data.error || 'No se pudo completar la operación', response.status);
     return data;

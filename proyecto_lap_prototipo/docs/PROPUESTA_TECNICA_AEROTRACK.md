@@ -1,5 +1,7 @@
 # Propuesta técnica de AeroTrack
 
+> **Nota (2026-10-05).** Esta propuesta es anterior a la simplificación del proyecto. Desde esa fecha no se usa P2PNet (la ocupación y las aglomeraciones salen del seguimiento con YOLO), hay un solo motor de identidad y no se configura alcance de cámaras. Lo vigente está en `docs/ARQUITECTURA.md`.
+
 ## 1. Decisión de arquitectura y alcance
 
 AeroTrack debe construirse como un sistema de analítica de afluencia con seguimiento temporal multicámara. Su objetivo es estimar dónde y cuándo se concentran las personas, medir cruces y entradas a zonas comerciales, y enlazar recorridos entre cámaras vecinas cuando exista evidencia suficiente. El primer escenario es un conjunto de videos propios de dos cámaras fijas; la validación con cámaras de LAP es una etapa posterior, sujeta a disponibilidad y autorización.

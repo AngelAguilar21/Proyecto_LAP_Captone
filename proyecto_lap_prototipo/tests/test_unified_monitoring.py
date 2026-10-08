@@ -8,7 +8,7 @@ sys.path.insert(0,str(ROOT));sys.path.insert(0,str(ROOT/'src'))
 from following.line_counter import LineCounter
 from following.flow import FlowField
 from following.combined import CombinedAnalysis
-from live_core import IdentityStore,validate_config,Occupancy
+from live_core import validate_config,Occupancy
 from live_server import default_config,Engine
 from replay import ReplayWriter
 from live_reports import report_data
@@ -27,44 +27,19 @@ class UnifiedTests(unittest.TestCase):
         counter.update([],6)
         self.assertEqual(sample(.5,.4,7)['exits'],1)
 
-    def test_combined_reuses_p2pnet_points_without_second_inference(self):
+    def test_combined_counts_tracked_people_per_image_zone(self):
         camera={'id':'C','detectionZone':[[0,0],[.5,0],[.5,1],[0,1]]}
         camera['analysisZones']=[{'id':'small','name':'Sector','points':[[0,0],[.1,0],[.1,1],[0,1]],'threshold':2,'dwell':1}]
         analysis=CombinedAnalysis([camera],ROOT)
         frame=np.zeros((100,100,3),dtype=np.uint8)
         people=[{'id':'A','pixel':[25,50]},{'id':'B','pixel':[75,50]}]
-        # Escena normal: sin muestra de densidad, P2PNet no participa.
         result=analysis.observe(camera,frame,people,0)
-        self.assertEqual(result['occupancy']['count'],1)
-        self.assertEqual(result['dense']['status'],'idle')
-        self.assertEqual(result['dense']['count'],0)
-        self.assertFalse(result['denseEnabled'])
-        self.assertFalse(result['avie']['p2pRequested'])
+        self.assertEqual(result['occupancy']['count'],1)       # B queda fuera de la zona útil
         self.assertEqual(result['occupancy']['zones'][1]['count'],0)
-        # Escena densa: se reutiliza la muestra asíncrona sin una segunda inferencia.
-        density={'status':'ready','t':2,'count':1,'points':[(.25,.5)]}
-        result=analysis.observe(camera,frame,people,2,density=density)
-        self.assertTrue(result['denseEnabled'])
-        self.assertEqual(result['dense']['points'],[(.25,.5)])
+        self.assertNotIn('dense',result)
+        result=analysis.observe(camera,frame,people,2)
         self.assertEqual(result['occupancy']['peak'],1)
-        self.assertEqual(analysis.close()['C']['dense']['count'],1)
-
-    def test_late_identity_requires_sustained_mutual_evidence(self):
-        cfg=default_config();cfg['clocksVerified']=False
-        store=IdentityStore(cfg)
-        color=np.ones((8,8),dtype=np.float32)/64
-        rows=[{'camera':'A','local':1,'point':[1,1],'color':color},{'camera':'B','local':1,'point':[1.03,1],'color':color}]
-        initial=store.update(rows,0);self.assertEqual(len({r['id'] for r in initial}),2)
-        cfg['clocksVerified']=True
-        for t in (.2,.4):self.assertEqual(len({r['id'] for r in store.update(rows,t)}),2)
-        self.assertEqual(len({r['id'] for r in store.update(rows,.6)}),1)
-
-    def test_separate_levels_never_share_an_identity(self):
-        cfg=default_config();cfg['clocksVerified']=True
-        cfg['cameras'][0]['planId']='lap-2';cfg['cameras'][1]['planId']='lap-3'
-        store=IdentityStore(cfg)
-        rows=store.update([{'camera':'A','local':1,'point':[1,1],'color':None},{'camera':'B','local':1,'point':[1,1],'color':None}],0)
-        self.assertEqual(len({r['id'] for r in rows}),2)
+        self.assertEqual(analysis.close()['C']['occupancy']['count'],1)
 
     def test_flow_field_keeps_opposite_directions_and_ignores_lost_tracks(self):
         field=FlowField({'radius':2})

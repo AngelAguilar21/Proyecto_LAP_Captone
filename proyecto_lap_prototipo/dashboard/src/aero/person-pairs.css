@@ -1,0 +1,36 @@
+.person-pairs { display: grid; gap: 12px; margin-top: 16px; }
+.pp-controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
+.pp-controls label { display: grid; gap: 4px; font-size: 13px; }
+.pp-time { flex: 1 1 280px; }
+.pp-time input { width: 100%; }
+.pp-step { display: inline-flex; gap: 4px; }
+.pp-frames { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+.pp-frame { margin: 0; display: grid; gap: 4px; }
+.pp-frame figcaption { font-size: 13px; font-weight: 600; }
+.pp-stage { position: relative; line-height: 0; border: 1px solid var(--line, #d7dde5); border-radius: 8px; overflow: hidden; background: #0e1420; min-height: 120px; }
+.pp-stage img { width: 100%; height: auto; display: block; cursor: crosshair; user-select: none; }
+.pp-empty { color: #334155; background: #eef5fa; padding: 28px 12px; text-align: center; line-height: 1.4; font-size: 13px; min-height: 120px; display: grid; place-items: center; }
+.pp-empty.error { color: #9f1239; background: #fff1f2; }
+.pp-marker { position: absolute; transform: translate(-50%, -50%); min-width: 22px; height: 22px; padding: 0 5px; border-radius: 11px; font: 600 12px/22px system-ui, sans-serif; text-align: center; color: #fff; pointer-events: none; box-shadow: 0 0 0 2px rgba(0, 0, 0, .55); }
+.pp-marker.done { background: #19a05b; }
+.pp-marker.pending { background: #e3a008; }
+.pp-box { position: absolute; border: 2px solid #19a05b; background: #19a05b22; pointer-events: none; box-sizing: border-box; }
+.pp-box.pending { border-color: #e3a008; background: #e3a00822; }
+.pp-list table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.pp-list th, .pp-list td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line, #d7dde5); }
+.pp-bad td { color: #b3261e; font-weight: 600; }
+.pp-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.person-pairs .notice { display: grid; gap: 6px; }
+.person-pairs .link { background: none; border: 0; padding: 0; color: var(--accent, #1f6feb); cursor: pointer; text-decoration: underline; }
+.cad-parts { display: flex; gap: 6px; margin: 4px 0 10px; }
+.cad-parts button { padding: 8px 14px; border: 1px solid var(--line, #d7dde5); border-radius: 8px; background: transparent; cursor: pointer; font-weight: 600; }
+.cad-parts button.selected { background: rgba(31, 111, 235, .12); border-color: #1f6feb; color: #1f6feb; }
+.pp-step button { padding: 4px 10px; font-size: 12px; font-weight: 600; min-width: 64px; }
+.pp-both { display: grid; gap: 4px; font-size: 13px; align-content: end; }
+.pp-problemas { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; line-height: 1.4; }
+.pp-problemas .pp-error { color: #b3261e; }
+.pp-problemas .pp-aviso { color: #8a5a00; }
+.pp-problemas b { font-weight: 700; }
+.pp-related { display: grid; gap: 6px; font-size: 13px; }
+.pp-related h3 { margin: 6px 0 0; font-size: 14px; }
+.pp-related ul { margin: 0; padding-left: 18px; display: grid; gap: 3px; }

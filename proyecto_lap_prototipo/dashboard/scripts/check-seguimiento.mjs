@@ -33,8 +33,8 @@ ok(/const starting *= *session\.connected *&& *session\.state\.status *=== *['"]
    'CameraPanel ya no distingue el estado "iniciando" para avisar al operador');
 ok(/video-starting/.test(panel),
    'no hay ningun aviso visible mientras la sesion esta iniciando');
-ok(!/YOLO|HOG|onDetector|denseCounting|denseInterval/.test(panel),
-   'la camara todavia ofrece detectores o una segunda inferencia fuera del flujo P2PNet');
+ok(!/HOG|onDetector|denseCounting|denseInterval|p2pnet|P2PNet/.test(panel),
+   'la camara todavia ofrece otros detectores o una segunda inferencia de densidad');
 ok(!/Orientación|Cobertura orientativa|Accesos de un local/.test(panel),
    'la configuracion basica de camara volvio a exponer opciones avanzadas');
 

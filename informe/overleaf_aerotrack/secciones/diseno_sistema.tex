@@ -1,0 +1,365 @@
+\section{Diseño del Sistema}
+\label{sec:diseno-sistema}
+
+Esta sección describe el diseño del prototipo AeroTrack, la consola con la que se configura y
+opera el sistema. El apartado~\ref{subsec:arquitectura} presenta los seis componentes que
+organizan el procesamiento de las imágenes y el motor de identidad entre cámaras. Los
+apartados siguientes documentan la consola: la gestión de usuarios por roles, la gestión de
+proyectos independientes, el asistente de configuración, el monitoreo, las alertas de seguridad con aviso por correo
+y las vistas de reportes y comerciales.
+
+\subsection{Arquitectura propuesta}
+\label{subsec:arquitectura}
+
+El prototipo organiza el procesamiento en seis componentes, cada uno con una
+responsabilidad única (Figura~\ref{fig:arquitectura}). Todo se ejecuta en el equipo local: el
+servidor solo acepta conexiones del propio equipo y ningún fotograma sale de él.
+
+\begin{figure}[H]
+\centering
+\resizebox{\anchofigura}{!}{%
+\begin{tikzpicture}[
+  comp/.style={draw=black,thick,rounded corners=2pt,align=center,font=\small,
+               minimum width=7.6cm,minimum height=1.25cm,inner sep=4pt},
+  dato/.style={draw=black,dashed,rounded corners=2pt,align=center,font=\small,
+               minimum width=4.6cm,minimum height=1.1cm,inner sep=4pt},
+  flecha/.style={-{Stealth[length=2.2mm]},thick}]
+  \node[comp] (a) at (0,0) {\textbf{1. Adquisición}\\archivo de video, cámara USB o flujo de red, por cámara};
+  \node[comp,below=0.55cm of a] (d) {\textbf{2. Detección}\\YOLO11 (variante según hardware) y filtros de\\zona útil, tamaño relativo e inmovilidad};
+  \node[comp,below=0.55cm of d] (s) {\textbf{3. Seguimiento por cámara}\\ByteTrack en dos etapas sobre el punto de los pies,\\con caja predicha y firma de color del torso};
+  \node[comp,below=0.55cm of s] (c) {\textbf{4. Calibración y proyección}\\homografía por cámara hacia el plano (opcional)};
+  \node[comp,below=0.55cm of c] (i) {\textbf{5. Identidad entre cámaras}\\vector OSNet de cuerpo entero, tramos, compuerta de\\tiempo y plano, reagrupación al cerrar la sesión};
+  \node[comp,below=0.55cm of i] (p) {\textbf{6. Persistencia, analítica y presentación}\\conteos, alertas, reportes y consola web};
+  \node[dato,right=1.0cm of i] (m) {Memoria de apariencia\\(base local, 24 h por defecto)};
+  \node[dato,right=1.0cm of p] (g) {Grabación de la sesión\\(identificadores y posiciones)};
+  \foreach \x/\y in {a/d,d/s,s/c,c/i,i/p} { \draw[flecha] (\x) -- (\y); }
+  \draw[flecha,{Stealth[length=2.2mm]}-{Stealth[length=2.2mm]}] (i) -- (m);
+  \draw[flecha] (p) -- (g);
+\end{tikzpicture}}
+\caption{Arquitectura del prototipo AeroTrack. Los recuadros discontinuos son los datos por
+persona que el sistema conserva en el equipo.}
+\label{fig:arquitectura}
+\end{figure}
+
+El primer componente es la adquisición, que lee cada fuente de cámara, sea un archivo de
+video, una cámara USB o un flujo de red, y la abre una sola vez. El segundo es la detección: el
+detector YOLO11 (Jocher y Qiu, 2024) localiza personas en cada muestra con una caja y una
+confianza. La variante del detector no la elige el operador, sino el sistema según el hardware
+del equipo: nano en CPU, y pequeña o mediana con GPU. Tras la detección se aplican tres filtros
+contra falsos positivos: se descarta lo que cae fuera de la zona útil de la imagen o del área de
+trabajo del plano, las detecciones dudosas mucho más pequeñas que las personas seguras de la
+misma cámara (gorros, carteles) y los objetos que nunca se mueven y se detectan con baja
+confianza.
+
+El tercero es el seguimiento dentro de cada cámara. Aplica la asociación en dos etapas de
+ByteTrack (Zhang et al., 2022) sobre el punto de los pies, que es el que la homografía puede
+proyectar, con un filtro de Kalman de velocidad constante: primero se emparejan las
+detecciones de alta confianza y después las de baja confianza, para no perder a una persona
+parcialmente ocluida. Dentro de la puerta espacial, las coincidencias se ordenan además con
+dos señales al estilo de BoT-SORT (Aharon et al., 2022): la superposición entre la caja predicha
+y la detectada, y una firma de color de la ropa calculada sobre dos franjas del torso.
+
+El cuarto componente es la calibración y proyección: cada cámara tiene una homografía propia
+hacia el plano, calculada con al menos cuatro correspondencias entre el suelo del video y el
+plano, que se valida por consistencia geométrica antes de aceptarse. La calibración es
+opcional; sin ella la cámara cuenta y sigue personas, pero no las ubica en el plano.
+
+El quinto es el motor de identidad entre cámaras (Figura~\ref{fig:identidad}). Para cada vista
+confiable de una persona calcula un vector de apariencia OSNet (Zhou et al., 2019) de 512
+dimensiones sobre el recorte de cuerpo entero, con las partes tapadas por otra persona
+rellenadas de gris, y lo acumula en el tramo continuo de seguimiento al que pertenece. Una
+persona lleva un identificador provisional hasta reunir suficientes vistas y solo entonces recibe
+un identificador confirmado, que es el único que cuenta en los conteos. La unión entre cámaras
+exige a la vez parecido de apariencia y coherencia de tiempo y, si hay calibración, de posición
+en el plano, y solo se intenta entre cámaras que el operador declaró relacionadas y cuyos relojes
+declaró sincronizados; ante una candidata ambigua, la asociación se marca como incierta en
+lugar de forzarse. Con la memoria de apariencia activa, que es la configuración por defecto, el
+motor compara además cada identidad nueva con todas las personas guardadas en una base
+de datos local del proyecto durante el plazo de retención (24 horas por defecto, hasta 168), de
+modo que reconoce a la misma persona en sesiones y días posteriores. Al cerrar la sesión,
+reagrupa los tramos con la grabación completa a la vista y renumera a las personas de 1 a N.
+
+\begin{figure}[H]
+\centering
+\resizebox{\anchofigura}{!}{%
+\begin{tikzpicture}[
+  paso/.style={draw=black,thick,rounded corners=2pt,align=center,font=\small,
+               minimum width=6.4cm,minimum height=1.0cm,inner sep=3pt},
+  decision/.style={draw=black,thick,diamond,aspect=2.6,align=center,font=\small,inner sep=1pt},
+  fin/.style={draw=black,thick,rounded corners=6pt,align=center,font=\small,
+              minimum width=3.6cm,minimum height=0.9cm,inner sep=3pt},
+  flecha/.style={-{Stealth[length=2.2mm]},thick}]
+  \node[paso] (n1) at (0,0) {Vista confiable de una persona seguida\\(confianza, altura, borde, oclusión)};
+  \node[paso,below=0.5cm of n1] (n2) {Vector OSNet de cuerpo entero (512 dimensiones)\\y prototipo del tramo de seguimiento};
+  \node[decision,below=0.5cm of n2] (d1) {¿Vistas suficientes\\para confirmar?};
+  \node[fin,left=1.2cm of d1] (f0) {Identificador\\provisional};
+  \node[decision,below=0.6cm of d1] (d2) {¿Coincide con una\\persona guardada?};
+  \node[fin,right=1.2cm of d2] (f1) {Recupera su ID\\(reidentificada)};
+  \node[decision,below=0.6cm of d2] (d3) {¿Candidata en cámara\\relacionada, coherente en\\apariencia, tiempo y plano?};
+  \node[fin,left=1.2cm of d3] (f3) {ID nuevo\\(local)};
+  \node[decision,below=0.6cm of d3] (d4) {¿Es inequívoca?};
+  \node[fin,right=1.2cm of d4] (f2) {Reutiliza su ID\\(estimada)};
+  \node[fin,left=1.2cm of d4] (f4) {No fuerza la unión\\(incierta)};
+  \draw[flecha] (n1) -- (n2);
+  \draw[flecha] (n2) -- (d1);
+  \draw[flecha] (d1) -- node[above,font=\small]{no} (f0);
+  \draw[flecha] (d1) -- node[right,font=\small]{sí} (d2);
+  \draw[flecha] (d2) -- node[above,font=\small]{sí} (f1);
+  \draw[flecha] (d2) -- node[right,font=\small]{no} (d3);
+  \draw[flecha] (d3) -- node[above,font=\small]{no} (f3);
+  \draw[flecha] (d3) -- node[right,font=\small]{sí} (d4);
+  \draw[flecha] (d4) -- node[above,font=\small]{sí} (f2);
+  \draw[flecha] (d4) -- node[above,font=\small]{no} (f4);
+  \node[font=\small\itshape,align=center,below=0.5cm of d4]
+    {La consulta a personas guardadas solo ocurre con la memoria de apariencia activa,\\que es la configuración por defecto (RNF-01 no conforme).};
+\end{tikzpicture}}
+\caption{Decisión de identidad de una persona en el motor de identidad entre cámaras.}
+\label{fig:identidad}
+\end{figure}
+
+El sexto componente reúne persistencia, analítica y presentación. Calcula la ocupación por
+zona, el flujo por los accesos y las alertas de aglomeración a partir de las personas
+confirmadas, y lo expone en la consola, que ofrece configuración, plano en vivo, video por
+cámara, alertas y reportes. No se limita a mantener un estado agregado en memoria: guarda en
+el equipo una grabación de cada sesión con, por muestra y por persona, el identificador, la caja,
+la posición en el plano y su trayectoria reciente, sin plazo de retención automático, y a partir de
+esas grabaciones calcula las métricas comerciales por negocio. No guarda fotogramas de las
+cámaras en vivo ni vectores de apariencia en la grabación. Las consecuencias de esa
+persistencia se examinan en el Anexo~\ref{anx:marco}, apartado B.9.
+
+\subsection{Gestión de usuarios y roles}
+\label{subsec:diseno-usuarios}
+
+Las capturas de este apartado y de los siguientes se tomaron sobre el prototipo vigente, con un
+proyecto de prueba sobre el plano del nivel 3 del aeropuerto y dos videos de demostración
+grabados por el equipo como fuentes; donde una figura muestra datos de esos videos o de la
+simulación sintética, se indica en su pie.
+
+El acceso a la consola requiere usuario y contraseña (Figura~\ref{fig:inicio-sesion}). La
+contraseña se guarda en el equipo como resumen criptográfico con sal propia, nunca en texto
+plano, y si todavía no existe ningún usuario, el primero que se registra queda con el rol de
+operador. El sistema distingue dos roles, que se aplican en el servidor y no solo en la interfaz:
+el operador configura cámaras, plano y proyectos; el administrador consulta resultados y ajusta
+los umbrales de alerta, sin acceso a la configuración. El usuario activo y su rol se muestran
+siempre en la cabecera y al pie del menú lateral.
+
+\figura{cap-01-inicio-sesion.png}
+  {Pantalla de inicio de sesión de la consola.}
+  {fig:inicio-sesion}
+
+\subsection{Gestión de proyectos}
+\label{subsec:diseno-proyectos}
+
+Un proyecto representa un espacio monitoreado, por ejemplo un nivel de un terminal. Cada
+proyecto guarda por separado su propio plano, sus cámaras, su calibración, sus incidentes y su
+memoria de apariencia, de modo que la configuración y los datos de un espacio no se mezclan
+con los de otro. Al entrar en la consola, una pantalla pregunta en qué proyecto se quiere
+trabajar y señala el último abierto (Figura~\ref{fig:selector-proyecto}). La vista de proyectos
+lista los guardados con su espacio, su número de cámaras y de planos, la fecha de su última
+edición y su estado, y permite crear uno nuevo, abrirlo, retomar su configuración, renombrarlo o
+eliminarlo (Figura~\ref{fig:proyectos}).
+
+\figura{cap-02-selector-proyecto.png}
+  {Selección del proyecto de trabajo al entrar en la consola.}
+  {fig:selector-proyecto}
+
+\figura{cap-03-proyectos.png}
+  {Vista de proyectos guardados, con sus cámaras, planos y estado.}
+  {fig:proyectos}
+
+\subsection{Asistente de configuración}
+\label{subsec:diseno-asistente}
+
+La configuración de un proyecto se completa con un asistente de siete pasos: proyecto, plano,
+conexión, zona útil, homografía y cámaras relacionadas, contexto y oportunidades, y revisión.
+Una barra superior muestra los pasos, marca los completados y lleva la cuenta de cuántos están
+listos, y una indicación en la cabecera confirma que el avance queda guardado, de modo que un
+proyecto incompleto puede retomarse desde la vista de proyectos.
+
+\subsubsection*{Paso 1: proyecto}
+
+Se identifica el espacio con el nombre del aeropuerto o proyecto y el del terminal y nivel, y se
+elige el tipo de fuente: videos grabados o cámaras en vivo conectadas por USB, RTSP o IP
+(Figura~\ref{fig:paso1}). Una nota lateral recuerda que el análisis es de presencia y recorridos,
+sin reconocimiento facial.
+
+\figura{cap-04-paso1-proyecto.png}
+  {Paso 1 del asistente: datos del espacio y tipo de fuente.}
+  {fig:paso1}
+
+\subsubsection*{Paso 2: plano}
+
+Se elige uno de los planos del aeropuerto, se importa una imagen o un PDF, o se dibuja el espacio
+con puntos, líneas y límites (Figura~\ref{fig:paso2}). Los planos del aeropuerto ya traen su
+escala, de modo que el límite de trabajo es opcional.
+
+\figura{cap-05-paso2-plano.png}
+  {Paso 2 del asistente: plano del nivel 3 del aeropuerto, con su escala aproximada.}
+  {fig:paso2}
+
+\subsubsection*{Paso 3: conexión}
+
+Se añaden las cámaras del proyecto y, para cada una, su nombre, el tipo de fuente y la ruta del
+video o la dirección de la cámara, y se comprueba que la fuente responde
+(Figura~\ref{fig:paso3}).
+
+\figura{cap-06-paso3-conexion.png}
+  {Paso 3 del asistente: dos cámaras conectadas a videos de demostración.}
+  {fig:paso3}
+
+\subsubsection*{Paso 4: zona útil}
+
+Se prueba la fuente y se delimita en la imagen el suelo real que debe analizarse, dejando fuera
+espejos, vidrios, pantallas y otros niveles; el panel lateral muestra el estado de la fuente, su
+resolución, su frecuencia de cuadros y el modelo activo (Figura~\ref{fig:paso4}). En el mismo
+paso pueden dibujarse, de forma opcional, las líneas de acceso de los negocios.
+
+\figura{cap-07-paso4-zona-util.png}
+  {Paso 4 del asistente: zona útil dibujada sobre la imagen de una cámara (video de
+   demostración).}
+  {fig:paso4}
+
+\subsubsection*{Paso 5: homografía y cámaras relacionadas}
+
+Se relaciona el suelo de cada video con el plano marcando puntos de referencia primero en la
+imagen y después en el mapa; se requieren al menos cuatro y, con cinco o más, cada uno se
+comprueba dejándolo fuera del ajuste (Figura~\ref{fig:paso5}). La calibración es opcional. Con
+dos o más cámaras, este paso pide además marcar a la misma persona en cada par de cámaras: con
+cuatro parejas el sistema declara las cámaras relacionadas, calcula el desfase de tiempo entre
+sus videos y lo corrige al leerlos. Sin esa relación, cada cámara conserva sus propios
+identificadores.
+
+\figura{cap-08-paso5-homografia.png}
+  {Paso 5 del asistente: referencias del suelo de dos cámaras sobre el plano (videos de
+   demostración).}
+  {fig:paso5}
+
+\subsubsection*{Paso 6: contexto y oportunidades}
+
+Se indica si el piso tiene negocios y se dibuja la huella de cada uno con un polígono, un
+rectángulo o un círculo, con su tipo y sus medidas (Figura~\ref{fig:paso6}). Las zonas de
+oportunidad no se dibujan aquí: el sistema las propone después de analizar el flujo. El paso
+recoge también la alerta general de aglomeración, con su número mínimo de personas y su tiempo
+de permanencia.
+
+\figura{cap-09-paso6-contexto.png}
+  {Paso 6 del asistente: huella de un negocio dibujada sobre el plano.}
+  {fig:paso6}
+
+\subsubsection*{Paso 7: revisión}
+
+Una lista indica qué está preparado y qué sigue pendiente, y un resumen muestra el número de
+cámaras, de zonas dibujadas y de fuentes probadas y la escala (Figura~\ref{fig:paso7}). El
+monitoreo solo puede abrirse cuando todo está preparado, y la pantalla aclara que una casilla
+completada no sustituye la validación de precisión.
+
+\figura{cap-10-paso7-revision.png}
+  {Paso 7 del asistente: revisión del proyecto antes de abrir el monitoreo.}
+  {fig:paso7}
+
+\subsection{Monitoreo y resultados}
+\label{subsec:diseno-monitoreo}
+
+La vista general muestra, durante una sesión, las personas en el plano, las entradas y salidas,
+las alertas activas, las cámaras con señal y el tiempo de análisis, junto con el estado del motor
+de identidad entre cámaras y el plano con las posiciones y trayectorias de las personas
+confirmadas (Figura~\ref{fig:vista-general}).
+
+\figura{cap-11-vista-general.png}
+  {Vista general durante una sesión sobre los videos de demostración.}
+  {fig:vista-general}
+
+La vista de videos y resultados reproduce una sesión ya procesada: muestra el video de cada
+cámara con la caja y el identificador de cada persona superpuestos, el mapa con sus posiciones
+y los resúmenes del análisis, y permite comparar sesiones y exportar un resumen
+(Figura~\ref{fig:videos-resultados}).
+
+\figura{cap-12-videos-resultados.png}
+  {Videos y resultados: detecciones con su identificador en una cámara y posiciones en el plano
+   (video de demostración).}
+  {fig:videos-resultados}
+
+La vista de monitoreo en vivo concentra el control de la sesión (iniciar, pausar o finalizar) con
+los indicadores de personas observadas, aglomeraciones, cámaras activas y tiempo de fuente, y
+el plano vivo de posiciones y trayectorias (Figura~\ref{fig:monitoreo-vivo}). Desde ella puede
+lanzarse también la simulación sintética, que se rotula como tal en todas las vistas.
+
+\figura{cap-13-monitoreo-vivo.png}
+  {Monitoreo en vivo durante la simulación sintética, con su rótulo visible.}
+  {fig:monitoreo-vivo}
+
+\subsection{Alertas de seguridad con aviso por correo}
+\label{subsec:diseno-alertas}
+
+La vista de alertas reúne lo que necesita el personal de seguridad para atender una
+aglomeración (Figura~\ref{fig:alertas-correo}). El apartado \enquote{Cuándo avisar} fija el
+número mínimo de personas, la permanencia en segundos y el radio en metros que definen una
+aglomeración; se cambian desde la misma vista y son el único ajuste que también puede hacer el
+administrador. El panel \enquote{Avisar por correo}, desplegado y vacío en la figura, pide la
+cuenta que envía, su contraseña de aplicación y los correos que reciben el aviso, hasta un
+máximo de veinte, y permite enviar un correo de prueba. Con el aviso activado, el sistema envía
+un correo por cada incidente nuevo de aglomeración, con el lugar, la cámara, el motivo y la
+advertencia de que requiere comprobación humana; un aviso ya enviado no se reenvía y una
+misma zona no genera más de un correo cada 120 segundos. La contraseña se guarda solo en el
+equipo, fuera de los archivos del proyecto, y la interfaz nunca la muestra de vuelta.
+
+\figura{cap-14-alertas-correo.png}
+  {Vista de alertas: umbrales de aglomeración y panel de aviso por correo desplegado y vacío.}
+  {fig:alertas-correo}
+
+Debajo, tres contadores muestran las alertas activas, el total de la sesión y los incidentes sin
+revisar, y la bitácora de incidentes conserva cada caso aunque la sesión termine, para que el
+personal lo marque como revisado, falsa alarma o resuelto (Figura~\ref{fig:bitacora}). En la
+captura la bitácora está vacía, porque los videos de demostración no produjeron ninguna
+aglomeración.
+
+\figura{cap-15-bitacora.png}
+  {Contadores de alertas y bitácora de incidentes, vacía en el proyecto de prueba.}
+  {fig:bitacora}
+
+\subsection{Reportes y vistas comerciales}
+\label{subsec:diseno-reportes}
+
+La vista de reportes selecciona una sesión procesada, muestra los resultados de cada cámara y
+permite descargarlos en PDF, Excel o CSV (Figura~\ref{fig:reportes}). Cada reporte declara el
+origen de sus datos.
+
+\figura{cap-16-reportes.png}
+  {Reportes de monitoreo de una sesión, con el rótulo de simulación activo en la consola.}
+  {fig:reportes}
+
+El panel comercial, al final del reporte, resume la ocupación y el flujo de la sesión (ocupación
+pico, zona con más tráfico, permanencia media y aglomeraciones), ordena las zonas por
+oportunidad comercial y describe el contexto de la medición, como la cobertura de cámaras y la
+sincronización entre ellas (Figura~\ref{fig:panel-comercial}).
+
+\figura{cap-17-panel-comercial.png}
+  {Panel comercial de una sesión sobre los videos de demostración.}
+  {fig:panel-comercial}
+
+La vista de negocios y accesos lista los negocios del nivel, ya cargados desde el plano del
+aeropuerto, y permite renombrarlos, añadir uno que falte y vincular sus líneas de acceso para
+medir entradas y salidas (Figura~\ref{fig:negocios}).
+
+\figura{cap-18-negocios.png}
+  {Negocios y accesos del nivel, con el rótulo de simulación visible.}
+  {fig:negocios}
+
+La vista de ventas y análisis cruza las entradas medidas por hora con las ventas registradas o
+estimadas de cada negocio, y ofrece resúmenes horarios, estimaciones, la relación entre
+aglomeraciones y ventas y la señal experimental de objeto nuevo al salir; sin ventas cargadas, lo
+indica en lugar de inventar una cifra (Figura~\ref{fig:ventas}).
+
+\figura{cap-19-ventas.png}
+  {Ventas y análisis, sin ventas cargadas, con el rótulo de simulación visible.}
+  {fig:ventas}
+
+La vista de exposición y captación calcula, sobre una sesión ya procesada, quién pasó por el
+frente de cada local, quién entró, cuánto se quedó y por dónde se mueve la gente, con mapas de
+calor, rutas y congestión (Figura~\ref{fig:exposicion}). Estas métricas se derivan de las
+trayectorias por identificador, lo que constituye la finalidad comercial examinada en la
+Sección~\ref{subsec:impacto-etico}.
+
+\figura{cap-20-exposicion.png}
+  {Exposición y captación por negocio de una sesión sobre los videos de demostración.}
+  {fig:exposicion}

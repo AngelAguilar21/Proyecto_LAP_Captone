@@ -1,0 +1,362 @@
+\section{Metodología}
+\label{sec:metodologia}
+
+Esta sección explica, paso a paso, cómo obtiene el sistema sus resultados: qué hace con cada
+fotograma desde que llega de una cámara hasta que se convierte en una alerta o en un reporte,
+cómo se evalúa lo que produce y cómo se trabajó para llegar a él. Describe el comportamiento
+del prototipo vigente; los requisitos que ese comportamiento satisface se especifican en la
+Sección~\ref{sec:requerimientos} y su diseño en la Sección~\ref{sec:diseno-sistema}.
+
+\subsection{Visión general}
+\label{subsec:met-vision}
+
+El sistema procesa el video por muestras, no cuadro a cuadro. En cada muestra lee un
+fotograma de cada cámara, detecta a las personas, descarta lo que no son personas o queda
+fuera del área de interés, sigue a cada persona dentro de su cámara, proyecta la posición de sus
+pies sobre el plano del espacio, decide su identidad entre cámaras y, con las posiciones de las
+personas confirmadas, calcula la ocupación de cada zona y detecta aglomeraciones. Las alertas,
+la bitácora, el panel comercial y los reportes se alimentan de ese análisis
+(Figura~\ref{fig:flujo-metodologia}). Antes de procesar video, el operador configura el espacio:
+el plano, las cámaras, las zonas y la calibración de cada cámara.
+
+\begin{figure}[H]
+\centering
+\resizebox{\anchofigura}{!}{%
+\begin{tikzpicture}[
+  etapa/.style={draw=black,thick,rounded corners=2pt,align=center,font=\small,
+                minimum width=6.6cm,minimum height=1.15cm,inner sep=3pt},
+  config/.style={draw=black,dashed,rounded corners=2pt,align=center,font=\small,
+                 minimum width=4.4cm,minimum height=1.15cm,inner sep=3pt},
+  flecha/.style={-{Stealth[length=2.2mm]},thick}]
+  \node[etapa] (e1) at (0,0) {\textbf{Fuente de video}\\archivo, cámara USB o flujo de red};
+  \node[etapa,below=0.5cm of e1] (e2) {\textbf{Detección}\\YOLO11, clase persona};
+  \node[etapa,below=0.5cm of e2] (e3) {\textbf{Filtros}\\zona útil, tamaño, elementos estáticos};
+  \node[etapa,below=0.5cm of e3] (e4) {\textbf{Seguimiento}\\punto de los pies, Kalman, IoU};
+  \node[etapa,below=0.5cm of e4] (e5) {\textbf{Proyección al plano}\\homografía de cada cámara};
+  \node[etapa,below=0.5cm of e5] (e6) {\textbf{Identidad}\\OSNet, entre oclusiones y cámaras};
+  \node[etapa,below=0.5cm of e6] (e7) {\textbf{Análisis por zonas}\\ocupación, permanencia, aglomeración};
+  \node[etapa,below=0.5cm of e7] (e8) {\textbf{Alertas y reportes}\\pantalla, correo, bitácora, panel, archivos};
+  \foreach \a/\b in {e1/e2,e2/e3,e3/e4,e4/e5,e5/e6,e6/e7,e7/e8} { \draw[flecha] (\a) -- (\b); }
+  \node[config,right=1.3cm of e3] (c1) {\textbf{Perfil de hardware}\\variante del detector,\\resolución y muestreo};
+  \node[config,right=1.3cm of e5] (c2) {\textbf{Configuración del espacio}\\plano, cámaras, zonas\\y calibración};
+  \draw[flecha,dashed] (c1.west) -- ++(-0.65,0) |- (e2.east);
+  \draw[flecha,dashed] (c2.west) -- (e5.east);
+  \draw[flecha,dashed] (c2.south) |- (e7.east);
+\end{tikzpicture}}
+\caption{Flujo de procesamiento del sistema, desde la fuente de video hasta las alertas y
+los reportes. Los recuadros discontinuos son configuraciones previas que condicionan las
+etapas.}
+\label{fig:flujo-metodologia}
+\end{figure}
+
+\subsection{Etapas del procesamiento}
+\label{subsec:met-etapas}
+
+Cada etapa se describe por lo que recibe, lo que hace, lo que entrega y la razón por la que se
+eligió esa solución.
+
+\subsubsection{Adquisición}
+\label{subsec:met-adquisicion}
+
+\textbf{Entrada.} Un archivo de video grabado, una cámara USB o un flujo de red (RTSP o una
+cámara IP), por cada cámara del proyecto. Una misma sesión no mezcla archivos y cámaras en
+vivo, porque sus relojes no son equivalentes.
+
+\textbf{Proceso.} Cada fuente se abre una sola vez y se decodifica en su propio hilo. Los
+fotogramas de más de 1280 píxeles de ancho se reducen a ese ancho. Antes de empezar, el
+sistema determina un perfil de hardware: si el equipo no tiene una GPU utilizable usa la
+variante nano de YOLO11 con 960 píxeles de entrada; con GPU elige la variante nano, pequeña o
+mediana según la memoria de video disponible (menos de 6 GB, de 6 a 16 GB, o 16 GB o más) y
+resoluciones de 960 a 1920 píxeles. Cuando alguna cámara está a tres metros de altura o más,
+sube la resolución, porque las personas ocupan pocos píxeles. El operador elige además un
+modo de rendimiento: preciso (una muestra cada 0,2 segundos), equilibrado (cada 0,4 segundos y
+800 píxeles) o rápido (cada 0,6 segundos y 640 píxeles); en modo automático y sin GPU, el
+sistema usa el preciso hasta con dos cámaras, el equilibrado hasta con cuatro y el rápido con
+más.
+
+\textbf{Salida.} En cada paso, un fotograma por cámara activa, con su instante en la fuente.
+
+\textbf{Por qué.} El prototipo debe funcionar en computadoras portátiles sin GPU dedicada.
+Muestrear cada pocas décimas de segundo es suficiente para fenómenos que se forman en
+minutos, como una aglomeración, y reduce a la vez el cómputo y el volumen de imágenes
+tratadas.
+
+\subsubsection{Configuración del espacio}
+\label{subsec:met-configuracion}
+
+\textbf{Entrada.} El plano del espacio (uno de los planos del aeropuerto, una imagen, un PDF o
+un archivo DXF, o un dibujo hecho en la consola) con sus dimensiones en metros, y una imagen
+de cada cámara.
+
+\textbf{Proceso.} El operador ubica cada cámara sobre el plano, marca en su imagen la zona útil
+que debe analizarse y, si la cámara ve una puerta, un acceso formado por un área exterior y otra
+interior. Dibuja las zonas de interés y les asigna un tipo y, si corresponde, una regla de
+aglomeración propia. Para calibrar, marca puntos del suelo visibles en el video (esquinas,
+cruces de baldosas) y su posición correspondiente en el plano. Con cuatro puntos el sistema
+calcula una homografía exacta; con cinco o más, la estima de forma robusta descartando los
+puntos incoherentes y la reajusta con los restantes, y además comprueba cada punto dejándolo
+fuera del ajuste. Rechaza las calibraciones con puntos repetidos o casi alineados. Por último, el
+operador declara qué cámaras están relacionadas y si sus relojes están sincronizados.
+
+\textbf{Salida.} La configuración del proyecto: plano, cámaras, zonas, reglas y una homografía
+por cámara calibrada, junto con la región de la imagen en la que esa homografía es fiable.
+
+\textbf{Por qué.} Las personas caminan sobre el suelo, y una homografía entre el suelo de la
+imagen y el plano basta para pasar de píxeles a metros sin conocer los parámetros internos de
+cada cámara. Pedir los puntos al operador, en lugar de estimarlos, hace la calibración
+verificable y repetible.
+
+\subsubsection{Detección}
+\label{subsec:met-deteccion}
+
+\textbf{Entrada.} Los fotogramas de todas las cámaras de la muestra.
+
+\textbf{Proceso.} El detector YOLO11 (Jocher y Qiu, 2024), preentrenado sobre el conjunto
+COCO, procesa los fotogramas de todas las cámaras en un solo lote y conserva únicamente la
+clase persona. El umbral de confianza es de 0,25, y de 0,15 cuando hay cámaras elevadas. La
+supresión de cajas duplicadas usa un umbral de superposición de 0,5, más estricto que el
+habitual, para no contar dos veces a una misma persona dentro de un grupo.
+
+\textbf{Salida.} Por cada persona detectada, una caja, su confianza y el punto de los pies, que
+es el centro del borde inferior de la caja.
+
+\textbf{Por qué.} YOLO entrega cajas completas en una sola pasada y con variantes de distinto
+costo, y el borde inferior de la caja da el punto que la homografía puede proyectar al suelo
+(Sección~\ref{subsec:yolo}).
+
+\subsubsection{Filtros de falsos positivos}
+\label{subsec:met-filtros}
+
+\textbf{Entrada.} Las detecciones de cada cámara.
+
+\textbf{Proceso.} Se aplican tres filtros. El primero descarta las detecciones cuyo punto de los
+pies cae fuera de la zona útil de la imagen o fuera del área de trabajo del plano; la consola las
+sigue dibujando en gris para que se vea que el detector sí las encontró. El segundo es un filtro
+de tamaño relativo: cada cámara aprende la altura típica de las personas que detecta con
+confianza alta (0,6 o más) y descarta las detecciones dudosas que miden menos del 62\,\% de esa
+referencia, salvo que estén cortadas por el borde de la imagen. El tercero actúa después del
+seguimiento y suprime los elementos estáticos: una trayectoria que en dos segundos no se ha
+movido más de una cuarta parte del ancho de su caja y cuya confianza media es baja se trata
+como mobiliario, un cartel o un reflejo. Una persona quieta pero bien detectada se conserva.
+Los dos últimos filtros pueden desactivarse en la configuración.
+
+\textbf{Salida.} Las detecciones que se consideran personas, y el número de descartes por
+cámara.
+
+\textbf{Por qué.} A los umbrales de confianza bajos que exigen las cámaras elevadas, el detector
+confunde con personas objetos como gorros, carteles o maniquíes. Los dos filtros usan señales
+de la propia escena, sin entrenar nada, y se adaptan a cámaras de distinta altura.
+
+\subsubsection{Seguimiento}
+\label{subsec:met-seguimiento}
+
+\textbf{Entrada.} Las detecciones filtradas de cada cámara.
+
+\textbf{Proceso.} Cada persona se sigue sobre el punto de sus pies con un filtro de Kalman de
+velocidad constante que predice dónde estará en la muestra siguiente. La asociación entre
+predicciones y detecciones se hace en dos etapas, como en ByteTrack (Zhang et al., 2022):
+primero con las detecciones de confianza alta (0,4 o más) y después con las de confianza baja,
+para no perder a una persona parcialmente oculta, con una puerta espacial de 60 píxeles. Dentro
+de esa puerta, las coincidencias se ordenan además con dos señales al estilo de BoT-SORT
+(Aharon et al., 2022): la superposición (IoU) entre la caja predicha y la detectada, y una firma
+de color de la ropa del torso. Una persona que deja de detectarse se conserva durante 45
+muestras antes de darse por perdida.
+
+\textbf{Salida.} Por cámara, la lista de personas seguidas, cada una con un identificador local
+estable, su caja, su punto de los pies y su velocidad.
+
+\textbf{Por qué.} Seguir el punto de los pies, y no solo la caja, mantiene la geometría que la
+homografía necesita. La segunda etapa de asociación y las señales de caja y color reducen los
+cambios de identidad en grupos y oclusiones cortas.
+
+\subsubsection{Proyección al plano}
+\label{subsec:met-proyeccion}
+
+\textbf{Entrada.} El punto de los pies de cada persona seguida y la homografía de su cámara.
+
+\textbf{Proceso.} El punto se transforma con la homografía a coordenadas del plano, en metros
+si el plano tiene escala. Solo se proyectan los puntos situados dentro de la región fiable de la
+cámara, que es la zona de la imagen cubierta por los puntos de calibración, ampliada; fuera de
+ella el sistema no extrapola: la persona sigue apareciendo en el video, pero no en el plano, y la
+consola avisa al operador para que añada referencias en esa zona.
+
+\textbf{Salida.} La posición de cada persona en el plano común a todas las cámaras.
+
+\textbf{Por qué.} Un plano común permite sumar lo que ven varias cámaras, medir distancias en
+metros para las reglas de aglomeración y usar la posición para decidir si dos observaciones
+corresponden a la misma persona. No extrapolar evita los errores grandes de una homografía
+lejos de sus puntos de referencia.
+
+\subsubsection{Identidad}
+\label{subsec:met-identidad}
+
+\textbf{Entrada.} Las personas seguidas en todas las cámaras, con su recorte de imagen y, si la
+cámara está calibrada, su posición en el plano.
+
+\textbf{Proceso.} Para cada vista confiable de una persona (confianza suficiente, altura mínima,
+lejos del borde y sin oclusión), el sistema calcula un vector de apariencia OSNet (Zhou et al.,
+2019) sobre el recorte de cuerpo entero y lo acumula en el tramo de seguimiento al que
+pertenece. Con esos vectores mantiene el identificador cuando una persona se pierde un
+momento detrás de otra y vuelve a aparecer, y lo extiende a otra cámara cuando el parecido de
+apariencia es suficiente y el tiempo y, con calibración, la posición son coherentes, siempre que
+las cámaras estén relacionadas y sus relojes declarados sincronizados. Una persona recibe un
+identificador provisional hasta reunir suficientes vistas y solo entonces uno confirmado; las
+asociaciones ambiguas se marcan como inciertas. Con la memoria de apariencia activa, que es
+la configuración por defecto, el sistema compara además cada identidad nueva con las
+personas guardadas de sesiones anteriores dentro del plazo de retención. Esa memoria es la
+causa del hallazgo no conforme de RNF-01 descrito en la Sección~\ref{subsec:privacidad} y en
+el apartado B.9 del Anexo~\ref{anx:marco}. Al cerrar la sesión, los tramos se reagrupan y las
+personas se renumeran de 1 a N.
+
+\textbf{Salida.} Para cada observación, un identificador provisional o confirmado y su estado de
+asociación: local, estimada, reidentificada o incierta.
+
+\textbf{Por qué.} Sin identidad entre cámaras, una persona vista por dos cámaras se contaría dos
+veces. La sola proximidad en el plano no basta cuando las cámaras no comparten campo de
+visión o cuando la calibración es imperfecta, y por eso se añadió el descriptor de apariencia.
+Contar solo los identificadores confirmados evita que una detección fugaz infle los conteos.
+
+\subsubsection{Análisis}
+\label{subsec:met-analisis}
+
+\textbf{Entrada.} Las posiciones en el plano de las personas con identificador confirmado y la
+configuración de zonas y reglas.
+
+\textbf{Proceso.} En cada muestra el sistema calcula:
+\begin{itemize}[leftmargin=2.2em,itemsep=0.1em]
+  \item \textbf{Ocupación por zona:} cuántas personas hay dentro de cada polígono, cuántas
+  personas-segundo acumula, su pico y cuántos identificadores distintos la visitaron, además de
+  un mapa de calor del plano por celdas.
+  \item \textbf{Aglomeraciones con la regla global:} alrededor de cada persona se traza un círculo
+  del radio configurado; si dentro hay al menos la cantidad mínima de personas, es una
+  concentración candidata, y se descartan los círculos que repiten a otro mayor. Cada
+  concentración se empareja con la de la muestra anterior más cercana para medir cuánto lleva
+  formada, y genera una alerta cuando esa duración alcanza el tiempo de permanencia
+  configurado.
+  \item \textbf{Aglomeraciones con reglas por zona:} una zona con regla propia alerta cuando
+  contiene al menos su cantidad mínima de personas durante su tiempo de permanencia.
+  \item \textbf{Flujo por los accesos:} el paso de personas entre el área exterior y la interior de
+  cada acceso se cuenta como entrada o salida.
+  \item \textbf{Permanencia por negocio:} a partir de la grabación de la sesión, la analítica
+  comercial calcula visitas, permanencias, regresos y rutas frente a cada negocio del piso.
+\end{itemize}
+
+\textbf{Salida.} La ocupación y el historial de cada zona, las concentraciones con su duración y
+su estado de alerta, los cruces por acceso y las métricas comerciales.
+
+\textbf{Por qué.} Las tres condiciones de una aglomeración (cuántas personas, en cuánto espacio
+y durante cuánto tiempo) son las variables que la Sección~\ref{sec:planteamiento} define como
+objeto de medición. Exigir que la concentración se sostenga en el tiempo evita alertar por una
+coincidencia de unos segundos, y las reglas por zona permiten que una cola tolere más
+personas que una sala de espera.
+
+\subsubsection{Salidas}
+\label{subsec:met-salidas}
+
+\textbf{Entrada.} Los resultados del análisis.
+
+\textbf{Proceso.} Cada alerta se muestra en la consola y se registra como incidente en la
+bitácora, donde el personal la marca como revisada, falsa alarma o resuelta. Si el aviso por
+correo está activo, el sistema envía un correo por incidente nuevo, sin repetir una misma zona
+antes de 120 segundos. El dashboard ejecutivo y el panel comercial presentan las zonas
+ordenadas por ocupación y por oportunidad comercial. Los reportes se exportan en PDF, Excel,
+CSV o JSON, y cada uno declara si sus datos proceden de una simulación, de videos de prueba o
+de una fuente real sin validación de precisión. Cada sesión queda además grabada en el equipo,
+con los identificadores y las posiciones de cada persona, para poder revisarla después.
+
+\textbf{Salida.} Avisos para el personal, un registro auditable de incidentes y los archivos de
+reporte.
+
+\textbf{Por qué.} El sistema alerta y no actúa: la decisión queda siempre en manos de una
+persona (medida M-10). La etiqueta de origen en cada reporte impide presentar como real un
+resultado sintético. La grabación de la sesión, en cambio, conserva datos por persona sin un
+plazo automático, y es la causa del hallazgo de la medida M-03 (apartado B.9 del
+Anexo~\ref{anx:marco}).
+
+\subsection{Evaluación de los resultados}
+\label{subsec:met-evaluacion}
+
+\textbf{Métricas.} La detección se evalúa con la exhaustividad (\emph{recall}), la fracción de
+personas reales que el sistema encuentra, y la precisión, la fracción de detecciones que son
+personas reales. Ambas se calculan emparejando las cajas del sistema con las de referencia
+mediante asignación húngara y exigiendo una superposición (IoU) de al menos 0,5. El conteo se
+evalúa con el error absoluto medio (MAE) entre las personas contadas y las reales por cuadro,
+junto con su sesgo, que indica si el sistema cuenta de más o de menos. El rendimiento se mide
+en cuadros procesados por segundo y en milisegundos por etapa: el propio sistema registra en
+cada ciclo el tiempo del detector, del seguimiento y del descriptor de apariencia. La identidad
+entre cámaras se evalúa con la métrica IDF1, la fracción de detecciones que conservan la
+identidad correcta (Sección~\ref{subsec:variables-restricciones}).
+
+\textbf{MOT20, solo para evaluación.} Para medir la detección y el conteo en escenas densas se
+usa el conjunto público MOT20 (Dendorfer et al., 2020), cuya licencia no permite el uso
+comercial.\verificar{licencia de MOT20: el equipo la registra como CC BY-NC-SA 3.0; contrastar
+con los términos publicados en el sitio de MOTChallenge.} Por esa razón se emplea únicamente
+para evaluar, nunca para entrenar ni para ajustar un modelo que se entregue a LAP. El protocolo
+usa las secuencias MOT20-01 y MOT20-03, toma uno de cada cinco cuadros, que equivale al paso
+de 0,2 segundos del modo preciso, considera como referencia a las personas visibles al menos en
+un 25\,\% e ignora a las más ocultas, y mide el sistema en tres puntos: a la salida del detector,
+tras los filtros y al final del seguimiento, que es lo que el sistema cuenta. Medir en tres puntos
+permite atribuir cada pérdida a la etapa que la produce. La Tabla~\ref{tab:mot20} resume el
+resultado con la configuración vigente.\verificar{experimento MOT20: realizado sobre una copia
+de trabajo del prototipo que todavía no se ha integrado en su versión principal; confirmar las
+cifras al integrarlo.}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Evaluación con MOT20 de la configuración vigente, al final del seguimiento.}
+\label{tab:mot20}
+\begin{tabular}{@{}L{3.6cm}C{1.9cm}C{1.9cm}C{2.0cm}C{2.0cm}@{}}
+\toprule
+\textbf{Secuencia} & \textbf{Recall (\%)} & \textbf{Precisión (\%)} & \textbf{MAE (\%)} & \textbf{FPS} \\
+\midrule
+MOT20-01 (diurna) & 70,5 & 94,0 & 25,0 & 10,0 \\
+MOT20-03 (nocturna, cámara alta) & 65,5 & 91,4 & 28,4 & 3,4 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Las cifras se obtuvieron en un equipo con una GPU GTX 1650 de 4 GB, sin el descriptor de
+apariencia, y el sistema cuenta de menos en ambas secuencias. En MOT20-01 el detector
+encuentra al 82,8\,\% de las personas, pero el filtro de tamaño y el umbral de confianza del
+seguimiento bajan esa cifra al 70,5\,\%. Ninguna de estas cifras predice el desempeño en el
+Aeropuerto Jorge Chávez (RNF-05).
+
+\textbf{Pruebas automatizadas.} El prototipo incluye 322 pruebas unitarias y de integración que
+comprueban, entre otros puntos, la validación de la configuración, la calibración, el
+seguimiento, el motor de identidad, la memoria de apariencia, el aislamiento entre proyectos y
+la generación de reportes.\verificar{resultado de la ejecución completa de las 322 pruebas
+sobre la versión entregada: no se ejecutaron al redactar esta sección.}
+
+\textbf{Modo demostración.} Para comprobar la cadena de análisis y las salidas sin necesidad de
+video, el sistema ofrece un modo de demostración que genera dieciocho personas sintéticas con
+trayectorias periódicas sobre el plano y cruces simulados en los accesos. Cada persona
+sintética lleva un identificador propio de la demostración y su asociación se marca como
+sintética, y los paneles y reportes de esa sesión se rotulan como simulación (RNF-04). El modo
+demostración verifica que el análisis, las alertas y los reportes funcionan; no mide la exactitud
+del sistema.
+
+\subsection{Organización del trabajo}
+\label{subsec:met-trabajo}
+
+El proyecto avanzó por iteraciones semanales registradas en actas de reunión, en las que se
+asignaban las tareas de cada frente, y se presentó al curso en avances quincenales
+(Sección~\ref{sec:planificacion}).\verificar{actas semanales: el repositorio del proyecto solo
+conserva el acta de la semana 1, del 26 de agosto de 2026.} El detector evolucionó en tres
+pasos. La primera versión usó un detector clásico basado en histogramas de gradientes
+orientados, HOG (Dalal y Triggs, 2005), como referencia sin costo de GPU, que se abandonó por
+su baja sensibilidad con personas parcialmente ocultas.\verificar{motivo del abandono de HOG:
+no hay una medición documentada que lo respalde.} La segunda incorporó P2PNet (Song et al.,
+2021), que localiza muy bien personas en multitudes, pero que se retiró por dos razones: localiza
+cabezas y no pies, lo que impide proyectar la posición al plano sin un error no validado, y en
+CPU tardaba del orden de 3,5 segundos por cada 0,2 segundos de video. La tercera, vigente,
+adoptó YOLO11, que entrega el punto de los pies, funciona en CPU y escala con el hardware. La
+identidad entre cámaras siguió un camino paralelo: empezó con la proximidad en el plano y un
+histograma de color como desempate, y pasó a OSNet cuando la proximidad dejó de bastar.
+
+La privacidad se trató desde el diseño y no al final: cada decisión técnica se contrastó con las
+restricciones éticas y legales de la Sección~\ref{subsec:restricciones}, con el marco normativo
+del Anexo~\ref{anx:marco} y con el análisis de impacto del Anexo~\ref{anx:impacto}. Ese
+contraste es el que identificó los dos hallazgos que el equipo debe corregir: la memoria de
+apariencia activa por defecto (RNF-01) y la persistencia de posiciones individuales en las
+grabaciones (M-03).

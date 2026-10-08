@@ -1,0 +1,209 @@
+%=====================================================================
+%  Aerotrack: Sistema De Estimacion De Aglomeraciones y Tracking De
+%  Personas Mediante Computer Vision
+%  Universidad ESAN -- Facultad de Ingenieria
+%  Carrera de Ingenieria de Tecnologias de Informacion y Sistemas
+%
+%  Compilacion en Overleaf: pdfLaTeX (motor por defecto), dos pasadas.
+%  No requiere biber/biblatex: las referencias se listan como texto
+%  con formato APA en secciones/referencias.tex.
+%
+%  Archivos .tex codificados en UTF-8.
+%=====================================================================
+\documentclass[12pt,a4paper]{article}
+
+%--------------------- Codificacion, fuente e idioma ------------------
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+% Times New Roman 12 en texto y formulas.
+\usepackage{newtxtext}
+\usepackage{newtxmath}
+\usepackage[spanish,es-tabla,es-noquoting,es-lcroman]{babel}
+\usepackage{csquotes}
+
+%--------------------- Geometria y estilo ----------------------------
+\usepackage[a4paper,left=3cm,right=2.5cm,top=3cm,bottom=2.5cm,headheight=15pt]{geometry}
+\usepackage{fancyhdr}
+\usepackage{setspace}
+\usepackage{indentfirst}
+\setlength{\parindent}{1.25cm}
+\setlength{\parskip}{0pt}
+
+%--------------------- Tablas, listas, graficos ----------------------
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{enumitem}
+\usepackage{ragged2e}
+\usepackage{longtable}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta,shapes.geometric,calc}
+% Permite cortar las direcciones web largas de las referencias en los guiones.
+\PassOptionsToPackage{hyphens}{url}
+\usepackage{hyperref}
+\Urlmuskip=0mu plus 1mu
+
+% Todo el documento va en negro: texto, tablas, diagramas y enlaces.
+\color{black}
+
+% Tipos de columna para tablas anchas (casos de uso, requisitos).
+\newcolumntype{L}[1]{>{\RaggedRight\arraybackslash}p{#1}}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+\newcolumntype{Y}{>{\RaggedRight\arraybackslash}X}
+
+% Tablas: booktabs sin rayas verticales ni sombreado, con un poco de aire.
+\renewcommand{\arraystretch}{1.15}
+
+%--------------------- Figuras ----------------------------------------
+% Todas las capturas y figuras se centran al mismo ancho.
+\newlength{\anchofigura}
+\setlength{\anchofigura}{0.85\textwidth}
+%   \figura{archivo}{pie}{etiqueta}
+\newcommand{\figura}[3]{%
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=\anchofigura]{imagenes/#1}
+    \caption{#2}
+    \label{#3}
+  \end{figure}}
+
+%--------------------- Marcadores [VERIFICAR] -------------------------
+% \verificar{texto} marca una afirmacion que sigue sin confirmar contra
+% su fuente. NO se imprime en el PDF: el texto queda en el fuente y cada
+% marcador deja rastro en el registro de compilacion, con un recuento
+% final ("MARCADORES [VERIFICAR] EN EL CUERPO: n").
+% La macro abre con \unskip para no dejar doble espacio cuando el
+% marcador va en una linea propia, y no termina en \ignorespaces para no
+% comerse el espacio siguiente.
+\newcounter{verificarcount}
+\newcommand{\verificar}[1]{%
+  \ifhmode\unskip\fi
+  \stepcounter{verificarcount}%
+  \typeout{[VERIFICAR \theverificarcount] marcador oculto en pagina \thepage.}}
+\AtEndDocument{%
+  \typeout{^^J=====================================================^^J%
+    MARCADORES [VERIFICAR] EN EL CUERPO: \theverificarcount^^J%
+    =====================================================^^J}}
+
+%--------------------- Hiperenlaces -----------------------------------
+\hypersetup{
+  unicode=true,
+  hidelinks,
+  pdftitle={Aerotrack: Sistema de Estimacion de Aglomeraciones y Tracking
+            de Personas Mediante Computer Vision},
+  pdfauthor={Aguilar Contreras, Angel Jesus; Rivadeneyra Huaman, Stephano;
+             Ortega, Jose; Moreno Ugarte, Fabian},
+  pdfsubject={Universidad ESAN, Facultad de Ingenieria, Carrera de
+              Ingenieria de Tecnologias de Informacion y Sistemas}
+}
+
+%--------------------- Encabezado y pie --------------------------------
+% Sin filetes: ni bajo el encabezado ni sobre el pie.
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Aerotrack}
+\fancyhead[R]{\small Universidad ESAN}
+\fancyfoot[C]{\small\thepage}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+\fancypagestyle{plain}{%
+  \fancyhf{}%
+  \fancyhead[L]{\small Aerotrack}%
+  \fancyhead[R]{\small Universidad ESAN}%
+  \fancyfoot[C]{\small\thepage}%
+  \renewcommand{\headrulewidth}{0pt}%
+  \renewcommand{\footrulewidth}{0pt}}
+
+\onehalfspacing
+
+%=====================================================================
+\begin{document}
+%=====================================================================
+
+%--------------------------- PORTADA ---------------------------------
+\begin{titlepage}
+\centering
+\singlespacing
+\vspace*{0.2cm}
+
+\IfFileExists{imagenes/logo-esan.png}{%
+  \includegraphics[width=5cm]{imagenes/logo-esan.png}%
+}{%
+  \framebox[5cm][c]{\rule{0pt}{1.6cm}\small\itshape Logo ESAN}%
+}
+
+\vspace{1.2cm}
+
+{\LARGE\bfseries Aerotrack: Sistema De Estimación De Aglomeraciones y\par}
+\vspace{0.2cm}
+{\LARGE\bfseries Tracking De Personas Mediante Computer Vision\par}
+
+\vspace{1.4cm}
+
+{\large Universidad ESAN.\par}
+\vspace{0.2cm}
+{\large Facultad de Ingeniería.\par}
+\vspace{0.2cm}
+{\large Carrera de Ingeniería de Tecnologías de Información y Sistemas.\par}
+
+\vspace{0.6cm}
+{\large Docente: Fabian Arteaga, Junior.\par}
+
+\vspace{0.9cm}
+
+\begin{tabular}{@{}L{5.5cm}L{2.3cm}L{6cm}@{}}
+\toprule
+\textbf{Integrante} & \textbf{Código} & \textbf{Rol} \\
+\midrule
+Aguilar Contreras, Angel Jesus & 22200133 & Liderazgo e integración \\[0.15cm]
+Rivadeneyra Huaman, Stephano & 22101822 & Ciencia de datos \\[0.15cm]
+Ortega, José & 25200719 & Ingeniería de datos \\[0.15cm]
+Moreno Ugarte, Fabián & 25200717 & Validación ética, legal y documentación \\
+\bottomrule
+\end{tabular}
+
+\vfill
+
+{\large 7 de octubre de 2026.\par}
+\vspace{0.3cm}
+{\large Lima, Perú.\par}
+
+
+\end{titlepage}
+
+%--------------------------- INDICE ----------------------------------
+\pagenumbering{roman}
+\setcounter{tocdepth}{2}
+{\singlespacing\tableofcontents}
+\clearpage
+{\singlespacing\listoffigures}
+\clearpage
+{\singlespacing\listoftables}
+\clearpage
+\pagenumbering{arabic}
+
+%------------------------- SECCIONES ---------------------------------
+\input{secciones/resumen_ejecutivo}
+\clearpage
+\input{secciones/introduccion}
+\clearpage
+\input{secciones/planteamiento_problema}
+\clearpage
+\input{secciones/marco_teorico}
+\clearpage
+\input{secciones/metodologia}
+\clearpage
+\input{secciones/requerimientos}
+\clearpage
+\input{secciones/diseno_sistema}
+\clearpage
+\input{secciones/planificacion}
+\clearpage
+\input{secciones/referencias}
+\clearpage
+\input{secciones/anexos}
+
+\end{document}

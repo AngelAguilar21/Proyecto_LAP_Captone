@@ -1,6 +1,6 @@
 """Adaptador de recepción reciente para cámaras IP, compartido con conteo."""
 import cv2
-from counting.source import VideoSource
+from .stream_source import VideoSource
 
 
 class NetworkCapture:

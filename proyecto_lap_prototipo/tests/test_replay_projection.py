@@ -21,4 +21,24 @@ class ProjectionTests(unittest.TestCase):
   c=default_config();c['cameras']=[]
   result=current_projection({'config':c},[{'t':0,'cameras':[{'id':'gone','people':[{'point':[1,1]}]}]}],c)
   self.assertEqual(result[0]['cameras'][0]['people'],[])
+ def camaras_dos(self):
+  c=default_config();c['planId']='custom'
+  pares=[[0,0,10,10],[1,0,20,10],[1,1,20,20],[0,1,10,20]]
+  c['cameras']=[{'id':k,'source':f'{k}.avi','pairs':copy.deepcopy(pares)} for k in 'AB']
+  samples=[{'t':0,'cameras':[{'id':k,'people':[{'id':'P00001','pixel':[.5,.5],'point':[15,15],'association':'estimated'}],'analysis':{}} for k in 'AB']}]
+  return c,samples
+ def test_una_grabacion_sin_calibracion_guardada_conserva_los_ids_entre_camaras(self):
+  # Las grabaciones antiguas no registraron los puntos del suelo: no se puede saber si cambiaron, y no debe romperse la asociacion.
+  c,samples=self.camaras_dos()
+  meta={'config':{},'cameras':[{'id':'A','source':'A.avi'},{'id':'B','source':'B.avi'}]}
+  ids=[v['people'][0]['id'] for v in current_projection(meta,samples,c)[0]['cameras']]
+  self.assertEqual(ids,['P00001','P00001'])
+ def test_si_la_calibracion_guardada_cambio_los_ids_pasan_a_locales(self):
+  c,samples=self.camaras_dos()
+  guardada=[[0,0,10,10],[1,0,20,10],[1,1,20,20],[0,1,10,25]]
+  meta={'config':{},'cameras':[{'id':'A','source':'A.avi','pairs':copy.deepcopy(c['cameras'][0]['pairs'])},{'id':'B','source':'B.avi','pairs':guardada}]}
+  personas={v['id']:v['people'][0] for v in current_projection(meta,samples,c)[0]['cameras']}
+  self.assertEqual(personas['A']['id'],'P00001')           # A no cambio
+  self.assertEqual(personas['B']['id'],'B:P00001')         # B si: su asociacion antigua ya no vale
+  self.assertEqual(personas['B']['association'],'local')
 if __name__=='__main__':unittest.main()

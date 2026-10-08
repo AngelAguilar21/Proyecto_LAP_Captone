@@ -14,7 +14,7 @@ def torso_histogram(frame, box):
 
     Separar el cuerpo en dos franjas reduce confusiones entre personas con una
     prenda parecida. Se combinan HSV y Lab para tolerar mejor cambios de luz
-    entre cámaras, manteniendo un costo pequeño frente a la inferencia P2PNet.
+    entre cámaras, con un costo pequeño frente a la inferencia del detector.
     """
     if box is None:
         return None

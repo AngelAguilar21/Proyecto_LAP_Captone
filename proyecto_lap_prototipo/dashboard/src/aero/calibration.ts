@@ -9,6 +9,8 @@ export interface CalibrationDiagnostics {
   rmse: number; warning?: string; spread: number;
   maxError: number; pointErrors: number[];
   validationError: number | null; validationPoints: number;
+  inlierCount?: number; outlierIndices?: number[]; fitMethod?: string;
+  projectedBoundary?: [number, number][];
 }
 export interface CalibrationCheck {
   key: string;

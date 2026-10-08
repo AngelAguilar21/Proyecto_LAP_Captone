@@ -4,13 +4,13 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
 from live_server import Engine,Handler,default_config
 from live_core import validate_config
-from replay import ReplayWriter,manifest,directory,public,get,recover_interrupted
+from replay import ReplayWriter,manifest,directory,public,get,recover_interrupted,_personas_unicas_confirmadas
 from urllib.parse import urlparse
 from io import BytesIO
 from unittest.mock import patch
 import cv2
 import numpy as np
-from counting.analytics import CountingAnalytics
+from following.zone_counts import CountingAnalytics
 from types import SimpleNamespace
 
 class WorkspaceTests(unittest.TestCase):
@@ -60,7 +60,7 @@ class WorkspaceTests(unittest.TestCase):
    engine=Engine(root/'config.json');engine.configure(cfg)
    fake_detector=SimpleNamespace(detectar=lambda frame:[SimpleNamespace(x=100,y=80,confianza=.9)])
    with patch.object(engine,'load_detector',return_value=fake_detector):
-    engine.start({'detector':'p2pnet','cameraIds':['C','D'],'requireUnified':False});engine.worker.join(15)
+    engine.start({'detector':'yolo','cameraIds':['C','D'],'requireUnified':False});engine.worker.join(15)
     self.assertFalse(engine.worker.is_alive());self.assertEqual(engine.state['status'],'ended')
    self.assertGreaterEqual(engine.state['t'],1.4)
    self.assertTrue((root/'data'/'replays'/engine.state['session']/'manifest.json').is_file())
@@ -74,6 +74,13 @@ class WorkspaceTests(unittest.TestCase):
    w.append({'t':1,'cameras':[{'id':'C','people':[]}]});w.finish('ended')
    m=manifest(root,'abc12345');self.assertEqual(m['end'],1);self.assertEqual(m['status'],'ended');self.assertNotIn('source',public(m)['cameras'][0])
    with self.assertRaises(ValueError):directory(root,'../config')
+
+ def test_global_report_counts_one_person_once_across_cameras(self):
+  sample={'cameras':[
+   {'id':'A','people':[{'id':'P00001','confirmed':True},{'id':'P00002','confirmed':True},{'id':'T00003','confirmed':False}]},
+   {'id':'B','people':[{'id':'P00001','confirmed':True},{'id':'P00004','confirmed':True,'duplicate':True}]},
+  ]}
+  self.assertEqual(_personas_unicas_confirmadas(sample),2)
  def test_switch_floor_preserves_other_camera_coordinates(self):
   cfg=default_config();cfg['cameras']=[];cfg['plans']={'custom':{'width':12,'height':8,'background':'','zones':[],'workArea':None}}
   cfg.update(width=1500,height=2200,planId='lap-3',workArea=None,mapAsset='/maps/lap/3.json')

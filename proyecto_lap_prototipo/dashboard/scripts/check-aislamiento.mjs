@@ -52,7 +52,7 @@ ok(/sidebar-nav/.test(app) && /sidebar-collapsed/.test(app),
    'la barra lateral plegable desaparecio del shell');
 
 // Ningun texto de cliente debe estar fijo en una pantalla de uso general.
-for (const archivo of ['MonitoringWorkspace.tsx', 'Overview.tsx']) {
+for (const archivo of ['MonitoringWorkspace.tsx', 'AeroTrack.tsx']) {
   const fuente = leer(archivo);
   for (const marca of ['Aeropuerto LAP', 'Terminal A']) {
     ok(!fuente.includes(marca), `${archivo} contiene el texto fijo "${marca}"`);

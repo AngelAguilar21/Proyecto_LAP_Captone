@@ -20,6 +20,16 @@ class CalibrationQualityTests(unittest.TestCase):
         self.assertEqual(result['validationPoints'], 6)
         self.assertLess(result['validationError'], .001)
 
+    def test_ransac_reports_and_ignores_one_bad_reference(self):
+        # Una referencia adicional fue marcada en un punto cercano, pero no en
+        # la ubicación real del plano. El resto sigue describiendo la misma H.
+        pairs = self.pairs + [[.25, .25, 3.0, 2.0], [.75, .75, 9.0, 6.0], [.1, .8, 99.0, 99.0]]
+        result = calibration_diagnostics(pairs)
+        self.assertEqual(result['fitMethod'], 'ransac')
+        self.assertEqual(result['inlierCount'], 6)
+        self.assertEqual(result['outlierIndices'], [7])
+        self.assertIn('excluyeron del ajuste', result['warning'])
+
     def test_duplicate_and_crossed_references_are_rejected(self):
         with self.assertRaisesRegex(ValueError, 'repetidas'):
             calibration(self.pairs + [self.pairs[0]])

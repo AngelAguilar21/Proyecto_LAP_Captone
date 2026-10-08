@@ -1,0 +1,18 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+# YOLO (ultralytics) necesita torch y torchvision; en CPU basta la versión +cpu.
+torch==2.14.0+cpu
+torchvision==0.29.0+cpu
+numpy==2.0.2
+scipy==1.13.1
+# Reidentificación OSNet (models/osnet.onnx).
+onnxruntime==1.20.1
+opencv-python==4.12.0.88
+Pillow==11.3.0
+matplotlib==3.9.4
+
+# Seguimiento (Kalman), reportes y lectura de planos.
+filterpy==1.4.5
+lap==0.5.12
+openpyxl==3.1.5
+reportlab==4.4.3
+pypdfium2==4.30.0

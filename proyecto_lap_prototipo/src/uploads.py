@@ -16,10 +16,43 @@ from task_control import checkpoint
 SUFFIXES = (".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v")
 MARKER = ".completed.json"
 MAX_SIZE = 1024 ** 3
+_dedup_lock = __import__('threading').Lock()
 
 
 def metadata_path(path):
     return path.with_name(path.name + MARKER)
+
+
+def deduplicate_completed(root, target):
+    """Reuse only a verified completed upload; keep retention evidence consistent."""
+    root = absolute(root)
+    target = plain_path(target, root)
+    directory = target.parent
+    with _dedup_lock:
+        completed(target, root)
+        _, sha = file_fingerprint(target, root)
+        index = plain_path(directory / '_indice.json', root)
+        try:
+            table = strict_json(index, root)
+            if not isinstance(table, dict): table = {}
+        except (OSError, ValueError):
+            table = {}
+        name = table.get(sha)
+        if isinstance(name, str) and name == Path(name).name and name not in ('', '.', '..'):
+            try:
+                previous = plain_path(directory / name, root)
+                completed(previous, root)
+                _, previous_sha = file_fingerprint(previous, root)
+                if previous != target and previous_sha == sha:
+                    target.unlink()
+                    metadata_path(target).unlink()
+                    return previous
+            except (OSError, ValueError):
+                pass
+        table[sha] = target.name
+        from path_security import atomic_json
+        atomic_json(index, table, root)
+    return target
 
 
 def _discard_owned(path, root, owned):
