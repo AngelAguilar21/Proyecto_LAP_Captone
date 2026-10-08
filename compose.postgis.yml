@@ -1,0 +1,19 @@
+services:
+  database:
+    image: postgis/postgis:17-3.5
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: aerotrack
+      POSTGRES_USER: aerotrack
+      POSTGRES_PASSWORD: ${AEROTRACK_DB_PASSWORD:?Define AEROTRACK_DB_PASSWORD en .env}
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - aerotrack_postgis:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aerotrack -d aerotrack"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+volumes:
+  aerotrack_postgis:

@@ -1,0 +1,6 @@
+# Optional export tooling; normal runtime uses the resulting ONNX only.
+-r requirements-reid-export.txt
+yacs==0.1.8
+iopath==0.1.10
+termcolor==3.3.0
+tabulate==0.10.0

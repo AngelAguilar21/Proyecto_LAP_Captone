@@ -13,9 +13,13 @@ import json
 import sqlite3
 import time
 import math
+import re
+import threading
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
+
+reference_lock = threading.RLock()
 
 ESQUEMA = """
 CREATE TABLE IF NOT EXISTS negocios (
@@ -53,6 +57,29 @@ CREATE TABLE IF NOT EXISTS incidentes (
     actualizado REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_incidentes_estado ON incidentes (estado);
+
+CREATE TABLE IF NOT EXISTS incident_notifications (
+    incident_id TEXT NOT NULL REFERENCES incidentes(id),
+    notification_kind TEXT NOT NULL CHECK(notification_kind IN ('original', 'escalation')),
+    status TEXT NOT NULL CHECK(status IN ('attempting', 'failed', 'sent', 'uncertain')),
+    attempts INTEGER NOT NULL DEFAULT 1,
+    attempted_at REAL NOT NULL,
+    sent_at REAL,
+    last_error TEXT,
+    owner TEXT NOT NULL,
+    PRIMARY KEY (incident_id, notification_kind),
+    CHECK ((status = 'sent' AND sent_at IS NOT NULL) OR
+           (status <> 'sent' AND sent_at IS NULL))
+);
+CREATE INDEX IF NOT EXISTS idx_notification_status ON incident_notifications(status);
+
+CREATE TABLE IF NOT EXISTS incident_replay_links (
+    incident_id TEXT PRIMARY KEY REFERENCES incidentes(id),
+    resolution TEXT NOT NULL CHECK(resolution IN ('linked','unknown')),
+    session_id TEXT,
+    CHECK ((resolution='linked' AND session_id IS NOT NULL) OR
+           (resolution='unknown' AND session_id IS NULL))
+);
 
 CREATE TABLE IF NOT EXISTS trafico_historico (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,20 +127,49 @@ def path_for(project_path):
 
 
 def connect(project_path):
+    from storage import operational
+    if operational.enabled(project_path):
+        return operational.business_connect(project_path)
     path = path_for(project_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     conexion = sqlite3.connect(path, timeout=15)
-    conexion.execute("PRAGMA foreign_keys = ON")
-    conexion.executescript(ESQUEMA)
-    conexion.executescript(NEGOCIOS_ESQUEMA)
-    # Los proyectos creados antes de la segmentación empresarial no tienen la
-    # columna nueva. La migración es local, idempotente y conserva sus datos.
-    columnas = {fila[1] for fila in conexion.execute("PRAGMA table_info(negocios)")}
-    if "empresa" not in columnas:
-        conexion.execute("ALTER TABLE negocios ADD COLUMN empresa TEXT NOT NULL DEFAULT 'Sin empresa'")
-    conexion.execute("INSERT OR IGNORE INTO negocio_puertas SELECT id, camara_id, linea_id FROM negocios WHERE camara_id IS NOT NULL AND linea_id IS NOT NULL")
-    conexion.commit()
+    try:
+        conexion.execute("PRAGMA foreign_keys = ON")
+        conexion.executescript(ESQUEMA)
+        conexion.executescript(NEGOCIOS_ESQUEMA)
+        # Los proyectos creados antes de la segmentación empresarial no tienen la
+        # columna nueva. La migración es local, idempotente y conserva sus datos.
+        columnas = {fila[1] for fila in conexion.execute("PRAGMA table_info(negocios)")}
+        if "empresa" not in columnas:
+            conexion.execute("ALTER TABLE negocios ADD COLUMN empresa TEXT NOT NULL DEFAULT 'Sin empresa'")
+        conexion.execute("INSERT OR IGNORE INTO negocio_puertas SELECT id, camara_id, linea_id FROM negocios WHERE camara_id IS NOT NULL AND linea_id IS NOT NULL")
+        conexion.commit()
+        _migrate_incident_history(conexion)
+        with reference_lock, conexion:
+            for iid, detail in conexion.execute(
+                    "SELECT id,detalle FROM incidentes WHERE id NOT IN "
+                    "(SELECT incident_id FROM incident_replay_links)").fetchall():
+                _link_incident_replay(conexion, iid, detail)
+    except Exception:
+        conexion.close()
+        raise
     return conexion
+
+
+def _migrate_incident_history(conexion):
+    """Existing rows have unknown history; never infer it from their state."""
+    additions = {"review_history_known": "INTEGER NOT NULL DEFAULT 0",
+                 "reviewed_at": "REAL", "history_validated_at": "REAL"}
+    columns = {row[1] for row in conexion.execute("PRAGMA table_info(incidentes)")}
+    if set(additions) <= columns:
+        return
+    with conexion:
+        conexion.execute("BEGIN IMMEDIATE")
+        # Another connection may have migrated while this one waited.
+        columns = {row[1] for row in conexion.execute("PRAGMA table_info(incidentes)")}
+        for name, definition in additions.items():
+            if name not in columns:
+                conexion.execute(f"ALTER TABLE incidentes ADD COLUMN {name} {definition}")
 
 
 # --- Negocios ---
@@ -158,7 +214,9 @@ def guardar_negocio(conexion, datos, config, catalogo=None):
     if not isinstance(ubicacion, dict):
         raise ValueError("Marca la ubicación del negocio en el plano.")
     plano = ubicacion.get("planId")
-    planos = config.get("plans") or {config.get("planId", "custom"): config}
+    planos = dict(config.get("plans") or {})
+    activo = config.get("planId", "custom")
+    planos[activo] = {**planos.get(activo, {}), **config}
     punto = ubicacion.get("point")
     if plano not in planos or not isinstance(punto, list) or len(punto) != 2:
         raise ValueError("Marca la ubicación del negocio en un plano del proyecto.")
@@ -246,15 +304,38 @@ def ventas_por_fecha(conexion, negocio_id, fecha):
 
 # --- Incidentes ---
 
+def replay_session(detail):
+    try:
+        value = json.loads(detail) if isinstance(detail, str) else detail
+        session = value.get("sesion") if isinstance(value, dict) else None
+        return session if isinstance(session, str) and re.fullmatch(r"[a-f0-9]{8,32}", session) else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _link_incident_replay(conexion, iid, detail):
+    session = replay_session(detail)
+    conexion.execute("INSERT OR IGNORE INTO incident_replay_links VALUES (?,?,?)",
+                     (iid, "linked" if session else "unknown", session))
+
+
 def registrar_incidente(conexion, id_incidente, tipo, zona, camara_id, inicio,
-                        pico=None, duracion=None, detalle=None):
+                        pico=None, duracion=None, detalle=None, commit=True):
+    # With commit=False the caller must hold reference_lock through commit/rollback.
+    with reference_lock:
+        return _registrar_incidente(conexion, id_incidente, tipo, zona, camara_id, inicio,
+                                    pico, duracion, detalle, commit)
+
+
+def _registrar_incidente(conexion, id_incidente, tipo, zona, camara_id, inicio,
+                        pico=None, duracion=None, detalle=None, commit=True):
     if tipo not in TIPOS_VALIDOS:
         raise ValueError(f"Tipo de incidente inválido: {tipo}")
     ahora = time.time()
     conexion.execute(
         "INSERT OR IGNORE INTO incidentes "
-        "(id, tipo, zona, camara_id, inicio, pico, duracion, estado, detalle, creado, actualizado) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        "(id, tipo, zona, camara_id, inicio, pico, duracion, estado, detalle, creado, actualizado, review_history_known) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,1)",
         (id_incidente, tipo, zona, camara_id, inicio, pico, duracion, "pendiente",
          json.dumps(detalle or {}, ensure_ascii=False), ahora, ahora))
     # Mientras el incidente sigue en curso (pendiente), se actualiza su pico y
@@ -264,22 +345,61 @@ def registrar_incidente(conexion, id_incidente, tipo, zona, camara_id, inicio,
         "UPDATE incidentes SET pico = ?, duracion = ?, actualizado = ? "
         "WHERE id = ? AND estado = 'pendiente'",
         (pico, duracion, ahora, id_incidente))
-    conexion.commit()
+    stored = conexion.execute("SELECT detalle FROM incidentes WHERE id=?", (id_incidente,)).fetchone()[0]
+    _link_incident_replay(conexion, id_incidente, stored)
+    if commit:
+        conexion.commit()
 
 
 def actualizar_estado_incidente(conexion, id_incidente, estado):
     if estado not in ESTADOS_VALIDOS:
         raise ValueError(f"Estado inválido: {estado}")
+    ahora = time.time()
     cursor = conexion.execute(
-        "UPDATE incidentes SET estado = ?, actualizado = ? WHERE id = ?",
-        (estado, time.time(), id_incidente))
+        "UPDATE incidentes SET estado = ?, actualizado = ?, "
+        "reviewed_at = CASE WHEN ? <> 'pendiente' THEN COALESCE(reviewed_at, ?) ELSE reviewed_at END, "
+        "review_history_known = CASE WHEN ? <> 'pendiente' THEN 1 ELSE review_history_known END WHERE id = ?",
+        (estado, ahora, estado, ahora, estado, id_incidente))
     conexion.commit()
     if cursor.rowcount == 0:
         raise ValueError("El incidente no existe.")
 
 
+def validar_historial_incidente(conexion, id_incidente, nunca_atendido):
+    """One explicit human decision; validation is not itself attention."""
+    if type(nunca_atendido) is not bool:
+        raise ValueError("Indica explícitamente si el incidente nunca fue atendido.")
+    ahora = time.time()
+    with conexion:
+        cursor = conexion.execute(
+            "UPDATE incidentes SET review_history_known=1, history_validated_at=?, actualizado=?, "
+            "reviewed_at=CASE WHEN ? THEN NULL ELSE COALESCE(reviewed_at, ?) END, "
+            "estado=CASE WHEN ? THEN estado ELSE 'revisado' END "
+            "WHERE id=? AND review_history_known=0 AND reviewed_at IS NULL "
+            "AND (?=0 OR estado='pendiente')",
+            (ahora, ahora, nunca_atendido, ahora, nunca_atendido, id_incidente, nunca_atendido))
+        if cursor.rowcount != 1:
+            raise ValueError("El historial no es desconocido o no permite esa validación.")
+
+
+# Shared by initial selection and the final transactional claim.
+ESCALATION_ELIGIBLE = ("incidentes.estado='pendiente' AND incidentes.review_history_known=1 "
+                      "AND incidentes.reviewed_at IS NULL AND incidentes.creado <= ?")
+
+
+def incidentes_para_escalar(conexion, cutoff):
+    return conexion.execute(
+        "SELECT id,tipo,zona,creado FROM incidentes WHERE " + ESCALATION_ELIGIBLE +
+        " AND NOT EXISTS (SELECT 1 FROM incident_notifications n WHERE n.incident_id=incidentes.id "
+        "AND n.notification_kind='escalation' AND n.status <> 'failed') ORDER BY creado,id",
+        (cutoff,)).fetchall()
+
+
 def listar_incidentes(conexion, estado=None, limite=200):
-    consulta = ("SELECT id, tipo, zona, camara_id, inicio, pico, duracion, estado, detalle, creado "
+    consulta = ("SELECT id, tipo, zona, camara_id, inicio, pico, duracion, estado, detalle, creado, "
+                "review_history_known, reviewed_at, history_validated_at, "
+                "(SELECT sent_at FROM incident_notifications n WHERE n.incident_id=incidentes.id "
+                "AND n.notification_kind='escalation' AND n.status='sent') "
                 "FROM incidentes")
     parametros = []
     if estado:
@@ -290,7 +410,8 @@ def listar_incidentes(conexion, estado=None, limite=200):
     filas = conexion.execute(consulta, parametros).fetchall()
     return [{"id": f[0], "tipo": f[1], "zona": f[2], "camaraId": f[3], "inicio": f[4],
              "pico": f[5], "duracion": f[6], "estado": f[7], "detalle": json.loads(f[8] or "{}"),
-             "creado": f[9]} for f in filas]
+             "creado": f[9], "review_history_known": bool(f[10]), "reviewed_at": f[11],
+             "history_validated_at": f[12], "escalated_at": f[13]} for f in filas]
 
 
 def recurrencia(conexion, zona, ventana_horas=2, minimo_dias=2):

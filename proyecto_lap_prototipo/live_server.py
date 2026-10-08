@@ -149,7 +149,7 @@ def rendimiento_elegido(pedido, n_camaras, tier="cpu"):
     if pedido not in ("auto", *RENDIMIENTO):
         raise ValueError("performance inválido: auto, precise, balanced o fast.")
     if pedido == "auto":
-        pedido = "precise" if tier != "cpu" or n_camaras <= 2 else "balanced" if n_camaras <= 4 else "fast"
+        pedido = "precise" if tier != "cpu" or n_camaras <= 1 else "balanced" if n_camaras <= 4 else "fast"
     return pedido, RENDIMIENTO[pedido]
 
 
@@ -213,6 +213,9 @@ import business_catalog
 import commercial
 import sqlite3
 import auth
+from contextlib import closing
+from resource_control import ResourceRegistry, managed_operation, http_operation, hold_source, hold_path
+from shutdown_control import ManagedHTTPServer, stop_server, defer_close
 from following.stream_source import is_youtube_url, low_latency_ffmpeg, resolve_stream_source
 
 CONFIG_PATH = ROOT / "config" / "live.local.json"
@@ -244,6 +247,11 @@ class Engine:
             self.project_id = None
             self.config_path = Path(config_path)
         self.data_root = ROOT if self.managed else self.config_path.parent
+        self.closing = False
+        self.resources = ResourceRegistry(self.data_root)
+        self.resource_lock = self.resources.lock
+        self.preview_lifecycle_lock = threading.RLock()
+        self.preview_workers = {}
         # Ajustes que no pertenecen a un proyecto (conteo especializado) siguen
         # viviendo en config/, no dentro de la carpeta de proyectos.
         self.settings_root = (ROOT / "config") if self.managed else self.config_path.parent
@@ -253,6 +261,7 @@ class Engine:
         self.lock = threading.RLock()
         self.stop_event = threading.Event()
         self.pause_event = threading.Event()
+        self._resume_generation = 0
         self.worker = None
         # Cargar los pesos de YOLO cuesta segundos y no depende de la sesión que termina: se conservan mientras el
         # proceso siga vivo y solo se cargan otros si se piden otro modelo o resolución.
@@ -275,8 +284,11 @@ class Engine:
         self.preview_state = {"camera": None, "playing": False, "t": 0., "duration": 0., "live": False, "error": None}
         from notifier import Mailer
         self.mailer = Mailer(self.settings_root)
+        from incident_notifications import IncidentNotifications
+        self.notifications = IncidentNotifications(self.mailer)
+        if business_data.path_for(self.config_path).exists():
+            self.notifications.recover(self.config_path)
         self.sessions = auth.Sesiones()
-        self.notified = set()
         self.business_error = None
         self.traffic_buffer = {}
         self.traffic_flushed = 0.
@@ -284,29 +296,25 @@ class Engine:
         self.state = {"status": "idle", "people": [], "cameras": [], "events": [], "t": 0,
                       "analytics": {"clusters": [], "zones": [], "heat": [], "mappedCount": 0}, "error": self.config_error}
 
-        # Restaura únicamente agregados finalizados; nunca reactiva una fuente ni IDs en vivo.
-        if not self.config_error:
-            summaries=[]
-            for path in (self.data_root/'data/replays').glob('*/manifest.json'):
-                try:
-                    meta=json.loads(path.read_text(encoding='utf-8'))
-                    if meta.get('projectId') not in (self.project_id, None):continue
-                    if meta.get('module') in ('unified','demo') and meta.get('status') in ('ended','stopped') and meta.get('cameraAnalytics'):
-                        summaries.append(meta)
-                except (OSError,ValueError):pass
-            if summaries:
-                last=max(summaries,key=lambda value:value['created']);pid=last['config'].get('planId','custom')
-                if any(c['id'] in last['cameraAnalytics'] for c in self.config['cameras']):
-                    analytics=copy.deepcopy(last.get('levelAnalytics',{}).get(pid,self.state['analytics']))
-                    analytics.update(clusters=[],mappedCount=0)
-                    for zone in analytics.get('zones',[]):zone.update(count=0,alert=False)
-                    self.state.update(status=last['status'],session=last['session'],mode='demo' if last['module']=='demo' else 'yolo',t=last['end'],planId=pid,analytics=analytics,levelAnalytics=last.get('levelAnalytics',{}),cameraAnalytics=last['cameraAnalytics'],identityDeleted=True)
-
         # Unifica la restauración para el arranque inicial y para el cambio de
         # proyecto, incluyendo sesiones con estado parcial o error recuperable.
         self.restore_last_result()
+        from automation import AutomationService
+        self.automation = AutomationService(self, tasks={})
 
-    def dispatch_alerts(self, camera_analytics, analytics):
+    @property
+    def resource_users(self):
+        with self.resource_lock:
+            return sum(self.resources.users.values())
+
+    def resource_use(self, path, write=False):
+        return self.resources.use(path, write)
+
+    def automation_snapshot(self):
+        from automation_snapshot import snapshot
+        return snapshot(self)
+
+    def dispatch_alerts(self, camera_analytics, analytics, level_analytics=None):
         """Guarda cada alerta nueva en la bitacora y, si el correo esta
         configurado, la envia. Nunca interrumpe la sesion: un fallo de disco o
         de correo se registra pero no corta el seguimiento."""
@@ -317,9 +325,6 @@ class Engine:
         for cid, data in (camera_analytics or {}).items():
             for episode in (data.get("occupancy") or {}).get("episodes", []):
                 key = "aglomeracion:{}:{}".format(cid, episode.get("id"))
-                if key in self.notified:
-                    continue
-                self.notified.add(key)
                 body = [
                     "Se detecto una concentracion de personas.",
                     "",
@@ -338,50 +343,59 @@ class Engine:
                     "detalle": {"camara": names.get(cid, cid), "origen": "camara"},
                     "asunto": "AeroTrack - Aglomeracion en " + str(episode.get("zone")),
                     "cuerpo": chr(10).join(body)})
-        for zone in (analytics or {}).get("zones", []):
-            if not zone.get("alert"):
+        plans = level_analytics.values() if level_analytics is not None else [analytics or {}]
+        for episode in (e for plan in plans for e in plan.get("zoneEpisodes", [])):
+            if not episode.get("alert"):
                 continue
-            key = "zona:{}:{}".format(zone.get("name"), round(self.state.get("t", 0)))
-            if key in self.notified:
-                continue
-            self.notified.add(key)
+            key = "zona:{}:{}".format(episode["scope"], episode["id"])
             body = [
-                "La zona " + str(zone.get("name")) + " del plano supero su umbral.",
+                "La zona " + str(episode["zone"]) + " del plano supero su umbral.",
                 "",
                 "Lugar: " + place,
-                "Personas observadas: " + str(zone.get("count")),
-                "Duracion: " + str(round(zone.get("duration", 0))) + " s",
+                "Personas observadas: " + str(episode["peak"]),
+                "Duracion: " + str(round(episode["duration"])) + " s",
                 "",
                 nota,
             ]
             pendientes.append({
-                "key": key, "tipo": "aglomeracion", "zona": zone.get("name"), "camara": None,
-                "inicio": self.state.get("t", 0) - (zone.get("duration") or 0),
-                "pico": zone.get("peak") or zone.get("count"), "duracion": zone.get("duration"),
-                "detalle": {"origen": "plano"},
-                "asunto": "AeroTrack - Alerta en " + str(zone.get("name")),
+                "key": key, "tipo": "aglomeracion", "zona": episode["zone"], "camara": None,
+                "inicio": episode["start"], "pico": episode["peak"], "duracion": episode["duration"],
+                "detalle": {"origen": "plano", "scope": episode["scope"],
+                            "zoneId": episode["zoneId"], "episodeId": episode["id"]},
+                "asunto": "AeroTrack - Alerta en " + str(episode["zone"]),
                 "cuerpo": chr(10).join(body)})
 
         if not pendientes:
             return
         sesion = self.state.get("session", "sin-sesion")
         conexion = None
+        business_data.reference_lock.acquire()
         try:
             conexion = business_data.connect(self.config_path)
+            conexion.execute("BEGIN IMMEDIATE")
             for alerta in pendientes:
                 business_data.registrar_incidente(
                     conexion, f"{sesion}:{alerta['key']}", alerta["tipo"], alerta["zona"],
                     alerta["camara"], alerta["inicio"] or 0, alerta["pico"], alerta["duracion"],
-                    {**alerta["detalle"], "sesion": sesion})
+                    {**alerta["detalle"], "sesion": sesion}, commit=False)
+            conexion.commit()
             self.business_error = None
         except (sqlite3.Error, OSError, ValueError) as exc:
-            self.business_error = str(exc)
+            self.business_error = type(exc).__name__
+            return  # Never send without a committed incident. A later dispatch may retry.
         finally:
-            if conexion:
-                conexion.close()
+            try:
+                if conexion:
+                    conexion.close()
+            finally:
+                business_data.reference_lock.release()
         if self.mailer.ready():
             for alerta in pendientes:
-                self.mailer.send(alerta["asunto"], alerta["cuerpo"], key=alerta["key"])
+                try:
+                    self.notifications.send(self.config_path, f"{sesion}:{alerta['key']}",
+                                            alerta["asunto"], alerta["cuerpo"])
+                except (sqlite3.Error, OSError, ValueError) as exc:
+                    self.business_error = type(exc).__name__
 
     def record_traffic(self, analytics, live):
         """Acumula el conteo por zona y lo vuelca cada minuto al historico.
@@ -441,12 +455,15 @@ class Engine:
             if conexion:
                 conexion.close()
 
-    def update_alert_rules(self, data):
+    def update_alert_rules(self, data, *, expected_project=None):
         """Ajusta solo los umbrales de aglomeracion, sin tocar plano ni camaras.
 
         Existe aparte de /api/config para que el administrador pueda cambiar
         cuando le avisan sin tener acceso a la configuracion completa."""
         with self.lock:
+            if self.managed and (not isinstance(expected_project, str) or
+                                 expected_project != self.project_id):
+                raise ValueError("El proyecto cambió o no se indicó. Recarga los umbrales antes de guardar.")
             config = copy.deepcopy(self.config)
             for campo, minimo, maximo in (("radius", .01, 1000), ("minPeople", 2, 1000), ("dwell", 0, 3600)):
                 if campo in data:
@@ -462,9 +479,11 @@ class Engine:
                 for zona in config["zones"]:
                     if zona["name"] in por_nombre:
                         zona["rule"] = por_nombre[zona["name"]]
-        self.configure(config)
-        self.record("Umbrales de alerta actualizados",
-                    f"{config['minPeople']} personas · {config['dwell']} s · radio {config['radius']}")
+            # Keep the snapshot and write in the same project context. configure
+            # uses this RLock too, so opening another project cannot interleave.
+            self.configure(config, expected_project=expected_project)
+            self.record("Umbrales de alerta actualizados",
+                        f"{config['minPeople']} personas · {config['dwell']} s · radio {config['radius']}")
 
     def incidents(self, estado=None):
         conexion = None
@@ -490,21 +509,48 @@ class Engine:
     def preview_snapshot(self):
         return dict(self.preview_state)
 
-    def preview_stop(self):
+    @managed_operation
+    def validate_incident_history(self, incident_id, never_attended, project_id):
+        with self.lock:
+            if project_id != self.project_id:
+                raise ValueError("El proyecto activo cambió. Recarga los incidentes antes de validar.")
+            path = self.config_path
+        with self.resource_use(business_data.path_for(path), write=True), closing(business_data.connect(path)) as db:
+            business_data.validar_historial_incidente(db, incident_id, never_attended)
+            result = business_data.listar_incidentes(db)
+        self.record("Historial de incidente validado", f"{incident_id}: nunca atendido={never_attended}")
+        return {"incidentes": result, "error": None}
+
+    def preview_stop(self, timeout=4):
         """Corta la vista en vivo y suelta la cámara.
 
         Nunca debe llamarse sosteniendo self.lock: espera a que termine el hilo
         de previsualización, que a su vez necesita ese mismo candado para
         escribir su última imagen."""
+        with self.preview_lifecycle_lock:
+            return self._stop_preview(timeout)
+
+    def _stop_preview(self, timeout):
         worker = self.preview_worker
+        event = self.preview_stop_event
+        event.set()
         if worker and worker.is_alive():
-            self.preview_stop_event.set()
-            worker.join(timeout=4)
-        with self.lock:
-            self.preview_worker = None
-            self.preview_state = {"camera": None, "playing": False, "t": 0., "duration": 0., "live": False, "error": None}
+            worker.join(timeout=max(0, timeout))
+        if worker and worker.is_alive():
+            return False
+        # Never wait behind an unrelated writer after spending the stop budget.
+        if self.lock.acquire(blocking=False):
+            try:
+                if self.preview_worker is worker:
+                    self.preview_worker = None
+                    self.preview_state = {"camera": None, "playing": False, "t": 0., "duration": 0., "live": False, "error": None}
+            finally:
+                self.lock.release()
+        return True
 
     def preview_start(self, cid, seconds=0.):
+        if self.closing:
+            raise ValueError("El servidor está cerrando.")
         with self.lock:
             if self.worker and self.worker.is_alive():
                 raise ValueError("Finaliza la sesión de seguimiento para usar la vista en vivo.")
@@ -515,15 +561,24 @@ class Engine:
                 raise ValueError("Configura una fuente antes de ver la cámara.")
             if not isinstance(seconds, (int, float)) or isinstance(seconds, bool) or not 0 <= seconds <= 86400:
                 raise ValueError("Instante inválido.")
-        self.preview_stop()
+        with self.preview_lifecycle_lock:
+            self.preview_stop()
+            self._start_preview(camera, seconds)
+
+    def _start_preview(self, camera, seconds):
         with self.lock:
+            if self.closing:
+                raise ValueError("El servidor está cerrando.")
+            cid = camera["id"]
             self.preview_stop_event = threading.Event()
             self.preview_pause_event = threading.Event()
             self.preview_seek_request = None
             self.preview_touch = time.time()
             self.preview_state = {"camera": cid, "playing": True, "t": float(seconds), "duration": 0., "live": False, "error": None}
-            self.preview_worker = threading.Thread(target=self._preview_loop, args=(copy.deepcopy(camera), float(seconds)), daemon=True)
-            self.preview_worker.start()
+            self.preview_worker = self.resources.start_thread(self._preview_loop,
+                args=(copy.deepcopy(camera), float(seconds), self.preview_stop_event, self.preview_pause_event), name="preview")
+            self.preview_workers = {w: event for w, event in self.preview_workers.items() if w.is_alive()}
+            self.preview_workers[self.preview_worker] = self.preview_stop_event
             self.record("Vista en vivo", f"{camera.get('name', cid)} abierta para revisión")
 
     def preview_control(self, action, seconds=None):
@@ -561,9 +616,13 @@ class Engine:
             raise ValueError("No se pudo preparar la imagen de video.")
         return data.tobytes()
 
-    def _preview_loop(self, camera, seconds):
+    @managed_operation
+    def _preview_loop(self, camera, seconds, stop_event=None, pause_event=None):
         """Refresca imágenes sin correr detección: es solo para ver la cámara."""
         import cv2
+        stop_event = stop_event if stop_event is not None else self.preview_stop_event
+        pause_event = pause_event if pause_event is not None else self.preview_pause_event
+        hold_source(camera["source"], ROOT)
         cid = camera["id"]
         source = camera["source"]
         if isinstance(source, str) and "://" not in source:
@@ -587,7 +646,8 @@ class Engine:
             frames = cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0
             live = remote or isinstance(source, int) or frames <= 1
             with self.lock:
-                self.preview_state.update(live=live, duration=0. if live else frames / max(1., fps))
+                if self.preview_stop_event is stop_event and not stop_event.is_set():
+                    self.preview_state.update(live=live, duration=0. if live else frames / max(1., fps))
             if seconds and not live:
                 cap.set(cv2.CAP_PROP_POS_MSEC, seconds * 1000)
 
@@ -604,43 +664,49 @@ class Engine:
                 newest = {"frame": None, "failed": False}
 
                 def drain():
-                    while not reader_stop.is_set() and not self.preview_stop_event.is_set():
-                        ok, frame = cap.read()
-                        if not ok:
-                            newest["failed"] = True
-                            return
-                        newest["frame"] = frame
+                    try:
+                        while not reader_stop.is_set() and not stop_event.is_set():
+                            ok, frame = cap.read()
+                            if not ok:
+                                newest["failed"] = True
+                                return
+                            newest["frame"] = frame
+                    finally:
+                        cap.release()
 
                 reader = threading.Thread(target=drain, daemon=True)
                 reader.start()
                 started_at = time.monotonic()
-                while not self.preview_stop_event.is_set():
+                while not stop_event.is_set():
                     if time.time() - self.preview_touch > 20:
                         break
                     if newest["failed"]:
                         raise ValueError("Se perdió la señal de la cámara.")
-                    if self.preview_pause_event.is_set():
-                        time.sleep(.15)
+                    if pause_event.is_set():
+                        stop_event.wait(.15)
                         continue
                     frame = newest["frame"]
                     if frame is None:
-                        time.sleep(.05)
+                        stop_event.wait(.05)
                         continue
                     encoded = self._preview_jpeg(frame)
                     with self.lock:
-                        self.frames[cid] = encoded
-                        self.preview_state["t"] = time.monotonic() - started_at
-                    time.sleep(1 / 15)
+                        if self.preview_stop_event is stop_event and not stop_event.is_set():
+                            self.frames[cid] = encoded
+                            self.preview_state["t"] = time.monotonic() - started_at
+                    stop_event.wait(1 / 15)
             else:
-                while not self.preview_stop_event.is_set():
+                while not stop_event.is_set():
                     if time.time() - self.preview_touch > 20:
                         break
-                    seek = self.preview_seek_request
+                    with self.lock:
+                        seek = self.preview_seek_request if self.preview_stop_event is stop_event else None
+                        if seek is not None:
+                            self.preview_seek_request = None
                     if seek is not None:
-                        self.preview_seek_request = None
                         cap.set(cv2.CAP_PROP_POS_MSEC, seek * 1000)
-                    if self.preview_pause_event.is_set():
-                        time.sleep(.15)
+                    if pause_event.is_set():
+                        stop_event.wait(.15)
                         continue
                     started = time.monotonic()
                     ok, frame = cap.read()
@@ -649,27 +715,37 @@ class Engine:
                         continue
                     encoded = self._preview_jpeg(frame)
                     with self.lock:
-                        self.frames[cid] = encoded
-                        self.preview_state["t"] = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
+                        if self.preview_stop_event is stop_event and not stop_event.is_set():
+                            self.frames[cid] = encoded
+                            self.preview_state["t"] = cap.get(cv2.CAP_PROP_POS_MSEC) / 1000
                     # Una grabación se reproduce a su velocidad real.
-                    time.sleep(max(0., 1 / max(1., min(fps, 30)) - (time.monotonic() - started)))
+                    stop_event.wait(max(0., 1 / max(1., min(fps, 30)) - (time.monotonic() - started)))
         except (ValueError, OSError, RuntimeError) as exc:
             with self.lock:
-                self.preview_state.update(playing=False, error=str(exc))
+                if self.preview_stop_event is stop_event and not stop_event.is_set():
+                    self.preview_state.update(playing=False, error=str(exc))
         finally:
             reader_stop.set()
-            if reader and reader.is_alive():
-                reader.join(timeout=2)
-            cap.release()
+            if reader:
+                # The owner remains alive while the native reader is blocked.
+                # Only the reader releases its capture; no read/release race.
+                reader.join()
+            else:
+                cap.release()
             with self.lock:
-                self.preview_state["playing"] = False
+                if self.preview_stop_event is stop_event:
+                    self.preview_state["playing"] = False
 
     def read_config_file(self):
         self.config = default_config()
         self.config_error = None
-        if self.config_path.exists():
+        if projects.document_exists(self.config_path):
             try:
-                self.config = validate_config({**self.config, **json.loads(self.config_path.read_text(encoding="utf-8"))})
+                stored = projects.read_document(self.config_path)
+                self.config = validate_config({**self.config, **copy.deepcopy(stored)})
+                from zone_episodes import ensure_zone_ids
+                if ensure_zone_ids(stored):
+                    projects.atomic_write(self.config_path, json.dumps(stored, ensure_ascii=False, indent=2))
             except (ValueError, OSError) as exc:
                 self.config_error = str(exc)
         if self.config.get("background") and "planLines" not in self.config:
@@ -694,23 +770,29 @@ class Engine:
 
     def restore_last_result(self):
         """Carga el último análisis terminado del proyecto sin reactivar fuentes."""
+        self.report_config = None
+        self.report_identity = None
+        hold_path(self.data_root / "data" / "replays")
         if self.config_error:
             return
         summaries = []
+        from replay import validate_manifest
         for path in (self.data_root / 'data/replays').glob('*/manifest.json'):
             try:
                 meta = json.loads(path.read_text(encoding='utf-8'))
+                validate_manifest(meta, path.parent.name)
                 if meta.get('projectId') not in (self.project_id, None):
                     continue
                 if meta.get('module') not in ('unified', 'tracking', 'demo'):
                     continue
                 if meta.get('status') not in ('ended', 'stopped', 'error'):
                     continue
-                if float(meta.get('end') or 0) <= 0:
-                    continue
+                # A zero-duration result may still have a valid summary. Report
+                # eligibility separately requires usable samples and duration.
                 if meta.get('cameraAnalytics') or meta.get('reportAnalytics'):
                     summaries.append(meta)
-            except (OSError, ValueError, TypeError):
+            except (OSError, ValueError) as exc:
+                self.record("Histórico inválido", f"{path.parent.name}: {type(exc).__name__}; no se modificó el archivo.")
                 continue
         if not summaries:
             return
@@ -748,6 +830,19 @@ class Engine:
             identityDeleted=True,
             error=None,
         )
+        # The scheduler requires the same saved evidence as the session report.
+        # Keep its configuration separate from today's editable project and do
+        # not make incomplete or unscoped legacy results reportable by inference.
+        from replay import report_snapshot
+        try:
+            report_config, report_state, _ = report_snapshot(
+                self.data_root, last['session'], self.project_id, strict=True)
+        except (OSError, ValueError, KeyError, TypeError, OverflowError):
+            return
+        self.state.update({key: copy.deepcopy(report_state[key])
+                           for key in ('totals', 'series', 'testRun')})
+        self.report_config = report_config
+        self.report_identity = (self.project_id, last['session'])
 
     def open_project(self, pid):
         with self.lock:
@@ -755,6 +850,8 @@ class Engine:
             self.config_path = projects.activate(ROOT, pid)
             self.project_id = pid
             self.read_config_file()
+            if business_data.path_for(self.config_path).exists():
+                self.notifications.recover(self.config_path)
             self.frames = {}
             self.preview_frames = {}
             self.source_checks = {}
@@ -816,10 +913,14 @@ class Engine:
             return self.projects_listing()
 
     def business_metrics(self):
+        # Reads persisted replay metadata while updating business SQLite.
+        hold_path(self.data_root / "data" / "replays")
         with self.lock:
             con = business_data.connect(self.config_path)
             try:
                 businesses = business_catalog.sync(con, self.config, ROOT / "dashboard" / "public")
+                from identity.spatial_graph import build_graph, persist_graph
+                persist_graph(con, build_graph(self.config, businesses))
                 observed = self.runtime_config or self.config
                 analytics = self.state.get("cameraAnalytics", {})
                 mode, sid, elapsed = self.state.get("mode"), self.state.get("session"), self.state.get("t", 0)
@@ -827,7 +928,7 @@ class Engine:
                     histories = []
                     for path in (self.data_root / "data/replays").glob("*/manifest.json"):
                         try:
-                            candidate = json.loads(path.read_text(encoding="utf-8"))
+                            candidate = projects.read_document(path)
                             if candidate.get("projectId") == self.project_id and candidate.get("status") in ("ended", "stopped") and candidate.get("cameraAnalytics"):
                                 histories.append(candidate)
                         except (OSError, ValueError):
@@ -863,9 +964,11 @@ class Engine:
     def record(self, action, detail):
         self.audit.appendleft({"at":datetime.now(timezone.utc).isoformat(),"action":action,"detail":detail})
 
-    def configure(self, config):
+    def configure(self, config, *, expected_project=None):
         validate_config(config)
         with self.lock:
+            if expected_project and self.project_id and expected_project != self.project_id:
+                raise ValueError("Esos cambios pertenecen a otro proyecto y no se guardaron. Vuelve a abrirlo para editarlo.")
             if self.worker and self.worker.is_alive():
                 raise ValueError("Detén la sesión antes de cambiar el plano o la calibración.")
             con = business_data.connect(self.config_path)
@@ -889,6 +992,7 @@ class Engine:
                     self.preview_frames.pop(cid,None)
                     self.state["cameras"] = [c for c in self.state["cameras"] if c["id"]!=cid]
             self.config = copy.deepcopy(config)
+            self.config_error = None
             self.revision += 1
             self.record("Configuración guardada",f"{len(config['cameras'])} cámaras · {len(config.get('zones',[]))} zonas")
 
@@ -906,6 +1010,10 @@ class Engine:
             self.record("Reglas actualizadas",f"Mínimo {draft['minPeople']} · radio {draft['radius']} · permanencia {draft['dwell']} s")
 
     def start(self, request):
+        if self.closing:
+            raise ValueError("El servidor está cerrando.")
+        if self.config_error:
+            raise ValueError(f"Corrige la configuración del proyecto antes de iniciar: {self.config_error}")
         self.preview_stop()
         with self.lock:
             if self.worker and self.worker.is_alive():
@@ -934,6 +1042,9 @@ class Engine:
                 selected=[c for c in self.config["cameras"] if c["id"] in camera_ids and c.get("active",True)]
             if not selected:
                 raise ValueError("Activa al menos una cámara.")
+            source_modes = {isinstance(c.get('source'), int) or str(c.get('source', '')).isdigit() or '://' in str(c.get('source', '')) for c in selected}
+            if mode == 'yolo' and len(source_modes) > 1:
+                raise ValueError('Selecciona solo videos grabados o solo cámaras en vivo. No se pueden mezclar sus relojes en un monitoreo.')
             if mode == "yolo":
                 if any(c.get("illustrative") for c in selected) and not test_run:
                     raise ValueError("Las ubicaciones ilustrativas no sirven para medir ocupación comercial.")
@@ -959,7 +1070,6 @@ class Engine:
                     raise ValueError("Delimita la zona útil de cada cámara para excluir espejos, vidrios y áreas externas.")
             self.stop_event.clear()
             self.pause_event.clear()
-            self.notified = set()
             self.frames = {}
             self.preview_frames = {}
             self.state = {"status": "starting", "mode": mode, "people": [], "cameras": [], "events": [], "t": 0,
@@ -969,10 +1079,10 @@ class Engine:
             self.runtime_config["cameras"] = copy.deepcopy(selected)
             # Cámaras vecinas: las que el usuario relacionó marcando a la misma persona en ambas (o enlaces manuales).
             selected_ids = {camera['id'] for camera in selected}
-            # `related_cameras` expone listas para que la configuración sea
-            # serializable. Durante el filtrado de pares necesitamos mutarlas,
-            # por eso se convierten a conjuntos solo dentro de este bloque.
-            vecinas = {cid: set(destinos) for cid, destinos in related_cameras(self.runtime_config).items()}
+            if self.runtime_config.get('cameraRoutes') is not None:
+                self.runtime_config['cameraRoutes'] = [r for r in self.runtime_config['cameraRoutes']
+                                                       if r['from'] in selected_ids and r['to'] in selected_ids]
+            vecinas = {cid: set(v) for cid, v in related_cameras(self.runtime_config).items()}
             bloqueadas_geometria = []
             if mode == "yolo":
                 # Una similitud OSNet no basta si las homografías de dos cámaras
@@ -1019,8 +1129,7 @@ class Engine:
                 if pid!=self.config.get("planId","custom"):
                     self.runtime_config.update(copy.deepcopy(self.config.get("plans",{}).get(pid,{})))
             runtime_request = {**request, "detector": mode, "weights": None, "inferenceSize": requested_size}
-            self.worker = threading.Thread(target=self.run, args=(self.runtime_config, runtime_request), daemon=True)
-            self.worker.start()
+            self.worker = self.resources.start_thread(self.run, args=(self.runtime_config, runtime_request), name="tracking")
             self.record("Sesión iniciada",f"{mode} · {camera_id or 'todas las cámaras'}")
 
     def pause(self, paused):
@@ -1030,6 +1139,8 @@ class Engine:
             if paused:
                 self.pause_event.set()
             else:
+                if self.pause_event.is_set():
+                    self._resume_generation += 1
                 self.pause_event.clear()
             self.state["status"] = "paused" if paused else "running"
             self.record("Sesión pausada" if paused else "Sesión reanudada","Control del operador")
@@ -1052,6 +1163,12 @@ class Engine:
                 insights_ventas.guardar(con, sid, dataset, resultado, eventos)
             finally:
                 con.close()
+            try:
+                from storage.archive_queue import ArchiveQueue
+                ArchiveQueue(self.data_root / 'data' / 'storage-outbox.sqlite').enqueue(
+                    self.data_root / 'data' / 'replays' / sid, insights=resultado)
+            except Exception as exc:
+                self.record("PostGIS", f"Archivo pendiente de reintento ({type(exc).__name__}). Los resultados locales se conservan.")
             return resultado
         except Exception as exc:  # los insights son derivados: nunca pueden romper el cierre de una sesión
             self.record("Insights", f"No se pudieron calcular los insights de la sesión: {type(exc).__name__}: {exc}")
@@ -1242,7 +1359,7 @@ class Engine:
 
     def warm_detector_async(self):
         """Carga YOLO en segundo plano para que el primer «Iniciar» no espere los pesos."""
-        if any(k[:2] == ("yolo", 640) for k in self.detector_caches) or (self.detector_warmup and self.detector_warmup.is_alive()):
+        if self.closing or any(k[:2] == ("yolo", 640) for k in self.detector_caches) or (self.detector_warmup and self.detector_warmup.is_alive()):
             return
 
         def warm():
@@ -1250,13 +1367,16 @@ class Engine:
                 self.load_detector("yolo", {"inferenceSize": 640})
             except Exception as exc:
                 self.record("Preparación del detector", f"No se pudo anticipar la carga de YOLO: {exc}")
-        self.detector_warmup = threading.Thread(target=warm, daemon=True, name="yolo-warmup")
-        self.detector_warmup.start()
+        self.detector_warmup = self.resources.start_thread(warm, name="yolo-warmup")
 
+    @managed_operation
     def run(self, config, request):
+        for camera in config["cameras"]:
+            hold_source(camera.get("source"), ROOT)
         captures = {}
         replay = None
         combined = None
+        level_occupancy = {}
         appearance_memory = None
         mode = request.get("detector", "yolo")
         try:
@@ -1361,16 +1481,18 @@ class Engine:
                 raise ValueError("No mezcles archivos y cámaras en vivo en una sesión; sus relojes no son equivalentes.")
             occupancy, metrics = Occupancy(config), SessionMetrics()
             # Re-ID: OSNet (models/osnet.onnx). Sin él no hay identidad entre cámaras fiable y no se inicia.
-            embedder = OSNetEmbedder(None, providers=profile["osnetProviders"], threads=profile.get("osnetThreads"))
+            model_name = config.get('reidModel', 'osnet.onnx')
+            embedder = OSNetEmbedder(ROOT / 'models' / model_name, providers=profile["osnetProviders"], threads=profile.get("osnetThreads"))
             if not embedder.available:
-                raise ValueError("Falta el modelo de reidentificación models/osnet.onnx: ejecuta preparar_sistema para instalarlo.")
+                raise ValueError(f"No se pudo cargar el modelo {model_name}. Instálalo o selecciona OSNet ligero. {embedder.error}")
             # Motor de identidad: tracklets por cámara + OSNet + compuerta de tiempo y plano; al cerrar se reagrupa la grabación.
             from identity import crear_motor_identidad
             from identity.engine import crear_memoria
             if config.get("appearanceMemory", True):
                 # Solo vectores de apariencia, con retención corta; si el disco falla la memoria queda en RAM.
-                appearance_memory = crear_memoria(config, self.data_root / "data" / "identidad" / f"{self.project_id or 'local'}_apariencia.sqlite",
-                                                  embedder.name, embedder.dimension)
+                huella = getattr(embedder, 'fingerprint', None) or embedder.name
+                appearance_memory = crear_memoria(config, self.data_root / "data" / "identidad" / f"{self.project_id or 'local'}_{huella}_apariencia.sqlite",
+                                                  f"{embedder.name}:{huella}", embedder.dimension)
             self.appearance_memory_live = appearance_memory
             identities = crear_motor_identidad(config, memoria=appearance_memory, encoder_nombre=embedder.name)
             reid_interval = int(config.get("reidInterval") or profile["osnetInterval"])
@@ -1385,27 +1507,24 @@ class Engine:
             # Guardamos observaciones y métricas también para fuentes en vivo.
             # El video remoto no se archiva y la URL no se escribe en el
             # manifiesto para evitar conservar credenciales o enlaces efímeros.
-            from replay import ReplayWriter
+            from replay import ReplayWriter, camera_snapshot
             replay = ReplayWriter(
                 self.data_root,
                 self.state["session"],
                 "unified" if request.get("combined") else "tracking",
-                [{"id":c["id"],"name":c.get("name",c["id"]),
-                  "source":c["source"] if not (c.get("stream") or (isinstance(c.get("source"), str) and "://" in c["source"])) else "",
-                  "sourceKind":"live" if (c.get("stream") or (isinstance(c.get("source"), str) and "://" in c["source"])) else "recording",
-                  "offset":c.get("offset",0),"syncOffset":c.get("syncOffset",0),"planId":c.get("planId","custom"),
-                  "countLines":c.get("countLines",[]),"pairs":c.get("pairs",[]),"detectionZone":c.get("detectionZone")} for c in cams],
+                camera_snapshot(cams),
                 {k:v for k,v in config.items() if k != "cameras"},
                 self.project_id,
             )
             from following.combined import CombinedAnalysis
             combined = CombinedAnalysis(cams, ROOT) if request.get('combined') else None
             camera_analytics = {}
-            level_configs={pid:config if pid==config.get('planId','custom') else {**config,**config.get('plans',{}).get(pid,{})} for pid in {c.get('planId','custom') for c in cams}}
+            from zone_episodes import plan_observed
+            level_configs={pid:config if pid==config.get('planId','custom') else {**config,**config.get('plans',{}).get(pid,{}), 'planId':pid} for pid in {c.get('planId','custom') for c in cams}}
             level_occupancy={pid:Occupancy(value) for pid,value in level_configs.items()}
             level_flow={pid:ZoneFlow(value) for pid,value in level_configs.items()}
             flow_fields={pid:FlowField(value) for pid,value in level_configs.items()}
-            camera_maps={c['id']:Occupancy(level_configs[c.get('planId','custom')]) for c in cams}
+            camera_maps={c['id']:Occupancy(level_configs[c.get('planId','custom')], scope='camera-map:'+c['id']) for c in cams}
             camera_levels={c['id']:c.get('planId','custom') for c in cams}
             for camera in cams:
                 plan=level_configs[camera.get('planId','custom')]
@@ -1422,6 +1541,8 @@ class Engine:
             max_embed = max(1, int(config.get("reidMaxPerTick") or preset["reid"]))
             lectores = ThreadPoolExecutor(max_workers=max(1, len(cams)))      # decodificar cada cámara en su propio hilo
             tiempos, avisados_zona = {}, set()
+            recording_deadline = None
+            recording_resume_generation = self._resume_generation
             while not self.stop_event.is_set():
                 # Permite relanzar una cámara que perdió señal sin detener las
                 # demás ni reconstruir el detector.
@@ -1436,6 +1557,7 @@ class Engine:
                         continue
                     source = camera.get("source")
                     try:
+                        hold_source(source, ROOT)
                         if source == "":
                             raise ValueError("Configura una fuente para esta cámara.")
                         if isinstance(source, str) and not source.lower().startswith(("rtsp://", "http://", "https://", "rtmp://")):
@@ -1480,8 +1602,14 @@ class Engine:
                         continue
                     break
                 if self.pause_event.is_set():
+                    recording_deadline = None
                     self.stop_event.wait(.1)
                     continue
+                cycle_started = time.perf_counter()
+                if not active[0]["stream"] and (recording_deadline is None or
+                        recording_resume_generation != self._resume_generation):
+                    recording_deadline = cycle_started
+                    recording_resume_generation = self._resume_generation
                 start = time.monotonic()
                 # En vivo prima la latencia. En archivos prima conservar las
                 # muestras: el coste de inferencia no debe saltarse cruces.
@@ -1490,7 +1618,7 @@ class Engine:
                 def leer(c):
                     cap = c["cap"]
                     if not c["stream"]:
-                        target = max(0, int(round((t + source_time_offset(c)) * c["fps"])))
+                        target = max(0, int((t + source_time_offset(c)) * c["fps"]))
                         # Saltar el desfase directamente al abrir el archivo evita
                         # procesar desde el fotograma 0 y garantiza que la primera
                         # muestra ya corresponda al tiempo común configurado.
@@ -1519,7 +1647,7 @@ class Engine:
                     if self.stop_event.is_set():
                         break
                     cap = c["cap"]
-                    if not ok:
+                    if not ok or frame is None or frame.size == 0:
                         statuses[c["id"]] = {**statuses[c["id"]], "status": "error" if c["stream"] else "ended", "error": "Fuente sin imagen" if c["stream"] else None}
                         active.remove(c)
                         cap.release()
@@ -1537,6 +1665,8 @@ class Engine:
                 if self.stop_event.is_set():
                     break
                 if not active:
+                    for counter in [occupancy, *level_occupancy.values(), *camera_maps.values()]:
+                        counter.update([], t, observation_valid=False)
                     if any(s.get("status") in ("error", "reconnecting") for s in statuses.values()):
                         self.stop_event.wait(.25)
                         continue
@@ -1549,7 +1679,11 @@ class Engine:
                 tiempos["detector"] = detector_ms
                 seguimiento_inicio = time.monotonic()
                 etapas = []
+                observed_ids = set()
                 for (c, frame, height, width), detections in zip(pending, detection_batches):
+                    if detections is None:
+                        continue
+                    observed_ids.add(c["id"])
                     # La salida del detector es la frontera de confianza para
                     # todo el pipeline. Normalizamos las cajas contra el
                     # frame real antes de calcular pies, homografías, Re-ID o
@@ -1701,9 +1835,14 @@ class Engine:
                         collapse_steps[c["id"]] = 0
                 if combined:
                     for c in active:
+                        if c["id"] not in observed_ids:
+                            continue
                         group=[p for p in counted if p['camera']==c['id']]
                         camera_analytics[c['id']] = combined.observe(c, raw_frames[c['id']], group, t)
-                        camera_analytics[c['id']]['map']=camera_maps[c['id']].update(group,t)
+                        camera_analytics[c['id']]['map']=camera_maps[c['id']].update(group,t, observation_valid=bool(c.get("projects")))
+                for c in cams:
+                    if c["id"] not in observed_ids:
+                        camera_maps[c["id"]].update([], t, observation_valid=False)
                 for cid, frame in raw_frames.items():
                     try:
                         bag_events = bag_signal.observe(cid,frame,t)
@@ -1756,11 +1895,18 @@ class Engine:
                     camera=next(c for c in cams if c['id']==cid)
                     for line in camera.get('countLines',[]):
                         a,b=[(round(p[0]*frame.shape[1]),round(p[1]*frame.shape[0])) for p in (line['a'],line['b'])]
-                        cv2.line(frame,a,b,(90,240,180),line_width)
+                        crossing = next((x for x in camera_analytics.get(cid,{}).get('crossings',[]) if x['id']==line['id']), {})
+                        recent = [e for e in crossing.get('events',[]) if 0 <= t-e['t'] <= .8]
+                        directions = {e['direction'] for e in recent}
+                        color = (220,100,220) if len(directions)>1 else (120,220,50) if 'entries' in directions else (255,165,50) if directions else (90,240,180)
+                        cv2.line(frame,a,b,color,line_width*(2 if directions else 1))
+                        if directions:
+                            crossing_label = 'Entrada + salida' if len(directions)>1 else f"Entrada +{len(recent)}" if 'entries' in directions else f"Salida +{len(recent)}"
+                            cv2.putText(frame, crossing_label, a, cv2.FONT_HERSHEY_SIMPLEX, .6*overlay_scale, color, line_width)
                         dx,dy=b[0]-a[0],b[1]-a[1];length=max(1.,(dx*dx+dy*dy)**.5)
                         middle=((a[0]+b[0])//2,(a[1]+b[1])//2);side=line.get('entrySide',1)
                         tip=(round(middle[0]-dy/length*35*side),round(middle[1]+dx/length*35*side))
-                        cv2.arrowedLine(frame,middle,tip,(90,240,180),line_width,tipLength=.3)
+                        cv2.arrowedLine(frame,middle,tip,color,line_width,tipLength=.3)
                     if frame.shape[1] > 1440:
                         frame = cv2.resize(frame, (1440, round(frame.shape[0]*1440/frame.shape[1])))
                     ok, jpg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 88])
@@ -1776,12 +1922,14 @@ class Engine:
                 trails = {key: value for key, value in trails.items() if key in seen}
                 with self.lock:
                     self.frames.update(encoded)
-                    analytics = occupancy.update(counted,t)
+                    primary_plan = config.get('planId','custom')
+                    analytics = occupancy.update([p for p in counted if camera_levels[p['camera']]==primary_plan], t,
+                        observation_valid=plan_observed(cams, observed_ids, primary_plan))
                     analytics["flow"] = flow.update(counted,t)
                     levels={}
                     for pid, counter in level_occupancy.items():
                         group=[p for p in counted if camera_levels[p['camera']]==pid]
-                        levels[pid]=counter.update(group,t)
+                        levels[pid]=counter.update(group,t, observation_valid=plan_observed(cams, observed_ids, pid))
                         levels[pid]['flow']=level_flow[pid].update(group,t)
                         levels[pid]['flowVectors']=flow_fields[pid].update(group,t)
                     analytics=levels.get(config.get('planId','custom'),analytics)
@@ -1789,30 +1937,44 @@ class Engine:
                         views=[]
                         for c in active:
                             h,w=raw_frames[c["id"]].shape[:2]
-                            views.append({"id":c["id"],"t":statuses[c["id"]]["sourceTime"],"analysis":camera_analytics.get(c["id"]),"people":[{"id":p["id"],"box":[p["box"][0]/w,p["box"][1]/h,p["box"][2]/w,p["box"][3]/h] if p["box"] else None,"pixel":[p["pixel"][0]/w,p["pixel"][1]/h],"local":p["local"],"point":p["point"],"association":p["association"],"confirmed":p.get("confirmed",True),"duplicate":p.get("duplicate",False),"history":p.get("history",[])[-30:]} for p in people if p["camera"]==c["id"]]})
+                            views.append({"id":c["id"],"t":statuses[c["id"]].get("sourceTime"),"observed":c["id"] in observed_ids,"analysis":camera_analytics.get(c["id"]),"people":[{"id":p["id"],"box":[p["box"][0]/w,p["box"][1]/h,p["box"][2]/w,p["box"][3]/h] if p["box"] else None,"pixel":[p["pixel"][0]/w,p["pixel"][1]/h],"local":p["local"],"point":p["point"],"association":p["association"],"confirmed":p.get("confirmed",True),"duplicate":p.get("duplicate",False),"history":p.get("history",[])[-30:]} for p in people if p["camera"]==c["id"]]})
                         replay.append({"t":t,"cameras":views,"analytics":analytics,"levels":levels})
-                    self.dispatch_alerts(camera_analytics, analytics)
+                    self.dispatch_alerts(camera_analytics, analytics, levels)
                     self.record_traffic(analytics, bool(active and active[0].get("stream")))
                     self.state.update(status="paused" if self.pause_event.is_set() else "running", people=people, cameras=list(statuses.values()), events=list(identities.events), t=t,
-                                      analytics=analytics, levelAnalytics=levels, cameraAnalytics=camera_analytics, synchronization={"mode":"live" if active[0]["stream"] else "recordings", "contentVerified":config["clocksVerified"], "sampleSkewSeconds":round(skew,5), "commonTime":t}, totals=metrics.update(counted,analytics,t), series=list(metrics.series), processingMs=round(elapsed * 1000), updatedAt=time.time(),
+                                      analytics=analytics, levelAnalytics=levels, cameraAnalytics=copy.deepcopy(camera_analytics), synchronization={"mode":"live" if active[0]["stream"] else "recordings", "contentVerified":config["clocksVerified"], "sampleSkewSeconds":round(skew,5), "commonTime":t}, totals=metrics.update(counted,analytics,t), series=list(metrics.series), processingMs=round(elapsed * 1000), updatedAt=time.time(),
                                       performance={"preset": preset_clave, "stepSeconds": paso_muestreo, "detectorSize": request.get("inferenceSize"), "maxEmbedPerStep": max_embed,
                                                    "msPorEtapa": {**{k: round(v) for k, v in tiempos.items()}, "otros": round(max(0., elapsed * 1000 - sum(tiempos.values())))}, "tiempoReal": round(elapsed / paso_muestreo, 2)},
                                       identity=identities.resumen())
                 timeline = round(timeline+paso_muestreo,6)
-                self.stop_event.wait(max(0., paso_muestreo - elapsed))
+                if active[0]["stream"]:
+                    self.stop_event.wait(max(0., paso_muestreo - (time.perf_counter() - cycle_started)))
+                else:
+                    recording_deadline += paso_muestreo
+                    self.stop_event.wait(max(0., recording_deadline - time.perf_counter()))
         except Exception as exc:
             with self.lock:
                 self.state.update(status="error", error=f"{type(exc).__name__}: {exc}", people=[])
         finally:
+            # Close aggregate episodes at their last source observation, never
+            # fabricate a below-threshold sample when a source/session ends.
+            reason = "source_error" if self.state["status"] == "error" else "session_stopped" if self.stop_event.is_set() else "session_ended"
+            for pid, counter in level_occupancy.items():
+                counter.zone_episodes.finish(reason)
+                with self.lock:
+                    snapshot = self.state.get('levelAnalytics', {}).get(pid)
+                    if snapshot is not None:
+                        snapshot['zoneEpisodes'] = counter.zone_episodes.snapshot()
             if "lectores" in locals():
-                lectores.shutdown(wait=False)
+                lectores.shutdown(wait=True)
             self.appearance_memory_live = None
             if appearance_memory:
                 appearance_memory.cerrar()
             self.flush_traffic()
             if combined:
                 final_analytics=combined.close()
-                self.state['cameraAnalytics']=final_analytics
+                with self.lock:
+                    self.state['cameraAnalytics']=copy.deepcopy(final_analytics)
                 if replay:
                     replay.meta['cameraAnalytics']=final_analytics
                     replay.meta['levelAnalytics']=self.state.get('levelAnalytics',{})
@@ -1821,6 +1983,11 @@ class Engine:
                 try:
                     replay.meta['reportAnalytics'] = copy.deepcopy(self.state['analytics'])
                     replay.meta['totals'] = copy.deepcopy(self.state.get('totals', {}))
+                    if 'identities' in locals():
+                        replay.meta['identityDiagnostics'] = identities.resumen()
+                        replay.meta['inferenceRuntime'] = {'detector': profile['device'],
+                                                          'reidProviders': getattr(embedder, 'providers', []),
+                                                          'modelFingerprint': getattr(embedder, 'fingerprint', None)}
                     replay.finish("error" if self.state["status"]=="error" else "stopped" if self.stop_event.is_set() else "ended")
                     # Con el análisis terminado la CPU queda libre: se prepara la copia que el navegador puede reproducir (AVI/MKV).
                     import video_web
@@ -1896,14 +2063,32 @@ class Engine:
             analytics = occupancy.update(people,t)
             replay.append({"t":t,"analytics":analytics,"levels":{config.get("planId","custom"):analytics},"cameras":[{"id":cid,"t":t,"analysis":a,"people":[p for p in people if p["camera"]==cid]} for cid,a in camera_analytics.items()]})
             with self.lock:
-                self.state["cameraAnalytics"] = camera_analytics
+                self.state["cameraAnalytics"] = copy.deepcopy(camera_analytics)
                 self.state.update(status="paused" if self.pause_event.is_set() else "running", people=people, t=t, analytics=analytics, totals=metrics.update(people,analytics,t), series=list(metrics.series), updatedAt=time.time(), cameras=[])
             self.stop_event.wait(.2)
             t += .2
         replay.meta["cameraAnalytics"] = camera_analytics if t else {}
+        occupancy.zone_episodes.finish("session_stopped")
+        with self.lock:
+            self.state['analytics']['zoneEpisodes'] = occupancy.zone_episodes.snapshot()
         replay.meta['reportAnalytics'] = copy.deepcopy(self.state['analytics'])
         replay.meta['totals'] = copy.deepcopy(self.state.get('totals', {}))
         replay.finish("stopped")
+
+
+def storage_response(method):
+    """La indisponibilidad de la BD es un 503 recuperable, nunca un login vacío."""
+    from functools import wraps
+    @wraps(method)
+    def handle(self, *args, **kwargs):
+        try:
+            return method(self, *args, **kwargs)
+        except Exception as exc:
+            from storage import operational
+            if operational.is_database_error(exc):
+                return self.send_data(503, {'error': 'La base de datos no está disponible. Revisa Docker y vuelve a intentar. No se cambiaron los datos locales.'})
+            raise
+    return handle
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1933,19 +2118,59 @@ class Handler(BaseHTTPRequestHandler):
             return False
         return self.headers.get("Sec-Fetch-Site", "same-origin") != "cross-site"
 
+    @http_operation
+    @storage_response
     def do_GET(self):
+        try:
+            return self._get()
+        except auth.UserStoreError as exc:
+            return self.send_data(503, {"error": str(exc)})
+
+    def _get(self):
         if not self.allowed():
             return self.send_data(403, {"error": "Acceso local requerido."})
         url = urlparse(self.path)
         engine = self.server.engine
+        if url.path == '/api/storage':
+            if auth.hay_usuarios(engine.settings_root) and not engine.sessions.leer(self.headers.get('X-LAP-Session', '')):
+                return self.send_data(401, {'error': 'Inicia sesión.'})
+            from storage.postgis import health
+            from storage.archive_queue import ArchiveQueue
+            from storage import operational
+            queue = ArchiveQueue(engine.data_root / 'data' / 'storage-outbox.sqlite')
+            return self.send_data(200, {**health(), **queue.status(), 'scope': 'operational' if operational.enabled(engine.config_path) else 'session_archive',
+                                       'operationalStorage': 'PostgreSQL: usuarios, proyectos, negocios y ventas' if operational.enabled(engine.config_path) else 'SQLite y JSON locales'})
+        if url.path in ("/api/commercial/trial", "/api/commercial/trial-template"):
+            if auth.hay_usuarios(engine.settings_root) and not engine.sessions.leer(self.headers.get("X-LAP-Session", "")):
+                return self.send_data(401, {"error": "Inicia sesión."})
+            import commercial_trial
+            with engine.lock:
+                con = business_data.connect(engine.config_path)
+                try:
+                    businesses = business_catalog.sync(con, engine.config, ROOT / "dashboard/public")
+                    options = commercial_trial.session_options(engine.data_root, engine.project_id, businesses, engine.config)
+                    if url.path.endswith('trial-template'):
+                        query = parse_qs(url.query)
+                        selected = next((b for s in options if s['id'] == query.get('session', [''])[0] for b in s['businesses'] if b['id'] == query.get('business', [''])[0]), None)
+                        if not selected:
+                            return self.send_data(400, {'error': 'Selecciona una tienda y un video finalizado.'})
+                        return self.send_data(200, commercial_trial.example_csv(selected['id'], selected['date'], selected['hour']).encode('utf-8-sig'), 'text/csv; charset=utf-8')
+                    return self.send_data(200, {'sessions': options, 'saved': commercial_trial.saved(con)})
+                finally:
+                    con.close()
         if url.path == "/api/commercial/sample":
             if auth.hay_usuarios(engine.settings_root) and not engine.sessions.leer(self.headers.get("X-LAP-Session", "")):
                 return self.send_data(401,{"error":"Inicia sesión."})
             try:
-                sample = json.loads((ROOT / "data/commercial-tests/validacion.json").read_text(encoding="utf-8"))
-                if sample.get("projectId") != engine.project_id:
-                    raise ValueError("No hay una prueba comercial guardada en este proyecto.")
-                return self.send_data(200,sample)
+                con = business_data.connect(engine.config_path)
+                try:
+                    commercial.setup(con)
+                    row = con.execute("SELECT session,negocio_id,fecha,hora FROM commercial_traffic WHERE dataset='demo' AND session NOT LIKE 'demo-%' ORDER BY fecha DESC,hora DESC,coverage DESC,session DESC LIMIT 1").fetchone()
+                    if not row:
+                        raise ValueError('Todavía no hay videos de prueba con accesos vinculados en este proyecto.')
+                    return self.send_data(200,dict(session=row[0],businessId=row[1],date=row[2],hour=row[3],projectId=engine.project_id))
+                finally:
+                    con.close()
             except (OSError, ValueError) as exc:
                 return self.send_data(404,{"error":str(exc)})
         if url.path in ("/api/camera-frame", "/api/camera-frame-info"):
@@ -1989,9 +2214,9 @@ class Handler(BaseHTTPRequestHandler):
                                 for incident in row['incidents']:
                                     writer.writerow([row['name'],result['dataset'],incident['start'],incident['duration'],incident['peak'],incident['sales'],incident['baseline'],incident['sampleDays'],incident['differencePercent'],incident['scope']])
                             return self.send_data(200, output.getvalue().encode('utf-8-sig'), 'text/csv; charset=utf-8')
-                        writer.writerow(["Negocio","Fecha","Hora","Origen","Entradas","Ventas PEN","Proyección PEN","Días históricos","Salidas emparejadas","Objetos nuevos","Salidas sin emparejar"])
+                        writer.writerow(["Negocio","Fecha","Hora Lima","Origen","Sesión de video","Cobertura segundos","Entradas","Ventas PEN","Transacciones","Transacciones por entrada %","Proyección PEN","Alcance de proyección","Ingreso histórico por entrada PEN","Días históricos","Siguiente hora","Entradas esperadas","Pronóstico siguiente hora PEN","Salidas emparejadas","Objetos nuevos","Salidas sin emparejar"])
                         for row in result["businesses"]:
-                            writer.writerow([row["name"],result["date"],result["hour"],result["dataset"],row["entries"],row["sales"],row["forecast"]["estimate"],row["forecast"]["days"],row["bags"]["matched"],row["bags"]["changed"],row["bags"]["unmatched"]])
+                            writer.writerow([row["name"],result["date"],result["hour"],result["dataset"],row["session"],row["coverage"],row["entries"],row["sales"],row["transactions"],row["conversion"],row["forecast"]["estimate"],row["estimateScope"],row["forecast"].get("perEntry"),row["forecast"]["days"],row["nextForecast"].get("target"),row["nextForecast"].get("expectedEntries"),row["nextForecast"].get("estimate"),row["bags"]["matched"],row["bags"]["changed"],row["bags"]["unmatched"]])
                         return self.send_data(200, output.getvalue().encode("utf-8-sig"), "text/csv; charset=utf-8")
                     return self.send_data(200,result)
                 except (ValueError, TypeError) as exc:
@@ -2002,13 +2227,19 @@ class Handler(BaseHTTPRequestHandler):
             if auth.hay_usuarios(engine.settings_root) and not engine.sessions.leer(self.headers.get("X-LAP-Session", "")):
                 return self.send_data(401, {"error": "Inicia sesión."})
             return self.send_data(200, engine.business_metrics())
-        if url.path == "/api/businesses":
+        if url.path in ("/api/businesses", "/api/spatial-graph"):
             if auth.hay_usuarios(engine.settings_root) and not engine.sessions.leer(self.headers.get("X-LAP-Session", "")):
                 return self.send_data(401, {"error": "Inicia sesión para consultar los negocios."})
             with engine.lock:
                 conexion = business_data.connect(engine.config_path)
                 try:
-                    return self.send_data(200, {"negocios": business_catalog.sync(conexion, engine.config, ROOT / "dashboard" / "public"), "projectId": engine.project_id})
+                    businesses = business_catalog.sync(conexion, engine.config, ROOT / "dashboard" / "public")
+                    if url.path == '/api/spatial-graph':
+                        from identity.spatial_graph import build_graph, persist_graph
+                        graph = build_graph(engine.config, businesses)
+                        persist_graph(conexion, graph)
+                        return self.send_data(200, graph)
+                    return self.send_data(200, {"negocios": businesses, "projectId": engine.project_id})
                 finally:
                     conexion.close()
         if url.path.startswith("/api/replay/"):
@@ -2016,7 +2247,8 @@ class Handler(BaseHTTPRequestHandler):
             return get(self,url,self.server.engine.data_root)
         if url.path == "/api/mail":
             import notifier
-            return self.send_data(200, {**notifier.public(engine.settings_root), "lastError": engine.mailer.error, "sent": engine.mailer.sent})
+            return self.send_data(200, {**notifier.public(engine.settings_root), "lastError": engine.mailer.error, "sent": engine.mailer.sent,
+                                         "deliveryPersistence": engine.notifications.diagnostics()})
         if url.path == "/api/auth":
             sesion = engine.sessions.leer(self.headers.get("X-LAP-Session", ""))
             return self.send_data(200, {
@@ -2046,13 +2278,15 @@ class Handler(BaseHTTPRequestHandler):
             query=parse_qs(url.query)
             try:
                 with engine.lock:
-                    config=copy.deepcopy(engine.config)
+                    config=copy.deepcopy(engine.report_config if engine.report_identity ==
+                                         (engine.project_id, engine.state.get("session")) else engine.config)
                     snapshot=engine.snapshot()
                 if query.get('session'):
                     from replay import report_snapshot
-                    config,snapshot,meta=report_snapshot(engine.data_root,query['session'][0],engine.project_id)
+                    config,snapshot,meta=report_snapshot(engine.data_root,query['session'][0],engine.project_id,strict=True)
                 if url.path == '/api/report/session':
-                    return self.send_data(200, {'config':config,'state':snapshot,'created':meta['created'] if query.get('session') else None,'scope':'session'})
+                    return self.send_data(200, {'config':config,'state':snapshot,'created':meta['created'] if query.get('session') else None,'scope':'session',
+                                                'evidenceIntegrity':meta.get('evidenceIntegrity','unknown') if query.get('session') else 'in_memory'})
                 result,mime=export(config,snapshot,query.get("kind",["zones"])[0],query.get("format",["csv"])[0])
                 with engine.lock:
                     engine.record("Reporte exportado",query.get("kind",["zones"])[0]+" · "+query.get("format",["csv"])[0])
@@ -2082,7 +2316,7 @@ class Handler(BaseHTTPRequestHandler):
     # Rutas de configuracion: solo el operador. El administrador entra al
     # sistema, ve todo y ajusta umbrales de alerta, pero no toca la geometria
     # ni la calibracion, para no romper por error algo que costo calibrar.
-    SOLO_OPERADOR = ("/api/commercial/import", "/api/commercial/simulate", "/api/businesses", "/api/config", "/api/import-plan", "/api/plan-lines", "/api/upload", "/api/camera-restart",
+    SOLO_OPERADOR = ("/api/commercial/trial", "/api/commercial/import", "/api/commercial/simulate", "/api/businesses", "/api/config", "/api/import-plan", "/api/plan-lines", "/api/upload", "/api/camera-restart",
                      "/api/camera-preview", "/api/calibration-check", "/api/person-pairs/check")
 
     def reject(self, size, code, message):
@@ -2102,7 +2336,10 @@ class Handler(BaseHTTPRequestHandler):
             pass
         return self.send_data(code, {"error": message})
 
+    @http_operation
+    @storage_response
     def do_POST(self):
+        import cv2
         engine = self.server.engine
         size = int(self.headers.get("Content-Length", "0"))
         if not self.allowed() or not secrets.compare_digest(self.headers.get("X-LAP-Token", ""), engine.token):
@@ -2110,7 +2347,11 @@ class Handler(BaseHTTPRequestHandler):
         try:
             parsed = urlparse(self.path)
             sesion = engine.sessions.leer(self.headers.get("X-LAP-Session", ""))
-            if parsed.path != "/api/auth" and auth.hay_usuarios(engine.settings_root):
+            try:
+                configured = auth.hay_usuarios(engine.settings_root)
+            except auth.UserStoreError as exc:
+                return self.reject(size, 503, str(exc))
+            if parsed.path != "/api/auth" and configured:
                 if not sesion:
                     return self.reject(size, 401, "Inicia sesión para continuar.")
                 if sesion["rol"] != "operador" and parsed.path in self.SOLO_OPERADOR:
@@ -2144,28 +2385,12 @@ class Handler(BaseHTTPRequestHandler):
                 suffix = Path(filename).suffix.lower()
                 if suffix not in (".mp4",".avi",".mov",".mkv",".webm",".m4v"):
                     raise ValueError("Formato de video no admitido.")
-                directory = ROOT / "data" / "uploads"
-                directory.mkdir(parents=True,exist_ok=True)
-                validar_tamano_de_video(size, shutil.disk_usage(directory).free)
-                target = directory / (secrets.token_hex(16)+suffix)
-                import hashlib
+                from uploads import receive, deduplicate_completed
+                validar_tamano_de_video(size, shutil.disk_usage(engine.data_root).free)
+                target = receive(engine.data_root, self.rfile, size, suffix, resources=engine.resources)
                 import video_web
-                huella = hashlib.sha256()
-                try:
-                    remaining = size
-                    with target.open("xb") as output:
-                        while remaining:
-                            chunk = self.rfile.read(min(remaining,1024*1024))
-                            if not chunk:
-                                raise ValueError("La carga quedó incompleta.")
-                            output.write(chunk)
-                            huella.update(chunk)
-                            remaining -= len(chunk)
-                except Exception:
-                    target.unlink(missing_ok=True)
-                    raise
-                target = video_web.deduplicar(directory, target, huella.hexdigest())      # el mismo video no se guarda dos veces
-                video_web.preparar(target)       # copia .webm para reproducirlo en el navegador (AVI y MKV no se reproducen)
+                target = deduplicate_completed(engine.data_root, target)
+                video_web.preparar(target)
                 with engine.lock:
                     engine.record("Video cargado",f"Archivo de prueba {suffix} · {size} bytes")
                 return self.send_data(200,{"path":str(target)})
@@ -2174,6 +2399,24 @@ class Handler(BaseHTTPRequestHandler):
             data = json.loads(self.rfile.read(size))
             if not isinstance(data, dict):
                 raise ValueError("Solicitud inválida.")
+            if parsed.path == "/api/commercial/trial":
+                import commercial_trial
+                with engine.lock:
+                    if data.get('projectId') != engine.project_id:
+                        raise ValueError('El proyecto cambió. Vuelve a seleccionar el video.')
+                    con = business_data.connect(engine.config_path)
+                    try:
+                        businesses = business_catalog.sync(con, engine.config, ROOT / 'dashboard/public')
+                        options = commercial_trial.session_options(engine.data_root, engine.project_id, businesses, engine.config)
+                        observed = next((b for s in options if s['id'] == data.get('session') for b in s['businesses'] if b['id'] == data.get('businessId')), None)
+                        if not observed:
+                            raise ValueError('Selecciona un video de prueba finalizado y una tienda con cruces medidos.')
+                        rows, fingerprint = commercial_trial.read_history(data.get('file'), str(data.get('filename', '')), observed['id'])
+                        result = commercial_trial.calculate(rows, {k: v for k, v in observed.items() if k not in ('id', 'name')})
+                        business = next(b for b in businesses if b['id'] == observed['id'])
+                        return self.send_data(200, commercial_trial.save(con, result, business, str(data.get('filename', '')), fingerprint))
+                    finally:
+                        con.close()
             if parsed.path == "/api/commercial/simulate":
                 with engine.lock:
                     if data.get("projectId") != engine.project_id:
@@ -2245,9 +2488,10 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(data, dict):
                 raise ValueError("Solicitud inválida.")
             if self.path == "/api/calibration-check":
-                import numpy as np
-                import cv2
+                from live_core import validate_calibration_pairs, calibration_diagnostics
                 pairs = data.get("pairs",[])
+                context=data.get("context")
+                validate_calibration_pairs(pairs, context, require_complete=True)
                 if not isinstance(pairs,list) or len(pairs)<4 or len(pairs)>30 or any(not isinstance(p,list) or len(p)!=4 for p in pairs):
                     raise ValueError("Se necesitan entre 4 y 30 pares de referencias.")
                 points=np.asarray(pairs,dtype=float)
@@ -2262,15 +2506,14 @@ class Handler(BaseHTTPRequestHandler):
                 zone=data.get("zone")
                 if zone is not None and (not isinstance(zone,list) or len(zone)<3 or any(not isinstance(q,list) or len(q)!=2 for q in zone)):
                     raise ValueError("Zona de detección inválida.")
-                plan=data.get("plan", [engine.config["width"],engine.config["height"]])
+                plan=data.get("plan", [context["width"],context["height"]] if context else [engine.config["width"],engine.config["height"]])
                 if (not isinstance(plan,list) or len(plan)!=2 or any(not isinstance(v,(int,float)) or isinstance(v,bool)
                                                                     or not np.isfinite(v) or v<=0 for v in plan)):
                     raise ValueError("Dimensiones del plano inválidas.")
                 if (points[:,2] < 0).any() or (points[:,2] > plan[0]).any() or (points[:,3] < 0).any() or (points[:,3] > plan[1]).any():
                     raise ValueError("Una referencia cae fuera del plano seleccionado.")
-                return self.send_data(200,calibration_diagnostics(pairs,zone,tuple(plan)))
+                return self.send_data(200,{**calibration_diagnostics(pairs,zone,tuple(plan)),"contextValidated":context is not None})
             if self.path == "/api/camera-preview":
-                import cv2
                 cid=data.get("camera")
                 camera=next((c for c in engine.config["cameras"] if c["id"]==cid),None)
                 if not camera:
@@ -2283,6 +2526,7 @@ class Handler(BaseHTTPRequestHandler):
                 source=data.get("source",camera["source"])
                 if not isinstance(source,(str,int)) or isinstance(source,bool):
                     raise ValueError("Fuente inválida.")
+                hold_source(source, ROOT)
                 if isinstance(source,str) and "://" not in source:
                     source=str((ROOT/source).resolve())
                 hls = isinstance(source, str) and is_youtube_url(source)
@@ -2361,10 +2605,21 @@ class Handler(BaseHTTPRequestHandler):
             if parsed.path == "/api/alert-rules":
                 # Umbrales de aglomeración: es lo único de configuración que el
                 # administrador sí puede ajustar, porque define cuándo le avisan.
-                engine.update_alert_rules(data)
+                engine.update_alert_rules(data, expected_project=data.get("projectId"))
                 return self.send_data(200, {"ok": True})
             if parsed.path == "/api/incidents":
                 return self.send_data(200, engine.update_incident(data.get("id"), data.get("estado")))
+            if parsed.path == "/api/incidents/history":
+                # Same operational roles as incident review, but this explicit
+                # human assertion always requires a session, even before setup.
+                if not sesion:
+                    return self.send_data(401, {"error": "Inicia sesión para validar el historial."})
+                if sesion["rol"] not in auth.ROLES:
+                    return self.send_data(403, {"error": "Tu usuario no puede validar incidentes."})
+                if "projectId" not in data:
+                    raise ValueError("Indica el proyecto del incidente.")
+                return self.send_data(200, engine.validate_incident_history(
+                    data.get("id"), data.get("never_attended"), data["projectId"]))
             if self.path == "/api/mail":
                 import notifier
                 if data.get("action") == "test":
@@ -2388,9 +2643,7 @@ class Handler(BaseHTTPRequestHandler):
                 # cambios. Si no es el abierto, se rechazan: son el borrador del
                 # proyecto anterior y sobrescribirían el plano de este.
                 intended = parse_qs(parsed.query).get("project", [None])[0]
-                if intended and engine.project_id and intended != engine.project_id:
-                    raise ValueError("Esos cambios pertenecen a otro proyecto y no se guardaron. Vuelve a abrirlo para editarlo.")
-                engine.configure(data)
+                engine.configure(data, expected_project=intended)
             elif self.path == "/api/start":
                 engine.start(data)
             elif self.path == "/api/settings":
@@ -2424,30 +2677,54 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    from storage.environment import load_environment
+    load_environment(ROOT.parent)
+    from storage import operational
+    operational.configure(ROOT)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--config-path", type=Path, help="Archivo de configuración alternativo para pruebas aisladas.")
     args = parser.parse_args()
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler, bind_and_activate=False)
+    server = ManagedHTTPServer(("127.0.0.1", args.port), Handler, bind_and_activate=False)
     if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
         server.allow_reuse_address = False
         server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
     server.server_bind()
     server.server_activate()
     server.engine = Engine(args.config_path)
-    # La interfaz y la configuración pueden abrirse mientras YOLO carga sus pesos en segundo plano.
-    server.engine.warm_detector_async()
-    from replay import recover_interrupted
-    recover_interrupted(server.engine.data_root)
-    print(f"LAP: http://127.0.0.1:{args.port} — solo equipo local", flush=True)
+    from storage.archive_queue import ArchiveQueue
+    archive = ArchiveQueue(server.engine.data_root / "data" / "storage-outbox.sqlite")
+    archive.recover(server.engine.data_root / "data" / "replays")
+    archive.start()
     try:
+        from automation_reports import ScheduledReports
+        from automation_backups import ProjectBackups
+        from automation_escalation import AlertEscalation
+        from automation_cleanup import RetentionCleanup
+        service = server.engine.automation
+        service.tasks = {"reports": ScheduledReports(server.engine, service.store),
+                         "backups": ProjectBackups(server.engine, service.store),
+                         "escalation": AlertEscalation(server.engine),
+                         "cleanup": RetentionCleanup(server.engine, service.store)}
+        server.engine.automation.start()
+        # La interfaz y la configuración pueden abrirse mientras YOLO prepara sus
+        # pesos en segundo plano. Así el primer monitoreo no paga toda la carga del
+        # modelo después de que el operador pulsa «Iniciar».
+        server.engine.warm_detector_async()
+        from replay import recover_interrupted
+        recover_interrupted(server.engine.data_root,
+                            on_error=lambda sid: server.engine.record("Histórico inválido", f"{sid}: recuperación interrumpida; archivo conservado."))
+        print(f"LAP: http://127.0.0.1:{args.port} — solo equipo local", flush=True)
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
-        server.engine.stop()
-        server.engine.preview_stop()
-        server.server_close()
+        archive.close()
+        if stop_server(server):
+            server.server_close()
+        else:
+            print("Cierre incompleto: esperando trabajadores/recursos activos.", flush=True)
+            defer_close(server)
 
 
 if __name__ == "__main__":

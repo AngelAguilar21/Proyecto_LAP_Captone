@@ -4,9 +4,11 @@ Coordinates are always in a shared, user-defined plane. Association confidence i
 a heuristic, not a calibrated probability. No biometric models are used here.
 """
 from spatial_scope import validate_polygon
+import copy
 import json
 import math
 from collections import deque
+from zone_episodes import ZoneEpisodes, ensure_zone_ids
 
 import cv2
 import numpy as np
@@ -23,6 +25,23 @@ def valid_plan_id(value):
     )
 
 
+def validate_calibration_pairs(pairs, plan=None, *, require_complete=False):
+    """Shared geometry and contextual bounds used by save and calibration-check."""
+    if not isinstance(pairs, list) or len(pairs)>30 or (require_complete and len(pairs)<4):
+        raise ValueError("Usa entre 4 y 30 correspondencias para comprobar la calibración.")
+    if plan is not None and (not isinstance(plan,dict) or
+            any(not finite(plan.get(k),1,10000) for k in ('width','height'))):
+        raise ValueError("Dimensiones del plano inválidas para comprobar calibración.")
+    for p in pairs:
+        if not isinstance(p,list) or len(p)!=4 or not all(finite(v,-10000,10000) for v in p):
+            raise ValueError("Cada correspondencia contiene [u, v, x, y].")
+        if not (0<=p[0]<=1 and 0<=p[1]<=1) or (plan is not None and not (0<=p[2]<=plan['width'] and 0<=p[3]<=plan['height'])):
+            raise ValueError("Puntos fuera del video o del plano.")
+    if len(pairs)>=4:
+        calibration(pairs)
+        points=np.asarray(pairs,dtype=np.float32)
+        if cv2.contourArea(cv2.convexHull(points[:,:2].copy()))<.005:
+            raise ValueError("Referencias casi alineadas: distribuye los nodos por todo el suelo visible.")
 def pairs_hash(pairs):
     """Huella de las referencias del suelo de una cámara: la alineación entre cámaras solo vale con las mismas referencias."""
     import hashlib
@@ -68,6 +87,12 @@ def related_cameras(c, minimo=MIN_PAREJAS_RELACION):
     """
     ids = [cam["id"] for cam in c.get("cameras", []) if cam.get("active", True)]
     vecinas = {cid: set() for cid in ids}
+    if c.get('cameraRoutes') is not None:
+        for route in c['cameraRoutes']:
+            a, b = route['from'], route['to']
+            if a in vecinas and b in vecinas:
+                vecinas[a].add(b)
+        return {cid: sorted(v) for cid, v in vecinas.items()}
     conteo = {}
     for item in c.get("personPairs", []) or []:
         a, b = item.get("a", {}).get("camera"), item.get("b", {}).get("camera")
@@ -121,7 +146,7 @@ def validate_config(c):
     for pid, plan in plans.items():
         if not valid_plan_id(pid) or not isinstance(plan,dict):
             raise ValueError("Plano desconocido.")
-        validate_config({**c,**plan,"plans":{},"cameras":[],"personPairs":[]})
+        validate_config(copy.deepcopy({**c,**plan,"planId":pid,"plans":{},"cameras":[],"personPairs":[],"cameraRoutes":[]}))
     if not valid_plan_id(c.get("planId","custom")):
         raise ValueError("Nivel desconocido.")
     if c.get("mapAsset") and c["mapAsset"] not in [f"/maps/lap/{n}.json" for n in (1,2,3,4)]:
@@ -173,15 +198,7 @@ def validate_config(c):
             if field in cam and not isinstance(cam[field],bool):
                 raise ValueError(f"{field}: debe ser booleano.")
         pairs = cam.get("pairs", [])
-        if not isinstance(pairs, list) or len(pairs) > 30:
-            raise ValueError("Usa como máximo 30 correspondencias de calibración.")
-        for p in pairs:
-            if not isinstance(p, list) or len(p) != 4 or not all(finite(v, -10000, 10000) for v in p):
-                raise ValueError("Cada correspondencia contiene [u, v, x, y].")
-            if not 0 <= p[0] <= 1 or not 0 <= p[1] <= 1 or not 0 <= p[2] <= cam_plan["width"] or not 0 <= p[3] <= cam_plan["height"]:
-                raise ValueError("Puntos fuera del video o del plano.")
-        if len(pairs) >= 4:
-            calibration(pairs)
+        validate_calibration_pairs(pairs, cam_plan)
         for field, lo, hi in [('crowdThreshold',1,1000),('crowdDwell',0,3600)]:
             if field in cam and not finite(cam[field],lo,hi):
                 raise ValueError(f'{cid}: {field} fuera de rango.')
@@ -270,6 +287,7 @@ def validate_config(c):
             raise ValueError(f"Campo {field} inválido.")
     if c.get("sourceMode", "recordings") not in ("recordings", "live", "demo"):
         raise ValueError("Modo de fuente inválido.")
+    ensure_zone_ids(c)
     validate_person_pairs(c)
     for clave in ("appearanceMemory", "identityFinalize", "identityGroupCrops"):
         if not isinstance(c.get(clave, True), bool):
@@ -282,6 +300,14 @@ def validate_config(c):
     if ajustes is not None and (not isinstance(ajustes, dict) or any(
             not isinstance(k, str) or isinstance(v, str) or (not isinstance(v, bool) and not finite(v, -1000, 100000)) for k, v in ajustes.items())):
         raise ValueError("identityV2 debe ser un objeto de parámetros numéricos del asociador.")
+    from identity.topology import validate_routes
+    validate_routes(c)
+    if c.get('reidModel', 'osnet.onnx') not in ('osnet.onnx', 'osnet_ain_msmt17.onnx'):
+        raise ValueError('Modelo ReID no admitido.')
+    if c.get('hardware', 'auto') not in ('auto', 'cpu', 'gpu'):
+        raise ValueError('Hardware inválido: automático, CPU o GPU.')
+    if c.get('reidProvider', 'auto') not in ('auto', 'cpu', 'cuda', 'openvino', 'directml'):
+        raise ValueError('Proveedor ReID inválido.')
     return c
 
 
@@ -399,16 +425,19 @@ def plan_span(points):
     return float(np.ptp(points[:, 2:], axis=0).max())
 
 
-PLAN_SPAN_WARN, PLAN_SPAN_BLOCK = .03, .02  # fracción del lado mayor del plano
+PLAN_SPAN_WARN = .03  # aviso de escala, nunca prueba de degeneración
 
 
 def blocking_calibration_issue(pairs, plan):
-    """Mensaje si los puntos del plano están tan juntos que toda la escena colapsa en un punto."""
-    points = np.asarray(pairs, dtype=float)
-    size = max(plan) if plan else 0
-    if size > 0 and plan_span(points) < PLAN_SPAN_BLOCK * size:
-        return (f"los puntos de referencia del plano están casi todos en el mismo lugar (separados solo "
-                f"{plan_span(points):.2f} en un plano de {size:g}). Marca cada referencia en su ubicación real del plano, bien separadas.")
+    """Bloquea degeneración geométrica, no una cámara que cubre poco del aeropuerto.
+
+    La extensión global del plano no determina la validez de una homografía local.
+    La escala física necesita referencias verificadas; no puede deducirse del tamaño del mapa.
+    """
+    try:
+        calibration(pairs)
+    except ValueError as exc:
+        return str(exc)
     return None
 
 
@@ -423,8 +452,8 @@ def projection_issues(h, points, zone=None, grid=14, plan=None):
     issues = []
     size = max(plan) if plan else 0
     if size > 0 and plan_span(points) < PLAN_SPAN_WARN * size:
-        issues.append(f"Los puntos del plano están casi todos en el mismo lugar (separados solo {plan_span(points):.2f} en un plano de {size:g}): "
-                      "marca cada referencia en su ubicación real del plano, bien separadas entre sí.")
+        issues.append(f"Calibración de un área local: extensión {plan_span(points):.2f} en un plano de {size:g}. "
+                      "Comprueba la escala y las correspondencias del suelo; cubrir poco del plano no invalida la calibración.")
     coverage = float(cv2.contourArea(cv2.convexHull(points[:, :2].astype(np.float32))))
     if coverage < MIN_REFERENCE_COVERAGE:
         issues.append(f"Las referencias cubren solo el {coverage * 100:.0f}% del video: repártelas por todo el suelo donde caminan las personas.")
@@ -565,15 +594,16 @@ def estimate_height(camera, box, width, height):
 
 
 class Occupancy:
-    def __init__(self, config):
+    def __init__(self, config, scope=None, episode_namespace=None):
+        ensure_zone_ids(config)
         self.config = config
         self.cells = {}
         self.last_t = None
         self.zone_stats = {}
-        self.zone_start = {}
+        self.zone_episodes = ZoneEpisodes(scope or "plan:" + config.get("planId", "custom"), episode_namespace)
         self.cell_visitors = {}
 
-    def update(self, people, t):
+    def update(self, people, t, observation_valid=True):
         cfg = self.config
         # Count one observed global ID once, never extrapolated invisible people.
         unique = {p["id"]: p for p in people if p.get("point") is not None and not p.get("predicted")}
@@ -622,23 +652,26 @@ class Occupancy:
             circle["alert"] = circle["duration"] >= cfg["dwell"]
         self.clusters = circles
         zones = []
-        for index, zone in enumerate(cfg.get("zones", [])):
-            if zone.get("kind") in ("wall", "door"):
-                continue
+        configured = [z for z in cfg.get("zones", []) if z.get("kind") not in ("wall", "door")]
+        self.zone_episodes.retain([z["id"] for z in configured], t)
+        for zone in configured:
             poly = np.asarray(zone["points"], dtype=np.float32)
             members = {p["id"] for p in points if cv2.pointPolygonTest(poly, tuple(p["point"]), False) >= 0}
             n = len(members)
-            zkey = zone.get("id",str(index))
+            zkey = zone["id"]
             stats = self.zone_stats.setdefault(zkey,{"seconds":0.,"peak":0,"visitors":set()})
-            stats["seconds"] += n * dt
-            stats["peak"] = max(stats["peak"],n)
-            stats["visitors"].update(members)
-            rule = zone.get("rule",{})
-            if rule.get("enabled") and n >= rule["minPeople"]:
-                self.zone_start.setdefault(zkey,t)
-            else:
-                self.zone_start.pop(zkey,None)
-            duration = t-self.zone_start.get(zkey,t)
-            zones.append({"name":zone["name"],"count":n,"seconds":stats["seconds"],"peak":stats["peak"],"visits":len(stats["visitors"]),"duration":duration,"alert":bool(rule.get("enabled") and zkey in self.zone_start and duration >= rule["dwell"])})
+            if observation_valid:
+                stats["seconds"] += n * dt
+                stats["peak"] = max(stats["peak"],n)
+                stats["visitors"].update(members)
+            episode = self.zone_episodes.observe(zone, n, t, observation_valid,
+                context=[cfg.get(k) for k in ("width", "height", "unit", "workArea")])
+            zones.append({"id":zkey,"name":zone["name"],"count":n if observation_valid else None,"seconds":stats["seconds"],"peak":stats["peak"],"visits":len(stats["visitors"]),
+                          "duration":episode["duration"] if episode else 0.,
+                          "alert":bool(episode and episode["alert"] and observation_valid),
+                          "observed":bool(observation_valid), "scope":self.zone_episodes.scope,
+                          "episodeId":episode["id"] if episode else None,
+                          "start":episode["start"] if episode else None})
         ranked = sorted(self.cells.items(), key=lambda item: item[1]["seconds"], reverse=True)[:80]
-        return {"clusters": circles, "zones": zones, "heat": [{"x": k[0] * grid_size, "y": k[1] * grid_size, "size": grid_size, **v} for k, v in ranked], "mappedCount": len(unique)}
+        return {"clusters": circles, "zones": zones, "heat": [{"x": k[0] * grid_size, "y": k[1] * grid_size, "size": grid_size, **v} for k, v in ranked], "mappedCount": len(unique),
+                "zoneEpisodes": self.zone_episodes.snapshot()}

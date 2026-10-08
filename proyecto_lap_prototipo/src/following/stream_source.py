@@ -6,6 +6,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
 
 import cv2
+from resource_control import CURRENT, hold_source
 
 # Protege la variable de entorno global de FFmpeg mientras se abre una captura.
 # Sin el candado, dos hilos que abren cámaras RTSP a la vez podrían pisarse la
@@ -100,8 +101,13 @@ class VideoSource:
     """Entrega frames y tiempo de contenido; admite archivos y streams locales autorizados."""
 
     def __init__(self, source, root):
+        hold_source(source, root)
         self.original_source = source
         self.hls = isinstance(source, str) and is_youtube_url(source)
+        # YouTube serves ~5 s HLS segments. A 5 s open/read limit can expire
+        # while the next segment is being published, especially over Wi-Fi.
+        self.open_timeout_ms = 20000 if self.hls else 5000
+        self.read_timeout_ms = 15000 if self.hls else 5000
         if self.hls:
             source = resolve_stream_source(source)
         self.media_source = source
@@ -113,7 +119,7 @@ class VideoSource:
         elif self.live:
             with low_latency_ffmpeg(self.hls):
                 self.capture = cv2.VideoCapture(source, cv2.CAP_FFMPEG,
-                    [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000, cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000])
+                    [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, self.open_timeout_ms, cv2.CAP_PROP_READ_TIMEOUT_MSEC, self.read_timeout_ms])
             try:
                 # Complementa las banderas de FFmpeg: sin esto OpenCV puede
                 # quedarse con un cuadro más en su propia cola interna.
@@ -145,9 +151,13 @@ class VideoSource:
         if self.live:
             self.reader = threading.Thread(target=self._receive, daemon=True)
             self.reader.start()
+            if CURRENT.get() is not None:
+                CURRENT.get().track(self)
 
     def _reconnect_live(self):
         """Reabre una fuente en vivo tras un corte transitorio de lectura."""
+        if self.closed.is_set():
+            return False
         source = self.original_source
         if isinstance(source, str) and is_youtube_url(source):
             source = resolve_stream_source(source)
@@ -158,10 +168,10 @@ class VideoSource:
                 capture = cv2.VideoCapture(
                     source,
                     cv2.CAP_FFMPEG,
-                    [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000,
-                     cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000],
+                    [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, self.open_timeout_ms,
+                     cv2.CAP_PROP_READ_TIMEOUT_MSEC, self.read_timeout_ms],
                 )
-        if not capture.isOpened():
+        if self.closed.is_set() or not capture.isOpened():
             capture.release()
             return False
         try:
@@ -181,17 +191,19 @@ class VideoSource:
         try:
             while not self.closed.is_set():
                 ok, frame = self.capture.read()
+                if self.closed.is_set():
+                    break
                 if not ok:
                     missed_reads += 1
                     if missed_reads < 3:
-                        time.sleep(.15)
+                        self.closed.wait(.15)
                         continue
                     missed_reads = 0
                     reconnect_failures += 1
                     if reconnect_failures <= 5 and self._reconnect_live():
                         continue
                     if reconnect_failures <= 5:
-                        time.sleep(.5)
+                        self.closed.wait(.5)
                         continue
                     raise ValueError("Se interrumpió la señal después de varios reintentos. No se interpreta la pérdida de señal como cero personas.")
                 missed_reads = 0
@@ -209,7 +221,9 @@ class VideoSource:
     def read(self, target=0):
         if self.live:
             with self.condition:
-                self.condition.wait_for(lambda: self.latest is not None or self.failure is not None or self.closed.is_set(), timeout=12)
+                self.condition.wait_for(lambda: self.latest is not None or self.failure is not None or self.closed.is_set(), timeout=35 if self.hls else 12)
+                if self.closed.is_set():
+                    return None, target
                 if self.failure:
                     raise self.failure
                 if self.latest is None:
@@ -235,11 +249,18 @@ class VideoSource:
             return None, target
         return frame, self.index/self.fps
 
-    def close(self):
+    def request_stop(self):
         self.closed.set()
+        with self.condition:
+            self.condition.notify_all()
+
+    def is_alive(self):
+        return self.reader is not None and self.reader.is_alive()
+
+    def close(self, timeout=6):
+        self.request_stop()
         if self.reader:
-            with self.condition:
-                self.condition.notify_all()
-            self.reader.join(timeout=6)
+            self.reader.join(timeout=max(0, timeout))
         else:
             self.capture.release()
+        return not self.is_alive()

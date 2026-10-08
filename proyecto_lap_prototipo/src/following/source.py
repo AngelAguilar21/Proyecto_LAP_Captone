@@ -21,4 +21,10 @@ class NetworkCapture:
         return frame is not None, frame
 
     def release(self):
-        self.source.close()
+        return self.source.close()
+
+    def request_stop(self):
+        self.source.request_stop()
+
+    def is_alive(self):
+        return self.source.is_alive()

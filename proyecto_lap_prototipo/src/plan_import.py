@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from pdf_runtime import serialized_pdfium
 
 
 # Lado mayor al que se guarda el plano rasterizado. Manda cuanto zoom aguanta antes
@@ -18,6 +19,7 @@ import tempfile
 LADO_MAXIMO = 3200
 
 
+@serialized_pdfium
 def _pdf_png(data, page):
     import pypdfium2 as pdfium
     document = pdfium.PdfDocument(data)

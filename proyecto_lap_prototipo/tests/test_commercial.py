@@ -55,6 +55,22 @@ class CommercialTests(unittest.TestCase):
             with self.con:
                 self.con.execute('INSERT INTO commercial_traffic VALUES (?,?,?,?,?,?,?,?)',(str(index),'shop',date,10,10,8,3600,'real'))
 
+    def test_short_clip_does_not_claim_conversion_and_replays_do_not_duplicate_hours(self):
+        self.historical()
+        commerce.import_sales(self.con, 'negocio_id,fecha,hora,monto,transacciones\nshop,2026-09-27,10,100,2', self.businesses, 'now.csv')
+        with self.con:
+            for sid, seconds in [('first',30), ('repeated',60)]:
+                self.con.execute('INSERT INTO commercial_traffic VALUES (?,?,?,?,?,?,?,?)',(sid,'shop','2026-09-27',10,4,3,seconds,'real'))
+        result = commerce.summary(self.con, self.businesses, [], day='2026-09-27', hour=10)
+        row = result['businesses'][0]
+        self.assertEqual(row['entries'],4)
+        self.assertEqual(row['coverage'],60)
+        self.assertEqual(row['session'],'repeated')
+        self.assertIsNone(row['conversion'])
+        self.assertIsNone(result['empresas'][0]['conversion'])
+        self.assertEqual(len(row['hourly']),1)
+        self.assertEqual(row['forecast']['estimate'],80)
+
     def test_forecast_no_future_data_insufficient_history_or_demo_mix(self):
         self.assertIsNone(commerce.forecast(self.con,'shop','2026-09-27',10,5)['estimate'])
         self.historical()

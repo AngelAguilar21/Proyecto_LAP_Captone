@@ -1,5 +1,6 @@
 """Vectores OSNet: cuándo se calculan por track y comportamiento sin modelo."""
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch

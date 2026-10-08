@@ -31,6 +31,10 @@ def atomic_write(path, text, attempts=6):
     Drive) el proceso de sincronización sostiene el archivo unos milisegundos y
     os.replace falla con «acceso denegado» sin que nada esté mal."""
     path = Path(path)
+    from storage import operational
+    if operational.enabled(path):
+        operational.write_document(path, json.loads(text))
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     last = None
@@ -45,12 +49,30 @@ def atomic_write(path, text, attempts=6):
     raise OSError(f"No se pudo guardar {path.name}. Ciérralo en otras aplicaciones e inténtalo de nuevo. ({last})")
 
 
+def read_document(path):
+    from storage import operational
+    if operational.enabled(path):
+        return operational.read_document(path)
+    return json.loads(Path(path).read_text(encoding='utf-8'))
+
+
+def document_exists(path):
+    from storage import operational
+    if operational.enabled(path):
+        try:
+            operational.read_document(path)
+            return True
+        except FileNotFoundError:
+            return False
+    return Path(path).exists()
+
+
 def read_index(root):
     path = index_path(root)
-    if not path.exists():
+    if not document_exists(path):
         return None
     try:
-        index = json.loads(path.read_text(encoding="utf-8"))
+        index = read_document(path)
     except (OSError, ValueError):
         return None
     return index if isinstance(index.get("projects"), list) and index["projects"] else None
@@ -146,7 +168,10 @@ def remove(root, pid):
         index["active"] = index["projects"][0]["id"]
     write_index(root, index)
     path = project_path(root, pid)
-    if path.exists():
+    from storage import operational
+    if operational.enabled(path):
+        operational.delete_document(path)
+    elif path.exists():
         path.unlink()
     return index["active"]
 
@@ -182,7 +207,7 @@ def listing(root, active_config=None, active_id=None):
         config = active_config if item["id"] == active_id else None
         if config is None:
             try:
-                config = json.loads(project_path(root, item["id"]).read_text(encoding="utf-8"))
+                config = read_document(project_path(root, item["id"]))
             except (OSError, ValueError):
                 config = {}
         items.append({**item, **summary(root, config)})

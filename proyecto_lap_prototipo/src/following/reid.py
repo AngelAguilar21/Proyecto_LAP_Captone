@@ -9,6 +9,7 @@ modelo no existe o no carga, `OSNetEmbedder.available` es False y el sistema
 sigue con la firma de color (torso_histogram), sin detener el monitoreo.
 """
 import os
+import hashlib
 from pathlib import Path
 
 import cv2
@@ -23,10 +24,8 @@ MIN_CROP_PX = 12
 
 def resolve_model_path(configured=None):
     """Orden: ruta de la configuración, variable de entorno, models/osnet.onnx."""
-    for candidate in (configured, os.environ.get(MODEL_ENV), DEFAULT_MODEL):
-        if candidate and Path(candidate).is_file():
-            return Path(candidate)
-    return None
+    candidate = configured or os.environ.get(MODEL_ENV) or DEFAULT_MODEL
+    return Path(candidate) if Path(candidate).is_file() else None
 
 
 class OSNetEmbedder:
@@ -34,6 +33,8 @@ class OSNetEmbedder:
         self.session = None
         self.error = None
         self.batch = None
+        self.fingerprint = None
+        self.providers = []
         self.dimension, self.name = 512, "osnet"
         self.size = (128, 256)  # (ancho, alto) de entrada habitual de OSNet
         path = resolve_model_path(model_path)
@@ -43,9 +44,15 @@ class OSNetEmbedder:
         try:
             import onnxruntime as ort
             opciones = ort.SessionOptions()
+            if providers and "DmlExecutionProvider" in providers:
+                opciones.enable_mem_pattern = False
+                opciones.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
             if threads:
                 opciones.intra_op_num_threads = int(threads)   # tope de hilos: OSNet no debe frenar al detector
             self.session = ort.InferenceSession(str(path), opciones, providers=providers or ["CPUExecutionProvider"])
+            self.providers = self.session.get_providers()
+            with path.open('rb') as model_file:
+                self.fingerprint = hashlib.file_digest(model_file, 'sha256').hexdigest()[:16]
             shape = self.session.get_inputs()[0].shape
             if len(shape) == 4 and all(isinstance(v, int) and v > 0 for v in shape[2:]):
                 self.size = (int(shape[3]), int(shape[2]))

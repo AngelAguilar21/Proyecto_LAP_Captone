@@ -9,8 +9,9 @@ El AsociadorMulticamara une a una persona entre cámaras y en regresos cortos de
 * Si un ID recién creado resulta ser alguien ya visto (al juntar más vistas), se fusionan y queda el antiguo.
 * Mientras una persona no tiene ID se toma una vista cada tick (sin esperar `sample_interval_s`) para
   reconocer en menos de un segundo a quien ya se vio.
-* Se compara en RAM (una multiplicación de matrices por consulta). La escritura a SQLite ocurre en un hilo
-  aparte: el monitoreo nunca espera al disco, y un fallo del disco solo desactiva la persistencia.
+* Se compara en RAM (una multiplicación de matrices por consulta). La escritura ocurre en un hilo
+  aparte: PostgreSQL en instalaciones migradas, SQLite en modo local. Un fallo de escritura
+  desactiva la persistencia de esa memoria y se informa en su estado; la inferencia sigue en RAM.
 
 Qué se guarda: vectores de apariencia (no rostros ni imágenes), cuándo y en qué cámara se vio. Nada que
 diga quién es la persona. La retención es configurable (1 a 168 h, 24 por defecto), se purga sola y
@@ -115,6 +116,7 @@ class MemoriaApariencia:
         self.personas, self.siguiente, self.persistente = {}, 1, False
         self.epoca = 0  # sube con purgar_todo(): quien la consulte sabe que debe olvidar
         self.error = None
+        self.backend = 'RAM'
         self._ids, self._matriz, self._fila = [], np.zeros((0, self.dimension), np.float32), {}
         self._hay = threading.Condition()
         self._db_lock = threading.Lock()
@@ -130,7 +132,11 @@ class MemoriaApariencia:
         """Abre la base y carga lo vigente. Un fallo deja la memoria solo en RAM, sin detener nada."""
         try:
             ruta.parent.mkdir(parents=True, exist_ok=True)
-            self._con = sqlite3.connect(str(ruta), check_same_thread=False)
+            from storage.operational import appearance_connect
+            self._con = appearance_connect(ruta, self.encoder, self.dimension)
+            self.backend = 'PostgreSQL' if self._con is not None else 'SQLite'
+            if self._con is None:
+                self._con = sqlite3.connect(str(ruta), check_same_thread=False)
             self._con.executescript(ESQUEMA)
             meta = dict(self._con.execute("SELECT clave, valor FROM appearance_meta").fetchall())
             if meta and (meta.get("encoder") != self.encoder or meta.get("dimension") != str(self.dimension)):
@@ -158,8 +164,13 @@ class MemoriaApariencia:
             self.persistente = True
             self._hilo = threading.Thread(target=self._escribir, daemon=True, name="memoria-apariencia")
             self._hilo.start()
-        except (OSError, sqlite3.Error, ValueError) as exc:
-            self.error = f"Memoria de apariencia solo en RAM: {exc}"
+        except Exception as exc:
+            from storage.operational import is_database_error
+            if not isinstance(exc, (OSError, sqlite3.Error, ValueError)) and not is_database_error(exc):
+                raise
+            self.error = f"Memoria de apariencia solo en RAM: {type(exc).__name__}"
+            if self._con is not None:
+                self._con.close()
             self.persistente, self._con = False, None
 
     def _marcar(self, pid, operacion="guardar"):
@@ -197,7 +208,7 @@ class MemoriaApariencia:
                                 if vistas is not None:
                                     self._con.execute("DELETE FROM appearance_views WHERE persona=?", (pid,))
                                     self._con.executemany("INSERT INTO appearance_views VALUES (?,?,?,?,?)", vistas)
-                        self._con.execute("INSERT OR REPLACE INTO appearance_meta VALUES ('siguiente', ?)", (str(siguiente),))
+                        self._con.execute("INSERT OR REPLACE INTO appearance_meta VALUES (?, ?)", ('siguiente', str(siguiente)))
                         self._con.commit()
             except sqlite3.Error as exc:
                 self.error, self.persistente = f"Memoria de apariencia solo en RAM: {exc}", False
@@ -251,7 +262,7 @@ class MemoriaApariencia:
             if self._con is not None:
                 try:
                     self._con.executescript("DELETE FROM appearance_views; DELETE FROM appearance_people;")
-                    self._con.execute("INSERT OR REPLACE INTO appearance_meta VALUES ('siguiente','1')")
+                    self._con.execute("INSERT OR REPLACE INTO appearance_meta VALUES (?,?)", ('siguiente','1'))
                     self._con.commit()
                 except sqlite3.Error as exc:
                     self.error = f"No se pudo vaciar la base: {exc}"
@@ -260,7 +271,7 @@ class MemoriaApariencia:
     def resumen(self):
         """Estado público de la memoria: cuántas personas, retención y si persiste en disco."""
         return {"personas": len(self.personas), "retencionHoras": self.retencion_s / 3600,
-                "persistente": self.persistente, "encoder": self.encoder, "error": self.error}
+                "persistente": self.persistente, "backend": self.backend, "encoder": self.encoder, "error": self.error}
 
     # ---------- Comparación en RAM ----------
 
@@ -283,10 +294,16 @@ class MemoriaApariencia:
     def _reconocer(self, suma, prototipos, camaras, ocupadas, ignorar):
         if not self._ids:
             return None, False
-        similitudes = self._matriz @ _normal(np.asarray(suma, np.float32))
+        # Filtrar antes del top-k: una identidad excluida no debe desplazar
+        # candidatas válidas ni ocultar la segunda mejor (ambigüedad).
+        filas = [i for i, pid in enumerate(self._ids) if pid not in ignorar
+                 and self.personas[pid].muestras >= self.min_muestras]
+        if not filas:
+            return None, False
+        similitudes = self._matriz[filas] @ _normal(np.asarray(suma, np.float32))
         candidatas, duda = [], False
         for i in np.argsort(-similitudes)[:8]:
-            pid = self._ids[i]
+            pid = self._ids[filas[i]]
             persona = self.personas.get(pid)
             if persona is None or pid in ignorar or persona.muestras < self.min_muestras:
                 continue
@@ -439,11 +456,42 @@ class AsociadorConMemoria(AsociadorMulticamara):
             return timestamp - track.ultimo_muestreo + 1e-8 >= MUESTREO_INICIAL_S
         return super()._debe_muestrear(track, fila, timestamp)
 
+    def _fuera_del_grafo(self, camaras, ahora, gid=None):
+        """No recuperar IDs de componentes desconectados ni memoria ya vencida.
+
+        La memoria histórica no tiene tiempo de contenido por cámara: aquí se
+        aplica conectividad dirigida; el motor de sesión valida los tránsitos.
+        """
+        origenes = set(camaras)
+        pendientes = list(camaras)
+        while pendientes:
+            destino = pendientes.pop()
+            anteriores = {a for a, b in self.transiciones if b == destino}
+            for par in self.solapes:
+                if destino in par:
+                    anteriores.update(par)
+            for origen in anteriores - origenes:
+                origenes.add(origen)
+                pendientes.append(origen)
+        excluidas = {pid for pid, p in self.memoria.personas.items()
+                if not p.camaras.intersection(origenes) or ahora - p.ultima_vez > self.memoria.retencion_s}
+        if gid is not None:
+            for otra, pid in self.confirmadas.items():
+                if otra != gid and otra in self.globales:
+                    # En la misma cámara la memoria permite regresos largos;
+                    # la ventana corta solo gobierna las transiciones entre cámaras.
+                    pares = [(x, y) for x in self._miembros(gid) for y in self._miembros(otra)]
+                    if any((x.camera_id != y.camera_id or max(x.inicio_s, y.inicio_s) <= min(x.fin_s, y.fin_s))
+                           and self._fisica(x, y) is None for x, y in pares):
+                        excluidas.add(pid)
+        return excluidas
+
     def _identificar(self, gid, ocupadas, ahora):
         if self._n_vistas(gid) < self.min_query_samples:
             return None
         suma, prototipos, camaras = self._grupo(gid)
-        pid, duda = self.memoria.reconocer(suma, prototipos, camaras, ocupadas=ocupadas)
+        pid, duda = self.memoria.reconocer(suma, prototipos, camaras, ocupadas=ocupadas,
+                                         ignorar=self._fuera_del_grafo(camaras, ahora, gid))
         persona = self.memoria.personas.get(pid) if pid is not None else None
         if persona is not None:
             self.confirmadas[gid] = pid
@@ -482,7 +530,8 @@ class AsociadorConMemoria(AsociadorMulticamara):
             return
         self._revisado[gid] = self.last_timestamp
         suma, prototipos, camaras = self._grupo(gid)
-        antigua, _ = self.memoria.reconocer(suma, prototipos, camaras, ocupadas=self._ocupadas(excepto=gid), ignorar={pid})
+        antigua, _ = self.memoria.reconocer(suma, prototipos, camaras, ocupadas=self._ocupadas(excepto=gid),
+                                          ignorar={pid} | self._fuera_del_grafo(camaras, ahora, gid))
         if antigua is None or antigua > pid or antigua not in self.memoria.personas:
             return
         regreso = ahora - self.memoria.personas[antigua].ultima_vez > REGRESO_S

@@ -6,6 +6,7 @@ import type { Session } from './useSession';
 import MapCanvas from './MapCanvas';
 import type { MapTool } from './MapCanvas';
 import { CameraEditor, CameraVideo } from './CameraPanel';
+import { calibrationMessage } from './calibration';
 import './plan-workspace.css';
 
 type Section = 'area' | 'cameras' | 'calibration';
@@ -38,7 +39,8 @@ export default function PlanWorkspace({ session, selected, onSelected, startTest
   const [template, setTemplate] = useState(true);
   const [pending, setPending] = useState<Point | null>(null);
   const [scaleDistance, setScaleDistance] = useState(1);
-  const [check, setCheck] = useState<{ rmse: number; pointErrors?: number[]; warning?: string; inlierCount?: number; outlierIndices?: number[]; validationError?: number | null; validationPoints?: number; fitMethod?: string; projectedBoundary?: Point[] } | null>(null);
+  const validation = camera ? session.calibrationFor(camera) : undefined;
+  const check = validation?.status === 'valid' ? validation.diagnostics : undefined;
   const [sourceOpen, setSourceOpen] = useState(false);
   const file = useRef<HTMLInputElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
@@ -56,13 +58,11 @@ export default function PlanWorkspace({ session, selected, onSelected, startTest
     setArea(config.workArea || []);
     setAreaEditing(!config.workArea?.length && !config.mapAsset);
     setPending(null);
-    setCheck(null);
   }, [config.planId]);
   useEffect(() => {
     setTool(controlled === 'calibration' ? 'calibrate' : 'select');
     setPending(null);
   }, [controlled, selected]);
-  useEffect(() => { setCheck(null); }, [camera?.id, JSON.stringify(camera?.pairs)]);
 
   function chooseSection(next: Section) {
     setInnerSection(next);
@@ -80,7 +80,6 @@ export default function PlanWorkspace({ session, selected, onSelected, startTest
     const next = { ...config, workArea: area, mapConfigured: true };
     void session.action(async () => {
       await session.save(next);
-      session.setConfig(next);
       setAreaEditing(false);
       setTool('select');
       session.setNotice('Límite del plano guardado.');
@@ -159,16 +158,14 @@ export default function PlanWorkspace({ session, selected, onSelected, startTest
       })),
     });
     setArea(area.map(point));
-    setCheck(null);
   }
 
   function validateCalibration() {
     if (!camera) return;
     void session.action(async () => {
-      const result = await session.post('calibration-check', { pairs: camera.pairs, zone: camera.detectionZone, plan: [config.width, config.height] });
+      await session.validateCalibration(camera.id);
       await session.save();
-      setCheck(result);
-      session.setNotice('Homografía validada y guardada.');
+      session.setNotice('Geometría de la homografía validada y guardada. La precisión física requiere comprobación independiente.');
     });
   }
 
@@ -176,7 +173,6 @@ export default function PlanWorkspace({ session, selected, onSelected, startTest
     void session.action(async () => {
       const next = areaEditing && area.length >= 3 ? { ...config, workArea: area, mapConfigured: true } : config;
       await session.save(next);
-      session.setConfig(next);
       setAreaEditing(false);
       session.setNotice('Plano guardado.');
     });
@@ -222,7 +218,6 @@ export default function PlanWorkspace({ session, selected, onSelected, startTest
             if (!pending || !camera) return;
             patchCamera({ pairs: [...camera.pairs, [...pending, ...point]] });
             setPending(null);
-            setCheck(null);
           }}
         />
         <footer className="cad-status"><span>{section === 'calibration' ? `${camera?.pairs.length || 0} referencias del suelo (opcionales; 4 o más para calibrar)` : config.workArea?.length ? `${config.workArea.length} puntos del límite` : config.planLines?.length ? `${config.planLines.length} líneas del plano` : 'Plano completo'}</span><span>Rueda: zoom · Arrastra: desplazar</span></footer>
@@ -241,16 +236,17 @@ export default function PlanWorkspace({ session, selected, onSelected, startTest
           <small>La zona útil de cada video es la que excluye espejos y áreas externas.</small>
         </> : <>
           {section === 'cameras' && <button disabled={disabled} onClick={addCamera}>+ Agregar cámara</button>}
-          <label>Cámara<select value={selected} onChange={event => { onSelected(event.target.value); setPending(null); setCheck(null); }}>{cameras.map(item => <option value={item.id} key={item.id}>{item.name || item.id}</option>)}</select></label>
+          <label>Cámara<select value={selected} onChange={event => { onSelected(event.target.value); setPending(null); }}>{cameras.map(item => <option value={item.id} key={item.id}>{item.name || item.id}</option>)}</select></label>
           {camera && section === 'cameras' && <><button onClick={() => setSourceOpen(true)}>Editar fuente y zona útil</button><label>Nombre<input disabled={disabled} value={camera.name || camera.id} onChange={event => patchCamera({ name: event.target.value })} /></label><label className="check"><input disabled={disabled} type="checkbox" checked={camera.active !== false} onChange={event => patchCamera({ active: event.target.checked })} /> Cámara activa</label></>}
           {camera && section === 'calibration' && <>
-            <CameraVideo camera={camera} state={session.state} connected={session.connected} mode={disabled ? undefined : 'calibration'} pending={pending} zonePoints={camera.detectionZone} pairPoints={camera.pairs.map(pair => [pair[0], pair[1]])} onPairChange={disabled ? undefined : (index, point) => { patchCamera({ pairs: camera.pairs.map((value, item) => item === index ? [point[0], point[1], value[2], value[3]] : value) }); setCheck(null); }} onPoint={point => { setPending(point); setTool('calibrate'); }} />
+            <CameraVideo camera={camera} state={session.state} connected={session.connected} mode={disabled ? undefined : 'calibration'} pending={pending} zonePoints={camera.detectionZone} pairPoints={camera.pairs.map(pair => [pair[0], pair[1]])} onPairChange={disabled ? undefined : (index, point) => { patchCamera({ pairs: camera.pairs.map((value, item) => item === index ? [point[0], point[1], value[2], value[3]] : value) }); }} onPoint={point => { setPending(point); setTool('calibrate'); }} />
             <button disabled={disabled} onClick={startTest}>Actualizar imagen</button>
             <label>Altura de la cámara (m)<input disabled={disabled} type="number" min="1.8" step="0.1" value={camera.height ?? 2} onChange={event => patchCamera({ height: +event.target.value })} /></label>
-            <div className="cad-nodes">{camera.pairs.map((pair, index) => <div key={index}><i style={{ background: COLORS[index % COLORS.length] }} />Referencia {index + 1}<span>X {pair[2].toFixed(2)} · Y {pair[3].toFixed(2)}{check?.pointErrors?.[index] != null ? ` · error ${check.pointErrors[index].toFixed(2)} ${unit}${check.outlierIndices?.includes(index + 1) ? ' (descartada)' : ''}` : ''}</span><button disabled={disabled} title={`Eliminar referencia ${index + 1}`} onClick={() => { patchCamera({ pairs: camera.pairs.filter((_, item) => item !== index) }); setCheck(null); }}>×</button></div>)}</div>
+            <div className="cad-nodes">{camera.pairs.map((pair, index) => <div key={index}><i style={{ background: COLORS[index % COLORS.length] }} />Referencia {index + 1}<span>X {pair[2].toFixed(2)} · Y {pair[3].toFixed(2)}{check?.pointErrors?.[index] != null ? ` · error ${check.pointErrors[index].toFixed(2)} ${unit}${check.outlierIndices?.includes(index + 1) ? ' (descartada)' : ''}` : ''}</span><button disabled={disabled} title={`Eliminar referencia ${index + 1}`} onClick={() => { patchCamera({ pairs: camera.pairs.filter((_, item) => item !== index) }); }}>×</button></div>)}</div>
             {!config.mapAsset && camera.pairs.length >= 2 && <><label>Distancia real entre 1 y 2 (m)<input disabled={disabled} type="number" min="0.001" step="0.1" value={scaleDistance} onChange={event => setScaleDistance(+event.target.value)} /></label><button disabled={disabled || !referenceDistance} onClick={applyScale}>Aplicar escala</button></>}
             <button className="primary" disabled={disabled || camera.pairs.length < 4 || session.busy} onClick={validateCalibration}>Validar homografía</button>
             {check && <p role="status" className={check.warning ? 'notice warning' : 'notice'}><strong>{check.warning ? 'Revisa las referencias' : 'Homografía validada'}</strong><span>{check.warning || `Error medio: ${check.rmse.toFixed(3)} ${unit}.`}{check.inlierCount != null && ` · ${check.inlierCount}/${camera.pairs.length} referencias consistentes`}{check.validationPoints ? ` · validación cruzada: ${check.validationError?.toFixed(3)} ${unit}` : ''} · La huella naranja muestra dónde cae toda la imagen sobre el plano.</span></p>}
+            <p role="status" className={validation?.status === "invalid" ? "notice warning" : "notice"}>{calibrationMessage(camera,validation)}</p>
           </>}
         </>}
       </aside>

@@ -79,6 +79,25 @@ def save(settings_root, changes):
     return public(settings_root)
 
 
+class DeliveryError(ValueError):
+    """Safe delivery outcome: uncertain errors must never be auto-retried."""
+
+    def __init__(self, reason, uncertain=True):
+        super().__init__(reason)
+        self.uncertain = uncertain
+
+
+def delivery_error(exc):
+    if isinstance(exc, DeliveryError):
+        return exc
+    refused = isinstance(exc, (smtplib.SMTPAuthenticationError,
+                              smtplib.SMTPSenderRefused,
+                              smtplib.SMTPRecipientsRefused,
+                              smtplib.SMTPDataError))
+    # Do not persist server messages: they may contain addresses or credentials.
+    return DeliveryError(type(exc).__name__, uncertain=not refused)
+
+
 def _send(data, subject, body):
     message = EmailMessage()
     message["From"] = data.get("user", "")
@@ -88,15 +107,27 @@ def _send(data, subject, body):
     port = int(data.get("port", 465))
     host = data.get("host", "smtp.gmail.com")
     context = ssl.create_default_context()
-    if port == 465:
-        with smtplib.SMTP_SSL(host, port, timeout=20, context=context) as server:
+    attempted = confirmed = False
+    try:
+        connection = (smtplib.SMTP_SSL(host, port, timeout=20, context=context)
+                      if port == 465 else smtplib.SMTP(host, port, timeout=20))
+        with connection as server:
+            if port != 465:
+                server.starttls(context=context)
             server.login(data["user"], data["password"])
-            server.send_message(message)
-    else:
-        with smtplib.SMTP(host, port, timeout=20) as server:
-            server.starttls(context=context)
-            server.login(data["user"], data["password"])
-            server.send_message(message)
+            attempted = True
+            refused = server.send_message(message)
+            if refused:
+                # Some recipients may already have accepted the message.
+                raise DeliveryError("partial_recipient_refusal", uncertain=True)
+            confirmed = True
+    except Exception as exc:
+        if confirmed:
+            return  # A QUIT failure cannot undo confirmed DATA acceptance.
+        error = delivery_error(exc)
+        if not attempted:
+            error = DeliveryError(type(exc).__name__, uncertain=False)
+        raise error from exc
 
 
 class Mailer:
@@ -107,34 +138,73 @@ class Mailer:
         self.last = {}
         self.error = None
         self.sent = 0
+        self.lock = threading.RLock()
+        self.stop_event = threading.Event()
+        self.workers = set()
 
-    def ready(self):
+    def _configuration(self, recipients):
         data = load(self.settings_root)
+        if recipients is not None:
+            if (not isinstance(recipients, list) or not 1 <= len(recipients) <= 20 or
+                    any(not isinstance(r, str) or "@" not in r or len(r) > 200 for r in recipients)):
+                raise ValueError("Destinatarios alternativos inválidos.")
+            data["recipients"] = list(recipients)
+        return data
+
+    def ready(self, recipients=None):
+        data = self._configuration(recipients)
         return bool(data.get("enabled") and data.get("password") and data.get("recipients"))
 
-    def send(self, subject, body, key=None, blocking=False):
+    def send(self, subject, body, key=None, blocking=False, recipients=None):
         """key agrupa avisos parecidos para no repetirlos dentro del enfriamiento."""
-        data = load(self.settings_root)
+        data = self._configuration(recipients)
         if not (data.get("enabled") and data.get("password") and data.get("recipients")):
             return False
-        now = time.time()
-        if key and now - self.last.get(key, 0) < COOLDOWN:
-            return False
-        if key:
-            self.last[key] = now
+        with self.lock:
+            if self.stop_event.is_set():
+                return False
+            now = time.time()
+            if key and key in self.last and now - self.last[key] < COOLDOWN:
+                return False
+            if key:
+                self.last[key] = now
 
         def run():
             try:
                 _send(data, subject, body)
-                self.sent += 1
-                self.error = None
+                with self.lock:
+                    self.sent += 1
+                    self.error = None
+                return None
             except Exception as exc:  # el correo nunca debe tumbar la sesión
-                self.error = str(exc)
+                error = delivery_error(exc)
+                with self.lock:
+                    self.error = str(error)
+                return error
+            finally:
+                with self.lock:
+                    self.workers.discard(threading.current_thread())
 
         if blocking:
-            run()
-            if self.error:
-                raise ValueError(self.error)
+            with self.lock:
+                if self.stop_event.is_set():
+                    return False
+                self.workers.add(threading.current_thread())
+            error = run()
+            if error is not None:
+                raise error
             return True
-        threading.Thread(target=run, daemon=True).start()
+        with self.lock:
+            if self.stop_event.is_set():
+                return False
+            worker = threading.Thread(target=run, name="mailer", daemon=True)
+            self.workers.add(worker)
+            try:
+                worker.start()
+            except Exception:
+                self.workers.discard(worker)
+                raise
         return True
+
+    def has_writers(self):
+        return bool(self.workers)

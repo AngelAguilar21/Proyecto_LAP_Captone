@@ -32,7 +32,9 @@ class WorkspaceTests(unittest.TestCase):
 
  def test_video_ranges_allow_seeking_without_loading_whole_file(self):
   class Response:
-   def __init__(self,header):self.headers={'Range':header};self.wfile=BytesIO();self.result={}
+   def __init__(self,header):
+    self.headers={'Range':header};self.wfile=BytesIO();self.result={}
+    self.server=SimpleNamespace(engine=SimpleNamespace(lock=threading.RLock(),project_id=None,config={}))
    def send_response(self,status):self.status=status
    def send_header(self,key,value):self.result[key]=value
    def end_headers(self):pass
@@ -58,7 +60,7 @@ class WorkspaceTests(unittest.TestCase):
    engine=Engine(root/'config.json');engine.configure(cfg)
    fake_detector=SimpleNamespace(detectar=lambda frame:[SimpleNamespace(x=100,y=80,confianza=.9)])
    with patch.object(engine,'load_detector',return_value=fake_detector):
-    engine.start({'detector':'yolo','cameraIds':['C','D'],'requireUnified':False});engine.worker.join(15)
+    engine.start({'detector':'yolo','cameraIds':['C','D'],'requireUnified':False,'performance':'precise'});engine.worker.join(15)
     self.assertFalse(engine.worker.is_alive());self.assertEqual(engine.state['status'],'ended')
    self.assertGreaterEqual(engine.state['t'],1.4)
    self.assertTrue((root/'data'/'replays'/engine.state['session']/'manifest.json').is_file())

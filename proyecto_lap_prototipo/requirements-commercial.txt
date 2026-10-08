@@ -2,3 +2,4 @@
 ultralytics==8.3.203
 lap==0.5.12
 yt-dlp>=2025.1.15
+openpyxl>=3.1.5,<4

@@ -20,11 +20,11 @@ ok(/function startCameraTest/.test(asistente),
 ok(/session\.post\(['"]start['"]/.test(asistente),
    'startCameraTest no llama al endpoint que inicia el analisis');
 ok(/detector:['"]yolo['"]/.test(asistente),
-   'la prueba del asistente no usa el detector YOLO');
+   'la prueba del asistente ya no utiliza su contrato YOLO');
 ok(/PROJECT_STEPS[^\n]*\['project','plan','source','test','calibrate','zones','review'\]/.test(asistente),
    'el asistente no respeta el flujo simplificado proyecto-plano-camara-zona-homografia-zonas-revision');
-ok(/inferenceSize:640/.test(asistente),
-   'la prueba de camara no usa la resolucion YOLO de 640 px');
+ok(/inferenceSize:640/.test(asistente) && /testRun:true/.test(asistente),
+   'la prueba de camara ya no usa YOLO 640 con testRun');
 ok(!/equipaje|luggage/i.test(asistente),
    'el asistente todavia expone el modulo de equipaje retirado');
 

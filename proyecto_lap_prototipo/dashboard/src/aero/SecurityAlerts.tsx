@@ -3,6 +3,7 @@ import type { Session } from './useSession';
 import { formatTime, isActive } from './types';
 import Icon from './Icon';
 import MailSettings from './MailSettings';
+import { planAlerts } from './zoneAlerts';
 
 type Incidente = {
   id: string; tipo: string; zona: string | null; camaraId: string | null;
@@ -31,6 +32,12 @@ function beep() {
 
 export default function SecurityAlerts({ session, onOpenCamera }: { session: Session; onOpenCamera: (id: string) => void }) {
   const { state, config } = session;
+  const ruleContext = useRef({ projectId: session.projects.active, serverInstance: state.serverInstance });
+  if (ruleContext.current.projectId !== session.projects.active || ruleContext.current.serverInstance !== state.serverInstance) {
+    ruleContext.current = { projectId: session.projects.active, serverInstance: state.serverInstance };
+  }
+  const mounted = useRef(false);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [sound, setSound] = useState(() => { try { return localStorage.getItem('aero.alerts.sound') !== 'off'; } catch { return true; } });
   const known = useRef(new Map<string, Alert>());
@@ -58,23 +65,14 @@ export default function SecurityAlerts({ session, onOpenCamera }: { session: Ses
         known.current.set(key, entry);
       }
     }
-    for (const zone of state.analytics.zones.filter(z => z.alert)) {
-      const key = `plan:${zone.name}:${Math.round(state.t - (zone.duration || 0))}`;
-      const rule = config.zones.find(z => z.name === zone.name)?.rule;
-      const entry: Alert = {
-        id: key, at: state.t - (zone.duration || 0), zone: zone.name, camera: 'Plano (varias cámaras)',
-        people: zone.peak ?? zone.count, duration: zone.duration || 0,
-        threshold: rule?.minPeople ?? config.minPeople, dwell: rule?.dwell ?? config.dwell,
-        open: true, origin: 'plan',
-      };
+    for (const entry of planAlerts(config, state)) {
+      const key = entry.id;
       if (!known.current.has(key)) added++;
       known.current.set(key, entry);
     }
-    if (known.current.size !== alerts.length || added) {
-      setAlerts([...known.current.values()].sort((a, b) => b.at - a.at));
-      if (added && sound && isActive(state.status)) beep();
-    }
-  }, [state.cameraAnalytics, state.analytics.zones, state.t, state.status, config]);
+    setAlerts([...known.current.values()].sort((a, b) => b.at - a.at));
+    if (added && sound && isActive(state.status)) beep();
+  }, [state.cameraAnalytics, state.analytics, state.t, state.status, config]);
 
   // Bitácora: los incidentes guardados sobreviven al cierre de la sesión, a
   // diferencia de las alertas de arriba, que solo existen mientras corre.
@@ -99,11 +97,19 @@ export default function SecurityAlerts({ session, onOpenCamera }: { session: Ses
   const [rules, setRules] = useState({ minPeople: 4, dwell: 3, radius: 1.5 });
   useEffect(() => {
     if (config) setRules({ minPeople: config.minPeople, dwell: config.dwell, radius: config.radius });
-  }, [config?.minPeople, config?.dwell, config?.radius]);
+  }, [session.projects.active, config?.minPeople, config?.dwell, config?.radius]);
   const rulesDirty = !!config && (rules.minPeople !== config.minPeople || rules.dwell !== config.dwell || rules.radius !== config.radius);
   function saveRules() {
+    const context = ruleContext.current;
+    const ownsContext = () => mounted.current && ruleContext.current === context;
     void session.action(async () => {
-      await session.post('alert-rules', rules);
+      try {
+        await session.post('alert-rules', { ...rules, projectId: context.projectId });
+      } catch (error) {
+        if (!ownsContext()) return;
+        throw error;
+      }
+      if (!ownsContext()) return;
       session.setNotice('Umbrales de alerta actualizados.');
     });
   }
@@ -126,7 +132,7 @@ export default function SecurityAlerts({ session, onOpenCamera }: { session: Ses
     <section className="aero-panel">
       <div className="panel-heading">
         <div><h2>Cuándo avisar</h2><p className="subtle">Define cuánta gente junta y por cuánto tiempo cuenta como aglomeración. No hace falta entrar a Configuración para cambiarlo.</p></div>
-        <button className="primary" disabled={session.busy || !rulesDirty} onClick={saveRules}>Guardar umbrales</button>
+        <button className="primary" disabled={session.busy || !rulesDirty || !session.projects.active} onClick={saveRules}>Guardar umbrales</button>
       </div>
       <div className="rules-form">
         <label>Personas mínimas<input type="number" min={2} max={1000} value={rules.minPeople} onChange={e => setRules({ ...rules, minPeople: +e.target.value })} /></label>

@@ -38,18 +38,21 @@ PLAN_POINTS_TOGETHER = [[.785, .652, 6.68, 6.456], [.787, .547, 6.658, 6.417], [
 
 
 class PlanSpanTests(unittest.TestCase):
-    def test_plan_points_clustered_in_one_place_block_a_unified_session(self):
-        message = blocking_calibration_issue(PLAN_POINTS_TOGETHER, (12, 9))
-        self.assertIn("casi todos en el mismo lugar", message)
+    def test_local_reference_extent_is_only_a_scale_warning(self):
         result = calibration_diagnostics(PLAN_POINTS_TOGETHER, None, (12, 9))
-        self.assertIn("casi todos en el mismo lugar", result["issues"][0])
+        self.assertIn("área local", result["issues"][0])
 
     def test_well_separated_plan_points_do_not_block(self):
         self.assertIsNone(blocking_calibration_issue(HEALTHY, (12, 8)))
         self.assertFalse(any("mismo lugar" in i for i in calibration_diagnostics(HEALTHY, None, (12, 8))["issues"]))
 
-    def test_without_plan_size_nothing_is_blocked(self):
-        self.assertIsNone(blocking_calibration_issue(PLAN_POINTS_TOGETHER, None))
+    def test_local_calibration_is_independent_of_airport_extent(self):
+        local = [[u,v,x+800,y+1000] for u,v,x,y in HEALTHY]
+        self.assertIsNone(blocking_calibration_issue(local, (2000,2000)))
+        self.assertIsNone(blocking_calibration_issue(local, (12000,12000)))
+
+    def test_degenerate_points_are_blocked_even_without_plan_size(self):
+        self.assertIsNotNone(blocking_calibration_issue([[0,0,1,1]]*4, None))
 
 
 class CollapsedPairsTests(unittest.TestCase):

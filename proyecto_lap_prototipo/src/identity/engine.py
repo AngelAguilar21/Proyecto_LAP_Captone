@@ -98,12 +98,30 @@ def registro_desde_config(config, ajustes=None):
             a, b = cascos[c["id"]], cascos[destino]
             if a is None or b is None or _distancia_cascos(a, b) <= TOLERANCIA_COBERTURA * match * ESCALA_SOLAPE:
                 solapes.add(frozenset((c["id"], destino)))
+    if config.get("cameraRoutes") is not None:
+        from .topology import validate_routes
+        validate_routes(config)
+        transiciones, solapes = [], set()
+        for ruta in config["cameraRoutes"] if config.get("clocksVerified") else []:
+            if ruta["from"] not in ids or ruta["to"] not in ids:
+                continue
+            if any({ruta['from'], ruta['to']} == {b.get('base'), b.get('destino')}
+                   for b in config.get('identityBlockedPairs', [])):
+                continue
+            maximo = float(ruta.get("maxSeconds", 120))
+            transiciones.append({"from": ruta["from"], "to": ruta["to"],
+                                 "t_min_s": float(ruta.get("minSeconds", 0)), "t_max_s": maximo,
+                                 "max_distance_m": velocidad * maximo + match * ESCALA_SOLAPE,
+                                 "min_direction_cos": -0.5})
+            if ruta["kind"] == "overlap":
+                solapes.add(frozenset((ruta["from"], ruta["to"])))
     hay_geometria = bool(config.get("clocksVerified")) and any(calibradas.values())
     asociacion = {**ASOCIACION_DEFECTO, **UMBRALES_OSNET,
                   "overlap_distance_m": match * ESCALA_SOLAPE, "max_speed_m_s": velocidad,
                   **({"min_visible": GRUPOS_MIN_VISIBLE} if config.get("identityGroupCrops") else {}),
                   **(config.get("identityV2") or {}), **(ajustes or {})}
-    return {"mode": "calibrado" if hay_geometria else "visual_temporal", "units": "m",
+    asociacion["candidate_window_s"] = max(asociacion["candidate_window_s"], max((r["t_max_s"] for r in transiciones), default=0))
+    return {"mode": "calibrado" if hay_geometria else "visual_temporal", "units": config.get("unit", "relative"),
             "cameras": {cid: {"timestamp_offset": 0.0, "calibrada": calibradas[cid]} for cid in ids},
             "transitions": transiciones, "overlaps": [sorted(p) for p in solapes], "association": asociacion}
 
@@ -252,7 +270,9 @@ class MotorIdentidadV2:
         pasos = np.diff(sorted(set(self._tiempos)))
         fps = float(np.clip(1.0 / np.median(pasos), 1.0, 60.0)) if len(pasos) else 5.0
         con_plano = a.mode == "calibrado"
+        from .topology import allowed_groups
         regrupar = ReagrupadorPlano(escala=a.max_distance, fps=fps, min_parecido=a.average_threshold, min_muestras=a.min_samples,
+                                    group_gate=lambda x, y: allowed_groups(x, y, a.transiciones, a.solapes, a.reentry),
                                     min_visible_s=a.min_duration_s, usar_posicion=con_plano,
                                     min_parecido_global=float(a.config.get("association", {}).get("closing_threshold", ASOCIACION_DEFECTO["closing_threshold"])),
                                     factor_separados=float(a.config.get("association", {}).get("closing_far", ASOCIACION_DEFECTO["closing_far"])))

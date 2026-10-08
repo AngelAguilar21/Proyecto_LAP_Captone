@@ -1,4 +1,5 @@
 export type Point = [number, number];
+export interface CameraRoute { from: string; to: string; kind: 'overlap' | 'transition'; minSeconds: number; maxSeconds: number; }
 export type SourceMode = 'recordings' | 'live' | 'demo';
 export type View = 'commercial' | 'insights' | 'businesses' | 'replay' | 'overview' | 'setup' | 'map' | 'cameras' | 'lab' | 'dashboard' | 'zones' | 'rules' | 'reports' | 'audit' | 'alerts' | 'projects';
 export interface Camera {
@@ -24,6 +25,10 @@ export interface Plan { width:number; height:number; unit: 'relative'|'meters'; 
 export interface ProjectEntry { id:string; name:string; created:number; updated:number; airport:string; floor:string; cameras:number; plans:number; setupComplete:boolean; }
 export interface ProjectListing { active:string|null; projects:ProjectEntry[]; }
 export interface Config {
+  cameraRoutes?: CameraRoute[];
+  hardware?: 'auto' | 'cpu' | 'gpu';
+  reidModel?: 'osnet.onnx' | 'osnet_ain_msmt17.onnx';
+  reidProvider?: 'auto' | 'cpu' | 'cuda' | 'openvino' | 'directml';
   planId?:string; plans?:Record<string,Plan>; mapAsset?:string;
   workArea?: Point[]; planLines?: number[][]; planView?: 'image'|'lines'; orientation?:'horizontal'|'vertical';
   width: number; height: number; unit: 'relative' | 'meters'; background: string; radius: number;
@@ -51,6 +56,13 @@ export interface CameraStatus {
   detector?: string; tracker?: string; reid?: string; hardware?: {tier: string; device: string; model: string; imgsz?: number}; inferenceMs?: number;
 }
 export interface HeatCell { x: number; y: number; size: number; seconds: number; peak: number; visits?: number }
+export interface ZoneEpisode {
+  id: string; scope: string; zoneId: string; zone: string; zoneName: string;
+  start: number; last: number; duration: number; peak: number;
+  end: number | null; reason: string | null; observed: boolean; alert: boolean;
+  threshold: number; dwell: number; signature: string;
+}
+
 export interface IdentityInfo {
   engine: 'reid_v2'; mode?: string; geometria_validada?: boolean; camaras_sin_calibracion?: string[];
   identidades_globales?: number; identidades_multicamara?: number; umbrales_de?: string; errores?: number;
@@ -65,10 +77,11 @@ export interface SessionState {
   updatedAt?: number; serverTime?: number; error?: string; people: Person[]; cameras: CameraStatus[];
   events: { id: string; from: string; to: string; t: number }[];
   analytics: {
+    zoneEpisodes?: ZoneEpisode[];
     flowVectors?:{x:number;y:number;dx:number;dy:number;distance:number;samples:number;size:number}[];
     flow?: {name: string; entries: number; exits: number; lastCrossing: number | null}[];
     clusters: { center: Point; radius: number; count: number; duration: number; alert: boolean }[];
-    zones: { name: string; count: number; seconds?: number; peak?: number; visits?: number; alert?: boolean; duration?: number }[];
+    zones: { name: string; count: number | null; observed?: boolean; seconds?: number; peak?: number; visits?: number; alert?: boolean; duration?: number }[];
     heat: HeatCell[]; mappedCount: number;
   };
   totals?: { observed: number; identities: number; personSeconds: number; meanObservedSeconds: number; alerts: number };

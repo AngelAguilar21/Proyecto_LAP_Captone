@@ -92,6 +92,20 @@ class LowLatencyFfmpegTests(unittest.TestCase):
 
 
 class VideoSourceLatenciaTests(unittest.TestCase):
+    def test_hls_tolera_segmentos_lentos_tambien_al_reconectar(self):
+        import following.stream_source as modulo
+        with patch.object(modulo, 'resolve_stream_source', return_value='https://example.com/live.m3u8'), \
+             patch.object(modulo.cv2, 'VideoCapture', side_effect=CapturaFalsa) as capture, \
+             patch.object(modulo.threading.Thread, 'start'):
+            fuente = modulo.VideoSource('https://www.youtube.com/watch?v=test', Path('.'))
+            self.assertTrue(fuente._reconnect_live())
+            for call in capture.call_args_list:
+                params = call.args[2]
+                self.assertEqual(params[1], 20000)
+                self.assertEqual(params[3], 15000)
+            fuente.reader = None
+            fuente.close()
+
     def setUp(self):
         self.previo = os.environ.pop(CLAVE, None)
         CapturaFalsa.vistas = []

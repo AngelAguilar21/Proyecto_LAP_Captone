@@ -10,8 +10,12 @@ import PreviewControls from './PreviewControls';
 import PlanWorkspace from './PlanWorkspace';
 import PlanSelector from './PlanSelector';
 import ZoneWorkspace from './ZoneWorkspace';
+import { isCalibrationError } from './calibration';
+import type { SetupStepId } from './setupReadiness';
+import { saveStatusLabel } from './sessionSave';
+import CameraRoutes from './CameraRoutes';
 
-export type SetupStepId = 'project' | 'plan' | 'source' | 'test' | 'calibrate' | 'zones' | 'review';
+export type { SetupStepId } from './setupReadiness';
 export const PROJECT_STEPS: SetupStepId[] = ['project','plan','source','test','calibrate','zones','review'];
 const CAMERA_STEPS: SetupStepId[] = ['source','test','calibrate','review'];
 
@@ -88,7 +92,7 @@ export default function SetupFlow({ session, selected, onSelected, onNavigate, s
     void session.action(async()=>{
       await session.save();
       await session.post('start',{detector:'yolo',camera:camera.id,requireUnified:false,testRun:true,inferenceSize:640});
-      session.setNotice('Prueba de fuente iniciada en modo rápido. Se está comprobando la señal y el procesamiento.');
+      session.setNotice('Prueba de fuente iniciada con YOLO (640). Comprueba señal y seguimiento; no ejecuta densidad P2PNet.');
     });
   }
   function finishSetup() {
@@ -97,7 +101,7 @@ export default function SetupFlow({ session, selected, onSelected, onNavigate, s
         await session.save({...config,setupComplete:true});
       } catch (error) {
         const message=error instanceof Error?error.message:String(error);
-        if(message.includes('Correspondencias inconsistentes')||message.includes('Calibración degenerada'))setStep(PROJECT_STEPS.indexOf('calibrate'));
+        if(isCalibrationError(message))setStep(steps.indexOf('calibrate'));
         throw error;
       }
       onNavigate('overview');
@@ -116,18 +120,19 @@ export default function SetupFlow({ session, selected, onSelected, onNavigate, s
 
   if(screen==='home')return <section className="setup-flow config-home">
     <header className="config-home-head"><div><h1>Configurar proyecto</h1><p>Ajusta el proyecto abierto. Para crear, abrir o eliminar espacios de trabajo usa la sección Proyectos.</p></div><span className="pill blue">{config.airport||'Proyecto sin nombre'}</span></header>
+    <CameraRoutes session={session}/>
     <div className="config-home-grid">
       <button className="config-home-primary" disabled={disabled} onClick={()=>openWizard('project')}><Icon name="map" size={28}/><span><strong>Espacio completo</strong><small>Pisos, planos, fuentes, homografía, relaciones entre cámaras, zonas y validación.</small></span></button>
       <button className="config-home-primary" disabled={disabled} onClick={()=>openWizard('camera')}><Icon name="camera" size={28}/><span><strong>Añadir una cámara</strong><small>Conecta una fuente nueva al piso activo y calibra su posición.</small></span></button>
     </div>
-    <section className="config-scope" aria-label="Contenido del proyecto abierto"><div><Icon name="layers"/><strong>{Math.max(1,Object.keys(config.plans||{}).length)} pisos</strong><small>Planos independientes por nivel</small></div><div><Icon name="camera"/><strong>{config.cameras.length} cámaras</strong><small>Fuentes asignadas por piso</small></div><div><Icon name="pin"/><strong>{config.zones.length} zonas</strong><small>Áreas y reglas operativas</small></div><div><Icon name="check"/><strong>{config.setupComplete?'Validado':'En configuración'}</strong><small>Estado del proyecto abierto</small></div></section>
+    <section className="config-scope" aria-label="Contenido del proyecto abierto"><div><Icon name="layers"/><strong>{Math.max(1,Object.keys(config.plans||{}).length)} pisos</strong><small>Planos independientes por nivel</small></div><div><Icon name="camera"/><strong>{config.cameras.length} cámaras</strong><small>Fuentes asignadas por piso</small></div><div><Icon name="pin"/><strong>{config.zones.length} zonas</strong><small>Áreas y reglas operativas</small></div><div><Icon name="check"/><strong>{config.setupComplete&&stages.every(s=>s.done)?'Validado':'En configuración'}</strong><small>Estado del proyecto abierto</small></div></section>
   </section>;
 
   return <section className="setup-flow">
     <div className="wizard-top">
       <button className="ghost" onClick={()=>setScreen('home')}><Icon name="arrow" size={15} rotation={180}/> Configuración</button>
       <div><h1>{mode==='camera'?'Añadir una cámara':config.airport||'Proyecto nuevo'}</h1><p>Paso {index+1} de {steps.length} · {LABELS[id].hint}</p></div>
-      <span className={`pill ${session.saveError?'warn':'muted'}`}>{session.saveError?'No se pudo guardar':session.saving?'Guardando…':'Guardado'}</span>
+      <span className={`pill ${session.saveError?'warn':'muted'}`} role="status">{saveStatusLabel(session.saveError,session.saving,session.dirty)}</span>
     </div>
 
     <nav className="wizard-steps" aria-label="Pasos de configuración">

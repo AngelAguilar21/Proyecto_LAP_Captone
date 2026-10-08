@@ -2,9 +2,12 @@
 import copy
 import sys
 import unittest
+import tempfile
+from unittest.mock import patch
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import live_server
 from live_server import default_config
 from live_core import MIN_PAREJAS_RELACION, Occupancy, calibration, project, related_cameras, validate_config
 
@@ -19,7 +22,12 @@ def pareja(i, a="A", b="B"):
 
 class LiveCoreTests(unittest.TestCase):
     def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.enterContext(patch.object(live_server, 'ROOT', Path(temporary.name)))
         self.cfg = default_config()
+        self.cfg['cameras'] = [dict(id=cid, source='synthetic-'+cid+'.mp4', x=1, y=1,
+                                    pairs=[], links=[other]) for cid,other in [('A','B'),('B','A')]]
         self.cfg["clocksVerified"] = True
 
     def test_ground_projection_and_degenerate_calibration(self):

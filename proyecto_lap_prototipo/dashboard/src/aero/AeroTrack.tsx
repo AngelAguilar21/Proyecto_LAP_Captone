@@ -28,6 +28,7 @@ import ProjectsPanel from './ProjectsPanel';
 import SecurityAlerts from './SecurityAlerts';
 import Login from './Login';
 import BusinessesPanel from './BusinessesPanel';
+import { isCalibrationError } from './calibration';
 
 
 function explainError(msg: string): string {
@@ -38,7 +39,7 @@ function explainError(msg: string): string {
   if (msg.includes('zona útil') || msg.includes('zona de detección')) return `La cámara necesita una zona útil dentro del video para excluir espejos y áreas externas. Vuelve a Configurar proyecto → Cámara y marca el área visible.\n${msg}`;
   if (msg.includes('YOLO') || msg.includes('detector')) return `No se pudo preparar el detector de personas. Comprueba que los pesos YOLO estén instalados y que el tamaño de inferencia sea 320, 480, 640 o 960 píxeles.\n${msg}`;
   if (msg.includes('zona de detección es [u, v]')) return `Uno de los puntos de la zona de detección quedó fuera del video (por ejemplo, al marcar justo en el borde de la imagen). Vuelve a "Marcar zona", usa "Deshacer punto" para quitar el último y márcalo de nuevo dentro del video.\n${msg}`;
-  if (msg.includes('Correspondencias inconsistentes')) return `Los puntos de calibración no coinciden bien entre el video y el plano — probablemente están muy juntos o casi en línea recta. Bórralos con "Reiniciar calibración" y vuelve a marcar 6 a 8 puntos repartidos por toda el área visible.\n${msg}`;
+  if (msg.includes('Correspondencias inconsistentes')) return `${msg}\nComprueba que cada referencia corresponda al mismo punto físico del suelo en el video y en el plano.`;
   if (msg.includes('heading fuera de rango')) return `La dirección de la cámara quedó fuera de 0°-360°. Corrígela en "Configurar cámara", campo "Dirección de visión".\n${msg}`;
   if (msg.includes('Calibración degenerada')) return `Los puntos de calibración marcados están alineados o repetidos y no permiten calcular la posición real. Marca puntos que no estén todos sobre la misma línea.\n${msg}`;
   return msg;
@@ -50,7 +51,7 @@ function PanelHeader({number,title,color='blue',children}:{number?:number;title:
 }
 
 function BlockingError({message,onClose,onResolve}:{message:string;onClose:()=>void;onResolve?:()=>void}) {
-  const calibration=message.includes('Correspondencias inconsistentes')||message.includes('Calibración degenerada');
+  const calibration=isCalibrationError(message);
   return <div className="blocking-error-backdrop" role="presentation">
     <section className="blocking-error-dialog" role="alertdialog" aria-modal="true" aria-labelledby="blocking-error-title" aria-describedby="blocking-error-copy">
       <div className="blocking-error-symbol"><Icon name="alert" size={28}/></div>

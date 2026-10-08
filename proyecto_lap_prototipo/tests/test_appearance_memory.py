@@ -65,8 +65,8 @@ class PruebasMemoria(unittest.TestCase):
         memoria = memoria_ram()
         uno = Escena(asociador(memoria)).ver(4, {"c1": [(1, A, 300)]})[("c1", 1)]
         memoria.personas[uno].ultima_vez -= 120
-        escena = Escena(asociador(memoria, camaras=("c9",)))
-        self.assertEqual(escena.ver(4, {"c9": [(1, A, 500)]})[("c9", 1)], uno)
+        escena = Escena(asociador(memoria, camaras=("c1",)))
+        self.assertEqual(escena.ver(4, {"c1": [(1, A, 500)]})[("c1", 1)], uno)
         self.assertEqual(escena.asociador.reconocidas, {uno})
         self.assertEqual(memoria.personas[uno].apariciones, 2)
 
@@ -171,7 +171,7 @@ class PruebasPersistencia(unittest.TestCase):
         # Reinicio del modelo: carga la memoria y reconoce a la misma persona con el mismo ID.
         memoria = self.abrir()
         self.assertEqual(set(memoria.personas), {uno})
-        self.assertEqual(Escena(asociador(memoria, camaras=("z",))).ver(4, {"z": [(3, A, 500)]})[("z", 3)], uno)
+        self.assertEqual(Escena(asociador(memoria, camaras=("c1",))).ver(4, {"c1": [(3, A, 500)]})[("c1", 3)], uno)
 
         # Borrado inmediato: la RAM y el disco quedan vacíos y los IDs vuelven a empezar en 1.
         self.assertEqual(memoria.purgar_todo(), 1)
