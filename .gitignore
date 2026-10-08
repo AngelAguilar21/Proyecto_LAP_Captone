@@ -118,5 +118,10 @@ proyecto_lap_prototipo/models/osnet_ain_msmt17.*
 proyecto_lap_prototipo/models/*.tmp.onnx
 proyecto_lap_prototipo/models/fastreid_msmt17.*
 /outputs/
+# Componentes retirados de main, conservados físicamente en instalaciones previas.
+/proyecto_lap_prototipo/external/P2PNet/
+/proyecto_lap_prototipo/config/alcance.json
+/proyecto_lap_prototipo/config/calibracion.json
+/proyecto_lap_prototipo/data/plano_zonas.json
 # Resultados y recortes de esta validación: datos locales, no código del proyecto.
 proyecto_lap_prototipo/data/commercial-tests/4feb3f3e/

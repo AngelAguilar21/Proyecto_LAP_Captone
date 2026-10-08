@@ -33,12 +33,19 @@ reportes comerciales con análisis de cámara nulo.
 
 ## Instalación y límites
 
-El código y panel compilado están preparados para la carpeta compartida.
-Las configuraciones de cámaras y datos locales existentes se conservan.
-No se instalaron modelos ni se migraron datos a PostgreSQL. En esta instalación
-falta `psycopg`; no existe el marcador `config/storage.local.json` que activa PG.
-Para activar esa capacidad se necesita el controlador indicado en
-`requirements-storage.txt`, PostgreSQL/PostGIS disponible y la migración
+El código y panel compilado se aplicaron a la carpeta compartida.
+Se verificaron los hashes de cuatro configuraciones locales; los ejemplos
+versionados sí se actualizaron desde main. Las configuraciones antiguas de alcance
+y calibración retiradas por main se restauraron físicamente desde el respaldo.
+Se conservó también el antiguo archivo de zonas y el directorio P2PNet; quedan
+excluidos de Git al no formar parte de la arquitectura vigente.
+Se conservó el stash `7e956b29b41d18985791545dcb5129a52ff47639` con los cambios
+locales anteriores; la corrección de cadencia ya está portada al nuevo código.
+
+Se instaló `psycopg` y `psycopg-binary` 3.3.6 en la venv existente, sin cambiar
+las demás dependencias. No se instalaron modelos ni se migraron datos a
+PostgreSQL. No existe el marcador `config/storage.local.json` que activa PG.
+Para activar esa capacidad se necesita PostgreSQL/PostGIS disponible y la migración
 verificada con `tools/migrar_operativo.py --migrate`, con AeroTrack detenido.
 Las afirmaciones de PostgreSQL instalado en documentos provenientes de la rama
 comercial describen la instalación del autor, no una prueba realizada aquí.
