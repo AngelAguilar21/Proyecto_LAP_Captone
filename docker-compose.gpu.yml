@@ -1,0 +1,12 @@
+# Capa adicional que entrega la GPU NVIDIA al contenedor. Requiere el controlador de NVIDIA y el
+# NVIDIA Container Toolkit en el servidor. Úsalo junto con docker-compose.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+services:
+  aerotrack:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

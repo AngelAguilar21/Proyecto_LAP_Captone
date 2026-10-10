@@ -24,6 +24,9 @@ from urllib.parse import urlparse, parse_qs
 import numpy as np
 
 ROOT = Path(__file__).resolve().parent
+# Por defecto solo el equipo local. En un contenedor o una VM se añade el dominio público
+# con AEROTRACK_ALLOWED_HOSTS="mi.dominio.com,otro.dominio.com" (protege contra DNS rebinding).
+ALLOWED_HOSTS = {"localhost", "127.0.0.1"} | {h.strip().lower() for h in os.environ.get("AEROTRACK_ALLOWED_HOSTS", "").split(",") if h.strip()}
 
 
 RESERVA_DISCO = 1024 ** 3   # espacio libre que debe quedar después de guardar un video
@@ -275,7 +278,7 @@ class Engine:
         self.preview_state = {"camera": None, "playing": False, "t": 0., "duration": 0., "live": False, "error": None}
         from notifier import Mailer
         self.mailer = Mailer(self.settings_root)
-        self.sessions = auth.Sesiones()
+        self.sessions = auth.Sesiones(self.settings_root / "sesiones.local.json")
         self.notified = set()
         self.business_error = None
         self.traffic_buffer = {}
@@ -1925,11 +1928,11 @@ class Handler(BaseHTTPRequestHandler):
 
     def allowed(self):
         # Block cross-origin control of local cameras (and DNS rebinding).
-        host = self.headers.get("Host", "").split(":")[0]
+        host = self.headers.get("Host", "").split(":")[0].lower()
         origin = self.headers.get("Origin")
-        if host not in ("localhost", "127.0.0.1"):
+        if host not in ALLOWED_HOSTS:
             return False
-        if origin and urlparse(origin).hostname not in ("localhost", "127.0.0.1"):
+        if origin and urlparse(origin).hostname not in ALLOWED_HOSTS:
             return False
         return self.headers.get("Sec-Fetch-Site", "same-origin") != "cross-site"
 
@@ -2426,9 +2429,11 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--host", default=os.environ.get("AEROTRACK_HOST", "127.0.0.1"),
+                        help="Dirección donde escucha. 127.0.0.1 = solo este equipo; 0.0.0.0 dentro de un contenedor.")
     parser.add_argument("--config-path", type=Path, help="Archivo de configuración alternativo para pruebas aisladas.")
     args = parser.parse_args()
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler, bind_and_activate=False)
+    server = ThreadingHTTPServer((args.host, args.port), Handler, bind_and_activate=False)
     if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
         server.allow_reuse_address = False
         server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
@@ -2439,7 +2444,15 @@ def main():
     server.engine.warm_detector_async()
     from replay import recover_interrupted
     recover_interrupted(server.engine.data_root)
-    print(f"LAP: http://127.0.0.1:{args.port} — solo equipo local", flush=True)
+    info = hardware.detect()
+    perfil = hardware.choose({}, False, info)
+    equipo = f"GPU {info['gpu']} ({info['vramGb']} GB)" if info["gpu"] else "sin GPU"
+    print(f"Hardware: {equipo}, {info['cpuThreads']} hilos, {info['ramGb']} GB RAM. "
+          f"Perfil automático: {perfil['tier']} en {perfil['device']}, modelo {Path(perfil['weights']).name}.", flush=True)
+    if info["hint"]:
+        print(f"Aviso de hardware: {info['hint']}", flush=True)
+    alcance = "solo equipo local" if args.host in ("127.0.0.1", "localhost") else f"escuchando en {args.host}"
+    print(f"LAP: http://127.0.0.1:{args.port} — {alcance}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -1,0 +1,28 @@
+.git
+.venv
+.env
+.env.*
+**/__pycache__
+**/node_modules
+**/.pytest_cache
+informe
+datos_ucf_qnrf
+Tareas equipo.md
+proyecto_lap_prototipo/dashboard/dist
+proyecto_lap_prototipo/dashboard/.lodcheck
+
+# Datos y credenciales de quien construye la imagen: nunca entran en ella.
+proyecto_lap_prototipo/config/*.local.json
+proyecto_lap_prototipo/config/*.local.tmp
+proyecto_lap_prototipo/config/projects
+proyecto_lap_prototipo/data/uploads
+proyecto_lap_prototipo/data/replays
+proyecto_lap_prototipo/data/identidad
+proyecto_lap_prototipo/data/anotacion
+proyecto_lap_prototipo/data/videos_originales
+proyecto_lap_prototipo/data/ultralytics
+proyecto_lap_prototipo/data/*.mp4
+proyecto_lap_prototipo/data/*.avi
+proyecto_lap_prototipo/data/*.sqlite
+**/*.mp4
+**/*.avi
