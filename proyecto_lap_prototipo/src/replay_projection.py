@@ -5,8 +5,10 @@ from following.flow import FlowField
 from spatial_scope import accepts, outline_scope
 
 
-def current_projection(meta, samples, config):
-    result = copy.deepcopy(samples)
+def current_projection(meta, samples, config, copiar=True):
+    """copiar=False modifica `samples` en el sitio: para listas recién leídas del disco, donde duplicar cientos de MB
+    de objetos agotaba la memoria con grabaciones largas."""
+    result = copy.deepcopy(samples) if copiar else samples
     cameras = {c['id']: c for c in config['cameras']}
     original = {c['id']: c for c in meta.get('cameras', [])}      # lo que tenía cada cámara cuando se hizo el análisis
     matrices = {cid: calibration(c.get('pairs', [])) for cid, c in cameras.items()}

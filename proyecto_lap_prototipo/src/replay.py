@@ -1,9 +1,36 @@
 """Resultados reproducibles: video original y observaciones por tiempo de contenido."""
-import json,re,mimetypes
+import json,re,mimetypes,threading
 from pathlib import Path
 from datetime import datetime,timezone
 from urllib.parse import parse_qs
 
+_CARGA_DE_DATOS=threading.Lock()
+MUESTRAS_COMPLETAS=300   # con más de 400 muestras solo ~300 viajan con el análisis completo
+
+def ultima_muestra(path,ventana=4*1024*1024):
+ """Última muestra legible, leyendo solo el final del archivo (una muestra pesa cientos de KB)."""
+ with path.open('rb') as f:
+  f.seek(0,2);size=f.tell();f.seek(max(0,size-ventana));bloque=f.read()
+ for linea in reversed(bloque.splitlines()):
+  try:return json.loads(linea)
+  except ValueError:continue
+ return None
+
+def aligerar(samples):
+ """Cada muestra repite el mapa de calor y la analítica acumulados de todas las cámaras (~200 KB). Una grabación de 20 minutos
+ sumaba cientos de MB y el navegador no podía abrirla. Las muestras intermedias conservan la posición de cada persona
+ (los recorridos siguen completos) y pierden solo esos acumulados; el panel los rellena con la muestra completa anterior.
+ Devuelve (muestras, paso); paso 1 = sin recorte."""
+ n=len(samples)
+ if n<=MUESTRAS_COMPLETAS+100:return samples,1
+ paso=-(-n//MUESTRAS_COMPLETAS)
+ for i,s in enumerate(samples):
+  if i%paso==0 or i==n-1:continue
+  s.pop('levels',None);s.pop('analytics',None)
+  for c in s.get('cameras',[]):
+   c.pop('analysis',None)
+   for p in c.get('people') or []:p.pop('history',None)
+ return samples,paso
 
 def _personas_unicas_confirmadas(sample):
  """Cuenta personas globales una sola vez en una muestra multicámara.
@@ -89,17 +116,26 @@ def get(handler,url,root):
    return handler.send_data(200,sorted(rows,key=lambda r:r['created'],reverse=True)[:50])
   meta=manifest(root,sid)
   if url.path.endswith('/data'):
-   samples=[]
-   for line in (directory(root,sid)/'samples.jsonl').read_text(encoding='utf-8').splitlines():
-    try:samples.append(json.loads(line))
-    except ValueError:break
-   if q.get('projection') == ['current']:
-    import copy
-    from replay_projection import current_projection
-    with handler.server.engine.lock:
-     current = copy.deepcopy(handler.server.engine.config)
-    samples = current_projection(meta, samples, current)
-   return handler.send_data(200,{**public(meta),'samples':samples})
+   if q.get('last')==['1'] and q.get('projection')!=['current']:
+    # Solo el estado final (lo que muestra Monitoreo al abrir): se lee el final del archivo, sin recorrerlo entero.
+    ultima=ultima_muestra(directory(root,sid)/'samples.jsonl')
+    return handler.send_data(200,{**public(meta),'samples':[ultima] if ultima else []})
+   # Una grabación larga ocupa varios GB al convertirla a objetos: una a la vez, o dos peticiones juntas agotan la memoria.
+   with _CARGA_DE_DATOS:
+    samples=[]
+    with (directory(root,sid)/'samples.jsonl').open(encoding='utf-8') as archivo:
+     for line in archivo:
+      try:samples.append(json.loads(line))
+      except ValueError:break
+    if q.get('projection') == ['current']:
+     import copy
+     from replay_projection import current_projection
+     with handler.server.engine.lock:
+      current = copy.deepcopy(handler.server.engine.config)
+     samples = current_projection(meta, samples, current, copiar=False)
+    if q.get('last')==['1']:samples=samples[-1:]   # el acumulado ya se calculó con todas; solo viaja el final
+    samples,paso=aligerar(samples)
+    return handler.send_data(200,{**public(meta),'samples':samples,**({'thinned':{'step':paso}} if paso>1 else {})})
   if url.path.endswith('/video'):
    camera=next((c for c in meta['cameras'] if c['id']==q.get('camera',[''])[0]),None)
    if not camera:raise ValueError('Cámara no incluida en esta grabación.')

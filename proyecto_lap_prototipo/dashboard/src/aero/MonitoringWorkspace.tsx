@@ -131,7 +131,7 @@ export default function MonitoringWorkspace({ session, onSetup, onReplay, active
             metadata[c.id] = { created: r.created, session: r.session };
           }
         }
-        const response = await fetch(`/api/replay/data?session=${relevant[0].session}`);
+        const response = await fetch(`/api/replay/data?session=${relevant[0].session}&last=1`);
         const data = await response.json();
         if (alive) setArchived({
           ...data,

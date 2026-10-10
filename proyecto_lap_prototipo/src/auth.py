@@ -116,28 +116,57 @@ def verificar(settings_root, usuario, clave):
 
 
 class Sesiones:
-    """Sesiones en memoria: al reiniciar el servidor hay que volver a entrar."""
+    """Sesiones activas. Con `archivo` sobreviven a un reinicio del servidor; se guarda el resumen SHA-256 del
+    token, nunca el token, así que el archivo no sirve para entrar."""
 
-    def __init__(self):
+    def __init__(self, archivo=None):
+        self.archivo = Path(archivo) if archivo else None
         self.activas = {}
+        if self.archivo:
+            try:
+                guardadas = json.loads(self.archivo.read_text(encoding="utf-8"))
+                ahora = time.time()
+                self.activas = {k: v for k, v in guardadas.items() if isinstance(v, dict) and v.get("expira", 0) > ahora}
+            except (OSError, ValueError, AttributeError):
+                self.activas = {}
+
+    @staticmethod
+    def _clave(token):
+        return hashlib.sha256((token or "").encode("utf-8")).hexdigest()
+
+    def _guardar(self):
+        if not self.archivo:
+            return
+        try:
+            self.archivo.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.archivo.with_suffix(".tmp")
+            tmp.write_text(json.dumps(self.activas), encoding="utf-8")
+            os.replace(tmp, self.archivo)
+        except OSError:
+            pass  # sin disco la sesión sigue valiendo mientras el servidor no se reinicie
 
     def abrir(self, usuario, rol):
         token = secrets.token_urlsafe(32)
-        self.activas[token] = {"usuario": usuario, "rol": rol, "expira": time.time() + DURACION_SESION}
+        self.activas[self._clave(token)] = {"usuario": usuario, "rol": rol, "expira": time.time() + DURACION_SESION}
+        self._guardar()
         return token
 
     def leer(self, token):
-        sesion = self.activas.get(token or "")
+        clave = self._clave(token)
+        sesion = self.activas.get(clave)
         if not sesion:
             return None
         if sesion["expira"] < time.time():
-            self.activas.pop(token, None)
+            self.activas.pop(clave, None)
+            self._guardar()
             return None
         return sesion
 
     def cerrar(self, token):
-        self.activas.pop(token or "", None)
+        self.activas.pop(self._clave(token), None)
+        self._guardar()
 
     def cerrar_usuario(self, usuario):
-        for token in [t for t, s in self.activas.items() if s["usuario"] == usuario]:
-            self.activas.pop(token, None)
+        for clave in [k for k, s in self.activas.items() if s["usuario"] == usuario]:
+            self.activas.pop(clave, None)
+        self._guardar()
