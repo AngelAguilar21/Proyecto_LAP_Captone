@@ -19,7 +19,20 @@ const DETALLE: Record<string,{label:string;hint:string}> = {
   detalle:  {label:'Detalle',       hint:'Identificadores, dirección estimada y conteos por cámara.'},
 };
 
-export type MapTool = 'select' | 'camera' | 'polygon' | 'rectangle' | 'circle' | 'move' | 'calibrate' | 'work-rect' | 'work-poly' | 'work-edit' | 'line' | 'trace' | 'erase';
+export interface Trail { id: string; association: string; points: number[][] }
+const MAX_TRAIL_POINTS = 3000, MAX_TRAILS = 400;
+
+/** Suma a un recorrido solo lo nuevo: por instante si hay tiempo, por posición si no. */
+function extendTrail(points: number[][], incoming: number[][]) {
+  for (const h of incoming) {
+    const last = points[points.length - 1];
+    if (last && (h.length > 2 && last.length > 2 ? h[2] <= last[2] : h[0] === last[0] && h[1] === last[1])) continue;
+    points.push(h);
+  }
+  if (points.length > MAX_TRAIL_POINTS) points.splice(0, points.length - MAX_TRAIL_POINTS);
+}
+
+export type MapTool ='select' | 'camera' | 'polygon' | 'rectangle' | 'circle' | 'move' | 'calibrate' | 'work-rect' | 'work-poly' | 'work-edit' | 'line' | 'trace' | 'erase';
 interface Props {
   config: Config; state: SessionState; connected: boolean; editable?: boolean; configuration?:boolean; compact?: boolean;
   selectedCamera: string; onCamera: (id: string) => void; selectedPerson?: string; onPerson?: (p: Person) => void;
@@ -27,6 +40,7 @@ interface Props {
   areaDraft?: Point[]; onAreaDraft?: (p:Point[])=>void; areaEditing?: boolean; template?: boolean;
   viewMode?:'tracks'|'heat';
   peopleFirst?:boolean;
+  trails?: Trail[];
   zonesOnly?:boolean;
   zoneMode?:'all'|'business';
   focusArea?:{x:number;y:number;size:number};
@@ -44,7 +58,7 @@ interface Props {
 }
 const kinds: Record<string, string> = { roi: '#0789e9', queue: '#e2a037', restricted: '#d65d63', room: '#839cac', wall: '#c1ced6', door: '#a67c52', corridor: '#5c8096', commercial: '#8a5fd1' };
 
-export default function MapCanvas({ config, state, connected, editable, configuration=false, zonesOnly=false, zoneMode='all', compact, focusArea, focusLocation, selectedCamera, onCamera, selectedPerson, onPerson, onChange, tool = 'select', onTool, onCalibrationPoint, calibrationFootprint, areaDraft=[], onAreaDraft, areaEditing=false, template, viewMode, peopleFirst=false, businessMarkers, onBusinessPoint, onMapPlace, onZoneSelect, editableBusinessId, onBusinessMove, orientation: controlledOrientation, onOrientation }: Props) {
+export default function MapCanvas({ config, state, connected, editable, configuration=false, zonesOnly=false, zoneMode='all', compact, focusArea, focusLocation, selectedCamera, onCamera, selectedPerson, onPerson, onChange, tool = 'select', onTool, onCalibrationPoint, calibrationFootprint, areaDraft=[], onAreaDraft, areaEditing=false, template, viewMode, peopleFirst=false, trails, businessMarkers, onBusinessPoint, onMapPlace, onZoneSelect, editableBusinessId, onBusinessMove, orientation: controlledOrientation, onOrientation }: Props) {
   const businesses=useBusinesses(config.airport||'');
   const registeredBusinesses=businessMarkers??businesses.items;
   const businessDrag=useRef<string|null>(null);
@@ -127,6 +141,21 @@ export default function MapCanvas({ config, state, connected, editable, configur
   const matchingPlan=(state.planId||'custom')===(config.planId||'custom');
   const active = !isSetup && matchingPlan && connected && (['running', 'paused'].includes(state.status) || (['ended','stopped'].includes(state.status) && state.people.some(p=>p.point)));
   const people = active ? Array.from(new Map(state.people.filter(p => p.point && !p.duplicate).map(p => [p.id, p] as const)).values()) : [];
+  // Los recorridos se acumulan por sesión y no se borran cuando la persona deja de verse:
+  // son parte del análisis. Solo se reinician al empezar una sesión nueva.
+  const liveTrails = useRef({ session: '', map: new Map<string, Trail>() });
+  if (!trails && !isSetup && matchingPlan && connected) {
+    const store = liveTrails.current, session = state.session || '';
+    if (store.session !== session) { store.session = session; store.map = new Map(); }
+    for (const p of people) {
+      const trail = store.map.get(p.id) || { id: p.id, association: 'local', points: [] };
+      extendTrail(trail.points, [...(p.history || []), p.point as number[]]);
+      trail.association = p.association || trail.association;
+      store.map.delete(p.id); store.map.set(p.id, trail);
+    }
+    while (store.map.size > MAX_TRAILS) store.map.delete(store.map.keys().next().value as string);
+  }
+  const trailList: Trail[] = trails ?? Array.from(liveTrails.current.map.values());
   const scale = Math.max(vb.w/viewport.width,vb.h/viewport.height);
 
   // Imagen o líneas: la decisión vive en planLayers.ts, donde se puede comprobar.
@@ -154,6 +183,7 @@ export default function MapCanvas({ config, state, connected, editable, configur
     lod.clusterPx,
   );
   const singles = groups.filter(g => g.count === 1);
+  const singleIds = new Set(singles.map(g => g.members[0].person.id)), presentIds = new Set(people.map(p => p.id));
   const personLabels = show('labels', peopleFirst || lod.personLabels)
     ? placeLabels(singles.map(g => ({ key: g.key, point: g.point, width: peopleFirst ? 44 : 58, height: peopleFirst ? 10 : 13,
         priority: g.key === selectedPerson ? 1e6 : g.members[0].person.history?.length || 0 })), scale, peopleFirst ? 300 : 120)
@@ -316,7 +346,13 @@ export default function MapCanvas({ config, state, connected, editable, configur
       {!isSetup&&matchingPlan&&layers.flow&&(state.analytics.flowVectors||[]).filter(v=>v.samples>=2).sort((a,b)=>b.samples-a.samples).filter((v,i,all)=>all.findIndex(other=>other.x===v.x&&other.y===v.y)===i).map((v,i)=>{const length=Math.max(scale*9,v.size*.6),x=v.x+v.dx*length,y=v.y+v.dy*length;return <path key={`flow-${i}`} d={`M${v.x},${v.y}L${x},${y}M${x-v.dx*scale*4+v.dy*scale*3},${y-v.dy*scale*4-v.dx*scale*3}L${x},${y}L${x-v.dx*scale*4-v.dy*scale*3},${y-v.dy*scale*4+v.dx*scale*3}`} fill="none" stroke="#1679a5" strokeWidth={scale*1.5} opacity=".7"><title>Dirección observada · {v.samples} desplazamientos muestreados</title></path>;})}
       {/* Solo de quienes se ven de a uno: el recorrido de alguien dentro de un grupo
           saldría de un punto que no es el suyo. */}
-      {show('trajectories', peopleFirst || lod.trajectories) && singles.map(({members:[m]}) => m.person).map(p => <polyline key={p.id} points={p.history.map(h => `${h[0]},${h[1]}`).join(' ')} fill="none" stroke={p.association === 'uncertain' ? '#ffae42' : '#21aaff'} opacity={selectedPerson === p.id ? 1 : .45} strokeWidth={scale*(selectedPerson === p.id ? 2.4 : peopleFirst ? .85 : 1.1)}/>)}
+      {/* Quien se ve de a uno conserva su recorrido completo; quien dejó de verse queda
+          dibujado hasta su último punto. Las personas dentro de un grupo no dibujan
+          recorrido porque saldría de un punto que no es el suyo. */}
+      {!isSetup && matchingPlan && show('trajectories', peopleFirst || lod.trajectories) && trailList.filter(t => t.points.length > 1 && (singleIds.has(t.id) || !presentIds.has(t.id))).map(t => {
+        const gone = !presentIds.has(t.id), end = t.points[t.points.length - 1], color = t.association === 'uncertain' ? '#ffae42' : '#21aaff', picked = selectedPerson === t.id;
+        return <g key={t.id} pointerEvents="none"><polyline points={t.points.map(h => `${h[0]},${h[1]}`).join(' ')} fill="none" stroke={color} strokeLinejoin="round" strokeLinecap="round" opacity={picked ? 1 : gone ? .6 : .45} strokeWidth={scale*(picked ? 2.4 : peopleFirst ? .85 : 1.1)}/>{gone && <circle cx={end[0]} cy={end[1]} r={scale*2.4} fill={color} stroke="#03111f" strokeWidth={scale*.6}><title>{t.id}: último punto visto</title></circle>}</g>;
+      })}
       {active && state.analytics.clusters.map((c,i) => <g key={i}><circle cx={c.center[0]} cy={c.center[1]} r={c.radius} fill={c.alert ? '#ef444420' : '#fda84a13'} stroke={c.alert ? '#ff5e66' : '#f2c268'} strokeWidth={scale*1.7} strokeDasharray={`${scale*5} ${scale*4}`}/><text x={c.center[0]} y={c.center[1]-c.radius+scale*15} textAnchor="middle" fill={c.alert ? '#ffbdba' : '#ffe2a8'} fontSize={scale*12}>{c.count} personas · {c.duration.toFixed(0)}s</text></g>)}
       {focusArea&&<rect x={focusArea.x} y={focusArea.y} width={focusArea.size} height={focusArea.size} fill="none" stroke="#101d30" strokeWidth={scale*3} strokeDasharray={`${scale*4} ${scale*2}`}/>}
       {layers.cameras && floorCameras.map((c, i) => <g key={c.id} transform={`translate(${c.x},${c.y}) rotate(${-bearing})`} className="map-camera" style={{userSelect:'none',opacity:c.active===false?.45:1}} onPointerDown={e => beginDrag(e,'camera',c.id)} onPointerUp={e => {e.stopPropagation();drag.current=null;panDrag.current=null;onCamera(c.id);}}><circle r={scale*14} fill={!isSetup&&state.cameraAnalytics?.[c.id]?.occupancy?.zones?.some((z:any)=>z.alert)?'#c5353f':!isSetup&&(state.cameraAnalytics?.[c.id]?.occupancy?.count||0)>=(c.crowdThreshold??10)?'#bd790d':selectedCamera===c.id?'#096cbd':'#132b3e'} stroke={c.color || COLORS[i%COLORS.length]} strokeWidth={scale*1.7}/><path d={`M${-scale*7},${-scale*4} h${scale*8} v${scale*8} h${-scale*8}z M${scale*2},0 l${scale*5},${-scale*4}v${scale*8}z`} fill="#c2e5f8"/>{show('labels', lod.cameraLabels) && <text y={scale*29} fill={paper.label} fontSize={scale*11} textAnchor="middle" fontWeight="600">{c.name||c.id}</text>}</g>)}
